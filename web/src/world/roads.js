@@ -526,7 +526,9 @@ export function buildGrounds(world) {
     else if (p.kind === "otopark") {
       const m = slab(w, d, cx, cz, T.parkingLot(), 0, 0.07);
       const uv = m.geometry.attributes.uv;
-      for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / 2.7, (uv.getY(i) * d) / 13);
+      // Sıralar trafik.js ile aynı: 16 m, alana ortalanmış (kenar payı her iki uçta eşit).
+      const margin = (d - Math.floor(d / 16) * 16) / 2;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / 2.7, (uv.getY(i) * d - margin) / 16);
       m.material.map.wrapS = m.material.map.wrapT = THREE.RepeatWrapping;
     }
   }

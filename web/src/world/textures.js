@@ -202,10 +202,16 @@ export function parkingLot() {
       ctx.fillStyle = ["#55585e", "#686b71", "#4f5258"][Math.floor(rand() * 3)];
       ctx.fillRect(rand() * sz, rand() * sz, 1.4, 1.4);
     }
-    // Doku 2,7 x 13 m'lik bir sırayı kaplar: ortada şerit, iki yanda park yerleri.
+    // Doku 2,7 x 16 m'lik bir sırayı kaplar: 5 m park yeri, 6 m koridor, 5 m park yeri; yer
+    // ayırıcıları ve park yerlerinin koridor tarafındaki uç çizgisi.
     ctx.fillStyle = "rgba(240,240,236,0.92)";
-    ctx.fillRect(0, 0, 3, sz * (5.3 / 13));
-    ctx.fillRect(0, sz * (7.7 / 13), 3, sz * (5.3 / 13));
+    ctx.fillRect(0, 0, 3, sz * (5 / 16));
+    ctx.fillRect(0, sz * (11 / 16), 3, sz * (5 / 16));
+    ctx.fillRect(0, sz * (5 / 16) - 2, sz, 2);
+    ctx.fillRect(0, sz * (11 / 16), sz, 2);
+    // Koridorda yön oku (beyaz, silik).
+    ctx.fillStyle = "rgba(240,240,236,0.25)";
+    ctx.fillRect(sz * 0.35, sz * (7.9 / 16), sz * 0.3, sz * (0.2 / 16));
   }));
 }
 

@@ -64,6 +64,25 @@ function bezier3(a, c1, c2, b, n = 8) {
   return out;
 }
 
+/** Köşeleri yumuşat: her iç köşe en çok r yarıçaplı ikinci derece eğriyle (dönüşte araç savrulmasın). */
+function fillet(pts, r = 4.5, n = 6) {
+  if (pts.length < 3) return pts;
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = pts[i - 1], b = pts[i], c = pts[i + 1];
+    const d1 = norm(sub(b, a)), d2 = norm(sub(c, b));
+    if (d1[0] * d2[0] + d1[1] * d2[1] > 0.995) { out.push(b); continue; }
+    const rr = Math.min(r, len(sub(b, a)) / 2, len(sub(c, b)) / 2);
+    const p1 = sub(b, mul(d1, rr)), p2 = add(b, mul(d2, rr));
+    for (let k = 0; k <= n; k++) {
+      const u = k / n, v = 1 - u;
+      out.push([v * v * p1[0] + 2 * v * u * b[0] + u * u * p2[0], v * v * p1[1] + 2 * v * u * b[1] + u * u * p2[1]]);
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  return clean(out);
+}
+
 /** İki şerit arasında kavşaktan geçiş eğrisi: giriş ve çıkış yönlerine teğet. */
 function connector(pA, dA, pB, dB) {
   const l = len(sub(pB, pA));
@@ -102,7 +121,9 @@ class Route {
 
   position(s, out = {}) {
     const p = this.pieces[this.pieceAt(s)];
-    return pointAt(p.pts, p.cum, s - p.s0, out);
+    pointAt(p.pts, p.cum, s - p.s0, out);
+    if (p.rev) out.heading += Math.PI; // geri viteste araç gidişin tersine bakar
+    return out;
   }
 
   /** Araç hangi şeritte, şeridin neresinde? Kavşak ve girişlerde bir sonraki şeride eksi uzaklıkla sayılır. */
@@ -116,6 +137,7 @@ class Route {
   }
 }
 
+export const LOT_ROW = 16; // otoparkta bir sıra: park yeri + koridor + park yeri (m)
 const S0 = 2.2; // izleme modelinde duran araçlar arası boşluk (m)
 
 export class Traffic {
@@ -283,7 +305,7 @@ export class Traffic {
    * A'dan B'ye araç rotası. A ve B yol kenarında (park yeri) ya da yola yakın bir noktadır; giriş ve
    * çıkışta kısa bir manevrayla şeride katılır/ayrılır. pre/post: otopark içi yol noktaları.
    */
-  route(A, B, { pre = null, post = null } = {}) {
+  route(A, B, { pre = null, post = null, prePieces = null } = {}) {
     const oa = this._laneOptions(A), ob = this._laneOptions(B);
     if (!oa || !ob) return null;
     const starts = oa.opts.map((o) => ({ lane: o.lane, c: Math.min(o.c + 7, this.lanes[o.lane].len - 0.5) }));
@@ -295,6 +317,7 @@ export class Traffic {
     const cStart = starts.find((s) => s.lane === first).c;
     const cEnd = goals.get(last);
     const pieces = [];
+    for (const pp of prePieces ?? []) pieces.push({ kind: "in", pts: clean(pp.pts), next: first, rev: pp.rev });
     const inPts = clean([...(pre ?? []), A]);
     pieces.push({ kind: "in", pts: this._join(inPts, first, cStart, true), next: first });
     this._lanesToPieces(pieces, seq, cStart, cEnd);
@@ -367,14 +390,17 @@ export class Traffic {
       }
     }
     for (const lot of w.parkingLots ?? []) {
-      const rows = Math.floor((lot.z1 - lot.z0) / 13);
-      const x0 = lot.gateSide < 0 ? lot.x0 + 4 : lot.x0 + 1, x1 = lot.gateSide < 0 ? lot.x1 - 1 : lot.x1 - 4;
+      // Gerçek ölçü: 5 m park yeri + 6 m koridor + 5 m park yeri = 16 m'lik sıra; kapı tarafında 6 m'lik
+      // dikey koridor. Sıralar alana ortalanır (lot.margin, zemin çizgileri de buna göre).
+      const rows = Math.floor((lot.z1 - lot.z0) / LOT_ROW);
+      lot.margin = (lot.z1 - lot.z0 - rows * LOT_ROW) / 2;
+      const x0 = lot.gateSide < 0 ? lot.x0 + 7 : lot.x0 + 1, x1 = lot.gateSide < 0 ? lot.x1 - 1 : lot.x1 - 7;
       const cols = Math.floor((x1 - x0) / 2.7);
       for (let r = 0; r < rows; r++) {
-        const aisle = lot.z0 + 6.5 + r * 13;
+        const aisle = lot.z0 + lot.margin + LOT_ROW / 2 + r * LOT_ROW;
         for (let c = 0; c < cols; c++) {
           for (const half of [-1, 1]) {
-            const x = x0 + 1.35 + c * 2.7, z = aisle + half * 3.6;
+            const x = x0 + 1.35 + c * 2.7, z = aisle + half * 5.5;
             this.slots.push({ x, z, heading: half < 0 ? Math.PI : 0, lot, aisle, kind: "otopark", busy: [] });
           }
         }
@@ -412,15 +438,32 @@ export class Traffic {
   }
 
   /** Park yerinden park yerine araç rotası (otopark içi manevralar dahil). */
+  /**
+   * Park yerinden park yerine. Otoparkta araçlar burnu içeride durur: çıkışta geri geri kıvrılarak
+   * koridora çıkar (burnu kapıya döner), koridor boyunca yumuşak dönüşlerle kapıya gider; girişte
+   * koridordan kavis çizerek yerine burnuyla girer.
+   */
   routeSlots(from, to) {
-    const access = (i) => {
-      const s = this.slots[i];
-      if (s.kind !== "otopark") return { point: [s.x, s.z], inner: null };
-      const ex = s.lot.gateX;
-      return { point: s.lot.gate, inner: [[s.x, s.z], [s.x, s.aisle], [ex, s.aisle], [ex, s.lot.gate[1]]] };
-    };
-    const a = access(from), b = access(to);
-    return this.route(a.point, b.point, { pre: a.inner ? a.inner.slice(0, -1) : null, post: b.inner ? [...b.inner].reverse().slice(1) : null });
+    const a = this.slots[from], b = this.slots[to];
+    const opts = {};
+    let A = [a.x, a.z], B = [b.x, b.z];
+    if (a.kind === "otopark") {
+      // Önce yerinden düz geri (2,5 m), sonra koridora doğru kıvrılarak geri; burnu kapıya döner.
+      const toA = Math.sign(a.aisle - a.z) || 1, ex = a.lot.gateX, dirX = Math.sign(ex - a.x) || 1;
+      const P1 = [a.x, a.z + toA * 2.5], Q = [a.x - dirX * 5, a.aisle];
+      opts.prePieces = [{ pts: [[a.x, a.z], ...bezier3(P1, [a.x, a.aisle - toA * 0.5], [a.x - dirX * 1.5, a.aisle], Q, 10)], rev: true }];
+      opts.pre = fillet([Q, [ex, a.aisle], [ex, a.lot.gate[1]]]).slice(0, -1);
+      A = a.lot.gate;
+    }
+    if (b.kind === "otopark") {
+      // Koridordan kavisle yerine burnuyla girer, son 2,5 m düz.
+      const toA = Math.sign(b.aisle - b.z) || 1, ex = b.lot.gateX, dirX = Math.sign(b.x - ex) || 1;
+      const Q = [b.x - dirX * 5, b.aisle], P1 = [b.x, b.z + toA * 2.5];
+      const tail = [...bezier3(Q, [b.x - dirX * 1.5, b.aisle], [b.x, b.aisle - toA * 0.5], P1, 10), [b.x, b.z]];
+      opts.post = [...fillet([b.lot.gate, [ex, b.aisle], Q]).slice(1), ...tail.slice(1)];
+      B = b.lot.gate;
+    }
+    return this.route(A, B, opts);
   }
 
   // --- otobüs hatları ---
@@ -736,7 +779,7 @@ export class Traffic {
       // eklenir ki araç tam o noktada dursun (yoksa 2 m geride kalıp hiç varamaz).
       const ge = route.len - v.s;
       if (ge + S0 < gap) { gap = Math.max(0.01, ge + S0 + 0.1); lv = 0; }
-      const base = piece.kind === "lane" ? this.lanes[piece.lane].vmax : piece.kind === "conn" ? TURN_V : 3.5;
+      const base = piece.kind === "lane" ? this.lanes[piece.lane].vmax : piece.kind === "conn" ? TURN_V : piece.rev ? 1.4 : 3.5;
       const vmax = base * (v.emergency ? 1.25 : v.kind === "bus" || v.kind === "cop" ? 0.85 : 1);
       const a = 1.6, b = 2.6, T = 1.3, s0 = S0;
       const dv = v.v - lv;
