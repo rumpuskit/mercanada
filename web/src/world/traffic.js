@@ -931,9 +931,11 @@ export function buildSignals(traffic, world) {
       // Yaya lambaları: geçidin iki ucunda, karşı kaldırıma bakar. Sağdaki araç direğinde, soldakinin
       // kendi kısa direği var.
       const pl = add(base, mul(rr, -(r.width / 2 - 0.55)));
-      peds.push({ node: n, group: e.group, x: p[0], z: p[1], y: world.surfaceY(p[0], p[1]) + 0.18, heading: Math.atan2(-rr[0], -rr[1]), pole: false });
-      peds.push({ node: n, group: e.group, x: pl[0], z: pl[1], y: world.surfaceY(pl[0], pl[1]) + 0.18, heading: Math.atan2(rr[0], rr[1]), pole: true });
-      world.addObstacleCircle(pl[0], pl[1], 0.2);
+      if (e.cross) peds.push({ node: n, group: e.group, x: p[0], z: p[1], y: world.surfaceY(p[0], p[1]) + 0.18, heading: Math.atan2(-rr[0], -rr[1]), pole: false });
+      if (e.cross) {
+        peds.push({ node: n, group: e.group, x: pl[0], z: pl[1], y: world.surfaceY(pl[0], pl[1]) + 0.18, heading: Math.atan2(rr[0], rr[1]), pole: true });
+        world.addObstacleCircle(pl[0], pl[1], 0.2);
+      }
     }
   }
   const N = Math.max(1, items.length);

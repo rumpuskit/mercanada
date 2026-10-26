@@ -1,0 +1,15 @@
+# Çevrimiçi sayacı (Cloudflare Worker + Durable Object). Yayın: cd sayac && npx wrangler@4 deploy
+name = "mercanada-sayac"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+workers_dev = false
+
+routes = [{ pattern = "sayac.rumpuskit.com", custom_domain = true }]
+
+[[durable_objects.bindings]]
+name = "PRESENCE"
+class_name = "Presence"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Presence"]

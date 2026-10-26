@@ -137,6 +137,21 @@ export function buildNetwork(roads) {
     n.signal = major.length >= 3 && major.some((e) => e.trim > 0);
     n.offset = (i * 37) % 60;
   });
+  // Yaya geçitleri: kavşak kollarında. İki kavşağı bağlayan kısa bir yolun iki ucuna birden geçit
+  // konmaz (yan yana zebra olmasın); geçit önemli kavşakta (ışıklı, daha çok caddeli) kalır.
+  const score = (n) => (n.signal ? 10 : 0) + n.ends.filter((e) => e.edge.road.type === "cadde").length;
+  for (const n of net.nodes) {
+    const cars = n.ends.filter((e) => isCar(e.edge.road));
+    for (const e of n.ends) e.cross = isCar(e.edge.road) && e.trim > 0 && cars.length >= 2;
+  }
+  for (const e of net.edges) {
+    const ea = e.a.ends.find((x) => x.edge === e && x.at === "a"), eb = e.b.ends.find((x) => x.edge === e && x.at === "b");
+    if (!ea?.cross || !eb?.cross || e.road.type === "giris") continue;
+    let L = 0;
+    for (let i = 1; i < e.pts.length; i++) L += len(sub(e.pts[i], e.pts[i - 1]));
+    if (L - e.trimA - e.trimB > 70) continue;
+    if (score(e.a) >= score(e.b)) eb.cross = false; else ea.cross = false;
+  }
   return net;
 }
 
@@ -336,9 +351,9 @@ export function buildRoads(world) {
           const outer = curve(OL, octrl && len(sub(octrl, node.p)) < 80 ? octrl : null, ONR, inner.length - 1);
           corners.push({ inner, outer, turn: cross(e.dir, next.dir) });
         }
-        // Yaya geçidi ve dur çizgisi.
+        // Yaya geçidi (araç girişlerinde kaldırım kesintisiz sürer, zebra yok) ve dur çizgisi.
         const y = y0 + H.marking;
-        for (let o = -r.carriage / 2 + 0.35; o < r.carriage / 2 - 0.3; o += 1.0) {
+        if (e.cross && r.type !== "giris") for (let o = -r.carriage / 2 + 0.35; o < r.carriage / 2 - 0.3; o += 1.0) {
           const p0 = add(add(node.p, mul(e.dir, e.trim + 0.8)), mul(left(e.dir), o));
           const p1 = add(p0, mul(e.dir, 3)), p2 = add(p1, mul(left(e.dir), 0.5)), p3 = add(p0, mul(left(e.dir), 0.5));
           M.mark.quad([p0[0], y, p0[1]], [p1[0], y, p1[1]], [p2[0], y, p2[1]], [p3[0], y, p3[1]]);

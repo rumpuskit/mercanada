@@ -20,6 +20,7 @@ import { Traffic, Vehicles, buildSignals, buildStops } from "./world/traffic.js"
 import { buildHarbor } from "./world/harbor.js";
 import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
+import { startOnline } from "./online.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -198,6 +199,8 @@ const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => following?.key ?? null, set: (k) => { following = k ? { key: k, t: 0 } : null; flight = null; } }, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, followKey: () => following?.key ?? null });
+// Çevrimiçi sayacı yalnızca yayındaki sitede (ya da ?sayac ile denerken).
+if (location.hostname === "ada.rumpuskit.com" || params.has("sayac")) startOnline();
 const mapUI = createMapUI({ world, camera, controls, flyTo });
 
 // Bir sakine dokununca kartını aç.

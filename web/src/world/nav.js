@@ -111,7 +111,7 @@ export class PedNav {
       }
       // Kavşak kollarında yaya geçidi.
       for (const e of walks) {
-        if (!(e.trim > 0)) continue;
+        if (!e.cross) continue;
         const A = endInfo.get(e);
         edge(A.L, A.R, [A.lp, A.rp], { node: n, group: e.group, signal: n.signal });
       }
