@@ -98,7 +98,9 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const day = today();
     const t = sim.tenure(r, day);
     $("card-handle").textContent = "@" + r.handle;
-    $("card-title").textContent = `${sim.title(r, day)} · ${people.works[selected].loc.name}`;
+    // İş yerinin adı yalnızca gerçek bir iş yeri varsa (emekli ve evden çalışanlarda yok).
+    const wk = people.works[selected];
+    $("card-title").textContent = wk.wp.kind === "ev" ? (wk.job === "emekli" ? "Emekli" : `${sim.title(r, day)} · evinden çalışıyor`) : `${sim.title(r, day)} · ${wk.loc.name}`;
     $("card-now").textContent = nowText(selected);
     $("card-tabs").hidden = false;
     $("card-traits").replaceChildren();
@@ -139,7 +141,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       ["Hobi", people.hobbies[selected].ad],
       ["Evcil", pet || "Henüz yok"],
       ["Adada", t === 0 ? "Bugün geldi" : `${fmt.format(t)} gündür`],
-      ["Ulaşım", people.hasCar[selected] ? "Kendi arabası" : "Otobüs ve yürüyüş"],
+      ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : "Otobüs ve yürüyüş") + (people.works[selected].wp.kind === "anakara" ? " · işe vapurla" : "")],
     ]);
   }
 
