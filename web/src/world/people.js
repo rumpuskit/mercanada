@@ -1772,6 +1772,34 @@ export class People {
         }
       }
     }
+    // Basketbol sahalarında gençler (sakin değil): okul sonrası ve hafta sonu 3'e 3 oynar; potaya
+    // doğru koşar, sıçrayıp atış yapar, savunmada kollarını açar.
+    const courtOpen = minute < 1230 && (wd < 5 ? minute >= 970 : minute >= 660);
+    if (courtOpen) {
+      const v = (this._teen ??= {});
+      let ci = 0;
+      for (const c of this.world.plazas) {
+        if (c.kind !== "basket") continue;
+        ci++;
+        const cx = (c.x0 + c.x1) / 2, cz = (c.z0 + c.z1) / 2, L = c.z1 - c.z0, W = c.x1 - c.x0;
+        // Hücum yönü 40 saniyede bir değişir; oyuncular o potanın yarısında hareket eder.
+        const dir = Math.floor(time / 40 + ci) % 2 ? 1 : -1;
+        const hoop = [cx, cz + dir * (L / 2 - 1.6)];
+        for (let k = 0; k < 6; k++) {
+          const seed = ci * 61 + k * 13, attack = k < 3;
+          const a = time * (0.6 + k * 0.05) + k * 1.9;
+          resetPose(v); v.height = 1.6 + (seed % 7) * 0.04; v.t = time;
+          v.x = cx + Math.sin(a) * W * 0.3; v.z = cz + dir * (L * 0.18 + Math.cos(a * 0.7 + k) * L * 0.15) + (attack ? 0 : dir * 1.2);
+          v.y = this.world.groundY(v.x, v.z);
+          v.heading = Math.atan2(hoop[0] - v.x, hoop[1] - v.z);
+          const shoot = attack && Math.sin(time * 0.8 + k * 2) > 0.92;
+          if (shoot) { v.y += 0.35 * Math.sin((time * 0.8 + k * 2) * 6) ** 2; v.shL = v.shR = 2.8; v.elL = v.elR = 0.4; }
+          else { walkPose(v, time * 7 + k, 1); if (!attack) { v.shL = v.shR = 1.2; v.abL = v.abR = 0.6; } }
+          Object.assign(v, { style: seed % 3 === 0 ? 1 : 0, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: attack ? TEAM_COLORS[0] : TEAM_COLORS[1], bottom: P.BOTTOMS[1], sleeves: false, skirt: false, beard: false, glasses: false, shorts: true });
+          crowd.add(-1, v);
+        }
+      }
+    }
     // Pazarcılar (sakin değil): pazar saatlerinde her tezgâhın arkasında; seslenir, malını düzeltir.
     if (minute >= 480 && minute < 1140) {
       const v = (this._vendorPose ??= {});
