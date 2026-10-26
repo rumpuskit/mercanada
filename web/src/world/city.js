@@ -95,6 +95,7 @@ export function makeKit() {
       tanks: new Batch(new THREE.CylinderGeometry(0.5, 0.5, 1, 10).rotateZ(Math.PI / 2).translate(0, 0.5, 0), std("#d9dde2", { metalness: 0.4, roughness: 0.4 })),
       solar: new Batch(box, std("#24324f", { roughness: 0.3, metalness: 0.3 }), { shadow: false }),
       chimneys: new Batch(box, std("#a29a90")),
+      domes: new Batch(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), std(0xffffff, { roughness: 0.5, metalness: 0.3 })),
     },
     glass: new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), { shadow: false }),
     windowOwners: [], // cam -> {slot} (daire) veya {workplace, seed}
@@ -137,7 +138,12 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   // Kat silmeleri.
   for (let f = 1; f < floors; f++) B.trims.add(local(b, 0, f * FLOOR_H - 0.1, 0), b.rot, s.set(b.w + 0.14, 0.2, b.d + 0.14), "#f6f3ee");
   // Çatı.
-  if (!full) {
+  if (full && b.roofType === "dome") {
+    // Cami: kasnak üstünde kurşun kubbe ve alem.
+    B.walls.add(local(b, 0, h, 0), b.rot, s.set(b.w * 0.82, 1.4, b.d * 0.82), b.wall);
+    B.domes.add(local(b, 0, h + 1.4, 0), b.rot, s.set(b.w * 0.4, b.w * 0.36, b.d * 0.4), b.roof);
+    B.rails.add(local(b, 0, h + 1.4 + b.w * 0.36, 0), b.rot, s.set(0.15, 1.6, 0.15));
+  } else if (!full) {
     // Kesit görünümü: çatı yok, üst kat döşemesi.
     B.walls.add(local(b, 0, h, 0), b.rot, s.set(b.w + 0.1, 0.12, b.d + 0.1), "#d6d0c6");
   } else if (b.roofType === "hip") {
@@ -191,6 +197,13 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
       for (const side of [-1, 1]) {
         const fake = { ...b, rot: b.rot + (side * Math.PI) / 2, w: b.d, d: b.w };
         addWindow(fake, 0, f * FLOOR_H + 1.0, 1, 0.8, 1.1, { workplace: "merdiven", seed: f });
+      }
+    }
+    // Cumba: üst katlarda sokağa taşan çıkma (Türk evlerinin tipik ayrıntısı).
+    if (b.cumba) {
+      for (let f = 1; f < floors; f++) {
+        B.walls.add(local(b, 0, f * FLOOR_H + 0.1, b.d / 2 + 0.45), b.rot, s.set(3.4, FLOOR_H - 0.25, 0.9), b.wall);
+        addWindow({ ...b, d: b.d + 1.8 }, 0, f * FLOOR_H + 0.95, 1, 2.2, 1.4, { workplace: "cumba", seed: f });
       }
     }
     // Giriş: kapı, saçak, basamak.
@@ -409,8 +422,53 @@ function buildFeatures(world) {
         fenerLamps.push(lamp);
         break;
       }
+      case "minare": {
+        const y0 = world.groundY(f.x, f.z);
+        add(new THREE.CylinderGeometry(1.5, 1.6, 2, 12), stone, f.x, y0 + 1, f.z);
+        add(new THREE.CylinderGeometry(1.0, 1.15, 22, 12), white, f.x, y0 + 13, f.z);
+        add(new THREE.CylinderGeometry(1.55, 1.2, 0.5, 12), stone, f.x, y0 + 18, f.z);
+        add(new THREE.CylinderGeometry(0.9, 1.0, 4, 12), white, f.x, y0 + 26, f.z);
+        add(new THREE.ConeGeometry(1.05, 5, 12), std("#7d8e9c", { metalness: 0.3, roughness: 0.5 }), f.x, y0 + 30.5, f.z);
+        add(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 6), std("#c9a24a", { metalness: 0.7, roughness: 0.3 }), f.x, y0 + 33.6, f.z, 0, false);
+        break;
+      }
+      case "sadirvan": {
+        const y0 = world.groundY(f.x, f.z);
+        add(new THREE.CylinderGeometry(2.2, 2.4, 0.9, 8), stone, f.x, y0 + 0.45, f.z);
+        add(new THREE.CylinderGeometry(2.0, 2.0, 0.08, 8), water, f.x, y0 + 0.85, f.z, 0, false);
+        for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; add(new THREE.CylinderGeometry(0.12, 0.12, 2.6, 6), stone, f.x + Math.cos(a) * 2.6, y0 + 1.3, f.z + Math.sin(a) * 2.6, 0, false); }
+        add(new THREE.ConeGeometry(3.4, 1.4, 8), std("#7d8e9c", { metalness: 0.3, roughness: 0.5 }), f.x, y0 + 3.3, f.z);
+        break;
+      }
+      case "oyun": {
+        const y0 = world.groundY(f.x, f.z);
+        const red = std("#d8433d"), yellow = std("#e8b93a"), blue = std("#2f6fb5");
+        add(new THREE.BoxGeometry(1.2, 2.2, 1.2), blue, f.x - 4, y0 + 1.1, f.z - 2);
+        const slide = add(new THREE.BoxGeometry(0.9, 0.1, 4.2), yellow, f.x - 4, y0 + 1.15, f.z + 0.6);
+        slide.rotation.x = -0.5;
+        for (const dx of [-1.6, 1.6]) add(new THREE.BoxGeometry(0.12, 2.6, 0.12), red, f.x + 3 + dx, y0 + 1.3, f.z - 2);
+        add(new THREE.BoxGeometry(3.4, 0.12, 0.12), red, f.x + 3, y0 + 2.6, f.z - 2);
+        for (const dx of [-0.7, 0.7]) add(new THREE.BoxGeometry(0.5, 0.06, 0.25), std("#3c4148"), f.x + 3 + dx, y0 + 0.6, f.z - 2, 0, false);
+        const see = add(new THREE.BoxGeometry(0.3, 0.1, 3.4), yellow, f.x, y0 + 0.5, f.z + 3);
+        see.rotation.x = 0.15;
+        add(new THREE.BoxGeometry(0.4, 0.45, 0.4), red, f.x, y0 + 0.22, f.z + 3);
+        break;
+      }
+      case "pota": {
+        const y0 = world.groundY(f.x, f.z);
+        const g = new THREE.Group();
+        g.position.set(f.x, y0, f.z);
+        g.rotation.y = f.rot ?? 0;
+        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 3.4, 8), metal); pole.position.set(0, 1.7, -0.4);
+        const board = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.05, 0.05), white); board.position.set(0, 3.35, -0.2);
+        const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.02, 6, 16).rotateX(Math.PI / 2), std("#e05a2a")); hoop.position.set(0, 3.05, 0.1);
+        g.add(pole, board, hoop);
+        g.traverse((o) => { o.castShadow = true; });
+        group.add(g);
+        break;
+      }
       case "semsiye": {
-        const y0 = Math.max(world.height(f.x, f.z), 0.3);
+        const y0 = f.town ? world.groundY(f.x, f.z) : Math.max(world.height(f.x, f.z), 0.3);
         add(new THREE.CylinderGeometry(0.035, 0.035, 2.4, 5), white, f.x, y0 + 1.2, f.z, 0, false);
         add(new THREE.ConeGeometry(1.4, 0.5, 10), std(["#e05a4a", "#2f7fb5", "#f2c14e", "#3e8a86"][f.c % 4]), f.x, y0 + 2.4, f.z);
         break;

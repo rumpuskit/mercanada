@@ -176,6 +176,7 @@ function treeDensity(world, x, z, h) {
   const cell = world.cellByKey.get(`${Math.round(x / CELL_W)},${Math.round(z / CELL_D)}`);
   const inPark = world.plazas.some((p) => p.kind === "park" && x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1);
   if (inPark) return 0.5;
+  if (world.parks.some((p) => x > p.x0 && x < p.x1 && z > p.z0 && z < p.z1)) return 0.35;
   const d = world.sdf(x, z);
   if (d > world.margin(x, z) - 35 && h < 1.6) return 0; // kumsal
   if (!cell) return 0.18 + Math.max(0, fbm(x / 110, z / 110, 31)) * 1.3;

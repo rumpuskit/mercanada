@@ -467,6 +467,16 @@ export function buildGrounds(world) {
       group.add(f);
       materials.push(f.material);
     } else if (p.kind === "pazar") slab(w, d, cx, cz, T.slabs(), 5, 0.1);
+    else if (p.kind === "avlu") slab(w, d, cx, cz, T.slabs(), 5, 0.12);
+    else if (p.kind === "oyun") slab(w, d, cx, cz, T.dirt(), 4, 0.06, 0xd6b48a);
+    else if (p.kind === "basket") {
+      slab(w + 2, d + 2, cx, cz, T.paving(), 2.4, 0.06);
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: T.court(), roughness: 0.8 }));
+      f.position.set(cx, FLAT + 0.105, cz);
+      f.receiveShadow = true;
+      group.add(f);
+      materials.push(f.material);
+    }
     else if (p.kind === "otopark") {
       const m = slab(w, d, cx, cz, T.parkingLot(), 0, 0.07);
       const uv = m.geometry.attributes.uv;

@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { H } from "./roads.js";
+import { CELL_D, CELL_W } from "./layout.js";
 import { stations } from "./roads.js";
 
 const LANE = { cadde: 2.0, sokak: 1.15, koy: 1.6 };
@@ -315,10 +316,10 @@ export class Traffic {
       const cycle = L / BUS_SPEED + stops.length * BUS_DWELL;
       this.lines.push({ name, color, pts: clean, cum, len: L, stops, headway, cycle, first: 360, last: 1470 });
     };
-    const halfW = 260, halfD = 135;
+    const halfW = CELL_W / 2, halfD = CELL_D / 2;
     const avZ0 = w.avenueZ(0);
     loop("Çevre Hattı", "#d8433d", [[0, -halfD], [halfW, 0], [0, avZ0], [-halfW, 0]], 8);
-    const mahalle = w.cells.filter((c) => c.type === "mahalle").map((c) => [c.cx * 520, c.cz * 270]);
+    const mahalle = w.cells.filter((c) => c.type === "mahalle").map((c) => [c.cx * CELL_W, c.cz * CELL_D]);
     if (mahalle.length) loop("Mahalle Hattı", "#2f6fb5", [[0, -halfD], ...mahalle, [halfW, -halfD]], 10);
   }
 

@@ -208,3 +208,21 @@ export function parkingLot() {
     ctx.fillRect(0, sz * (7.7 / 13), 3, sz * (5.3 / 13));
   }));
 }
+
+/** Basketbol sahası: turuncu zemin, beyaz çizgiler (sahaya tek parça yayılır). */
+export function court() {
+  return (cache.court ??= canvasTexture(256, (ctx, sz) => {
+    ctx.fillStyle = "#c86a3c";
+    ctx.fillRect(0, 0, sz, sz);
+    ctx.fillStyle = "#2f6fb5";
+    ctx.fillRect(sz * 0.3, 0, sz * 0.4, sz * 0.18);
+    ctx.fillRect(sz * 0.3, sz * 0.82, sz * 0.4, sz * 0.18);
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(6, 6, sz - 12, sz - 12);
+    ctx.beginPath(); ctx.moveTo(6, sz / 2); ctx.lineTo(sz - 6, sz / 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sz / 2, sz / 2, sz * 0.12, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sz / 2, 6, sz * 0.32, 0, Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sz / 2, sz - 6, sz * 0.32, Math.PI, 2 * Math.PI); ctx.stroke();
+  }, false));
+}

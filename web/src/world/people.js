@@ -179,6 +179,7 @@ export class People {
     this.poses = Array.from({ length: this.n }, () => ({}));
     this.slotToIndex = new Map(residents.map((r, i) => [r.slot, i]));
     this.homeActs = new Array(this.n);
+    this.currentPlace = new Array(this.n);
     this.dollhouse = null;
     this.openDoors = new Set();
 
@@ -257,7 +258,7 @@ export class People {
       const a = g * 2.39996, r = 9.5 + ((g * 7) % 17);
       addGroup("meydan", Math.cos(a) * r, Math.sin(a) * r, 2 + (g % 4));
     }
-    for (const place of ["park", "tepe", "sahil_yolu", "plaj", "pazar"]) {
+    for (const place of ["park", "tepe", "sahil_yolu", "plaj", "pazar", ...Object.keys(w.places).filter((k) => k.startsWith("mahalle:"))]) {
       const pl = w.places[place];
       if (!pl) continue;
       pl.anchors.forEach(([ax, az], i) => {
@@ -282,6 +283,15 @@ export class People {
     this.pools = pools;
   }
 
+  /** Akşam buluşması (simülasyonda "meydan"): yarısı kendi mahallesinin çay bahçesine/parkına gider. */
+  _placeOf(i, k) {
+    const seg = this.plans[i][k];
+    if (!seg || seg.ne !== "meydan") return seg?.yer;
+    const key = "mahalle:" + this.homes[i].parts.mahalle;
+    if (this.world.places[key] && roll(this.residents[i].seed, "yakin", this.day * 16 + k) % 100 < 50) return key;
+    return "meydan";
+  }
+
   /** Bir sakinin bir yerdeki modu: ne yapacak? */
   _mode(i, seg, k) {
     const s = this.residents[i].seed;
@@ -294,6 +304,8 @@ export class People {
     }
     if (seg.ne === "meydan") {
       const m = roll(s, "meydanMod", this.day * 16 + k) % 100;
+      const pl = this._placeOf(i, k);
+      if (pl !== "meydan") return m < 55 ? "seat:" + pl : "group:" + pl;
       return m < 22 ? "seat:meydan" : m < 50 ? "seat:kafe" : m < 72 ? "shop" : "group:meydan";
     }
     return "group:meydan";
@@ -384,7 +396,8 @@ export class People {
   }
 
   /** Yer için meydana giden yol (kapı/yer tarafından meydana doğru). */
-  _roadPath(i, yer) {
+  _roadPath(i, yer, k) {
+    if (yer === "meydan" && k != null) yer = this._placeOf(i, k);
     if (yer === "ev") return this.homes[i].path;
     if (yer === "is") return this.works[i].loc.path;
     return this.world.placeOf(yer.replace("hobi:", "")).path;
@@ -404,8 +417,8 @@ export class People {
   }
 
   /** Bir yerin yol ağına bağlandığı nokta: yerin meydana giden yolunda ağ üstündeki ilk nokta. */
-  _access(i, yer, endpoint) {
-    const path = this._roadPath(i, yer);
+  _access(i, yer, endpoint, k) {
+    const path = this._roadPath(i, yer, k);
     for (let j = 0; j < path.length; j++) {
       if (this.nav.locate(path[j])) return { prefix: path.slice(0, j), point: path[j] };
     }
@@ -460,7 +473,7 @@ export class People {
     if (store.has(k)) return store.get(k);
     for (let j = 0; j < k; j++) if (this.plans[i][j].ne === "yol" && !store.has(j)) this._trip(i, this.plans[i][j], j);
     const A = this._endpoint(i, k - 1, true), B = this._endpoint(i, k + 1, false);
-    const accA = this._access(i, seg.nereden, A), accB = this._access(i, seg.nereye, B);
+    const accA = this._access(i, seg.nereden, A, k - 1), accB = this._access(i, seg.nereye, B, k + 1);
     const dist = Math.hypot(B[0] - A[0], B[1] - A[1]);
     const s = this.residents[i].seed;
     let trip = null;
@@ -840,7 +853,7 @@ export class People {
     if (g) {
       stand(g.x, g.z, g.heading);
     } else {
-      const place = w.placeOf(seg.yer.replace("hobi:", ""));
+      const place = w.placeOf((this._placeOf(i, k) ?? seg.yer).replace("hobi:", ""));
       const a = place.anchors[s % place.anchors.length];
       const [x, z] = w.nearestWalkable(a[0] + ((s % 7) - 3) * 1.4, a[1] + (((s >> 3) % 7) - 3) * 1.4, 6);
       stand(x, z, ph);
@@ -863,6 +876,7 @@ export class People {
       while (k < plan.length - 1 && minute >= plan[k].son) k++;
       const seg = activityAt(plan, minute);
       this.activities[i] = seg;
+      this.currentPlace[i] = seg.ne === "meydan" ? this._placeOf(i, k) : null;
       this.athome[i] = seg.ne === "ev" ? 1 : 0;
       const c = this.colors[i];
       const p = this.poses[i];

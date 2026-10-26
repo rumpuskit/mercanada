@@ -50,7 +50,10 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
       case "is": return `İşte · ${people.works[i].loc.name}`;
       case "yol": return `Yolda → ${placeLabel(i, seg.nereye)}`;
       case "hobi": return `${people.hobbies[i].ad} · ${placeLabel(i, seg.yer)}`;
-      case "meydan": return "Çarşıda, arkadaşlarıyla";
+      case "meydan": {
+        const pl = people.currentPlace[i];
+        return pl && pl !== "meydan" ? `Mahallesinin çay bahçesinde, komşularıyla` : "Çarşıda, arkadaşlarıyla";
+      }
       default: return seg.ne;
     }
   }
