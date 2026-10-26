@@ -19,6 +19,7 @@ import { NameTags } from "./world/nametags.js";
 import { Traffic, Vehicles, buildStops } from "./world/traffic.js";
 import { buildHarbor } from "./world/harbor.js";
 import { Stories } from "./world/story.js";
+import { Ambience } from "./sound.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -111,6 +112,37 @@ const dollhouse = new Dollhouse(world, city, people, scene);
 people.dollhouse = dollhouse;
 const sky = createSky(scene);
 sky.sun.shadow.mapSize.set(2048, 2048);
+
+// Ortam sesleri: düğmeyle açılır (tarayıcılar sesi ancak bir dokunuşla başlatır).
+const ambience = new Ambience();
+const soundBtn = document.getElementById("sound");
+soundBtn.addEventListener("click", () => {
+  if (ambience.enabled) { ambience.stop(); soundBtn.textContent = "🔇"; }
+  else { ambience.start(); soundBtn.textContent = "🔊"; }
+});
+const limanZ = world.coastPoint(0, 60, 0, 1)[1];
+function soundEnv(dist, light, minute) {
+  const t = controls.target;
+  let near = 0;
+  const P = people.positions;
+  for (let i = 0; i < residents.length; i++) {
+    if (!people.visible[i]) continue;
+    const dx = P[i * 3] - t.x, dz = P[i * 3 + 2] - t.z;
+    if (dx * dx + dz * dz < 35 * 35) near++;
+  }
+  let traffic = 0;
+  for (const v of people.vehicleStates) if (Math.hypot(v.x - t.x, v.z - t.z) < 70) traffic++;
+  const cell = world.cellByKey.get(`${Math.round(t.x / 560)},${Math.round(t.z / 270)}`);
+  const inPark = world.parks.some((q) => t.x > q.x0 - 20 && t.x < q.x1 + 20 && t.z > q.z0 - 20 && t.z < q.z1 + 20) || world.plazas.some((q) => q.kind === "park" && t.x > q.x0 && t.x < q.x1 && t.z > q.z0 && t.z < q.z1);
+  return {
+    dist, minute, day: light, people: near, traffic,
+    coast: Math.max(0, world.margin(t.x, t.z) - world.sdf(t.x, t.z)),
+    fountain: Math.hypot(t.x, t.z),
+    harbor: Math.hypot(t.x, t.z - limanZ),
+    nature: inPark || !cell || cell.type === "tepe" || cell.type === "kir" ? 1 : 0.35,
+    match: people.ball ? Math.hypot(t.x - world.pitch.cx, t.z - world.pitch.cz) : null,
+  };
+}
 
 // Maç topu.
 const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), new THREE.MeshStandardMaterial({ color: "#f4f4f4", roughness: 0.6, flatShading: true }));
@@ -260,6 +292,7 @@ function tick() {
   dollhouse.update(1 - light, real);
   vehicles.end(1 - light);
   if (frame % 15 === 0) ui.tick(unix, minute, day, skyState.times);
+  if (frame % 8 === 0 && ambience.enabled) ambience.update(soundEnv(dist, light, minute));
   driftClouds(clouds, dt);
   water.userData.tick(real);
   harbor.userData.tick(real);
