@@ -783,7 +783,9 @@ export class World {
     post("sofor", P.truck.x + 2.2, P.truck.z + 7.5, -Math.PI / 2);
     for (const [bx, bz, h] of P.benches) for (const dx of [-0.5, 0.5]) post("mola", bx + dx, bz, h);
     P.posts = posts;
-    this._addWorkplace("liman", 0, { door, path: [door, [gateX, this.avenueZ(gateX)], ...toHub(gateX)], anchor: [95, 215], spread: 20 });
+    // Görev yeri olmayanlar ambarın personel kapısından içeri girer.
+    const innerDoor = [wh.x + wh.w / 2 - 1.6, wh.z + wh.d / 2 + 0.6];
+    this._addWorkplace("liman", 0, { door, innerDoor, path: [door, [gateX, this.avenueZ(gateX)], ...toHub(gateX)], anchor: [95, 215], spread: 20 });
     this.labels.push({ text: "Yük Limanı", x: 98, z: 215, h: 24 });
   }
 

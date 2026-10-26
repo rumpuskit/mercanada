@@ -277,29 +277,32 @@ export function dayPlan(r, day) {
     const j = job(r);
     const shift = catalog.vardiyalar[j.vardiya];
     if (j.vardiya === "erken") sleep = 1290 + (roll(s, "uyku", day) % 60);
+    // İşe 0-24 dk erken varılır, işten 0-15 dk geç çıkılır: herkes aynı otobüse/aynı dakikaya yığılmaz.
+    const arrive = shift.bas - (roll(s, "erken_varis", day) % 25);
+    const leave = shift.son + (roll(s, "gec_cikis", day) % 16);
     if (j.vardiya === "gec") {
       // Akşam vardiyası: sabah kalkar, işe gitmeden önce çoğu bir süre dışarı çıkar.
       const wake = 510 + (roll(s, "uyan", day) % 90);
       add(plan, wake, "uyku", PLACE_HOME);
       const out = wake + 60 + (roll(s, "sabah_cikis", day) % 60);
       const len = 60 + (roll(s, "sabah_sure", day) % 60);
-      if (roll(s, "sabah", day) % 100 < 60 && out + len + commute <= shift.bas - commute - 30) {
+      if (roll(s, "sabah", day) % 100 < 60 && out + len + commute <= arrive - commute - 30) {
         add(plan, out - commute, "ev", PLACE_HOME);
         travel(plan, commute, PLACE_HOME, "meydan");
         add(plan, end(plan) + len, "meydan", "meydan");
         travel(plan, commute, "meydan", PLACE_HOME);
       }
     } else {
-      add(plan, shift.bas - commute - 45 - (roll(s, "uyan", day) % 30), "uyku", PLACE_HOME);
+      add(plan, arrive - commute - 45 - (roll(s, "uyan", day) % 30), "uyku", PLACE_HOME);
     }
-    add(plan, shift.bas - commute, "ev", PLACE_HOME);
+    add(plan, arrive - commute, "ev", PLACE_HOME);
     travel(plan, commute, PLACE_HOME, PLACE_WORK);
-    add(plan, shift.son, "is", PLACE_WORK);
+    add(plan, leave, "is", PLACE_WORK);
     const outing = eveningPlace(s, day, hobbyPlace);
     const duration = 60 + (roll(s, "sure", day) % 120);
     // Hobiler 20:00'den, meydan buluşmaları 21:30'dan önce başlar.
     const latest = outing.startsWith("hobi:") ? OUTING_LATEST_HOBBY : OUTING_LATEST_MEYDAN;
-    if (outing !== "" && shift.son + commute <= latest && shift.son + 3 * commute + duration <= sleep - 10) {
+    if (outing !== "" && leave + commute <= latest && leave + 3 * commute + duration <= sleep - 10) {
       travel(plan, commute, PLACE_WORK, outing);
       add(plan, end(plan) + duration, activityOf(outing), outing);
       travel(plan, commute, outing, PLACE_HOME);

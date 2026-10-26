@@ -9,6 +9,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { stations } from "./roads.js";
 import { CELL_D, CELL_W } from "./layout.js";
 import { MinHeap } from "./heap.js";
+import { mahalleName } from "../sim.js";
 import { pedState, signalState } from "./signals.js";
 
 const LANE = { cadde: 2.0, sokak: 1.0, koy: 1.6, giris: 1.5 };
@@ -161,6 +162,7 @@ export class Traffic {
     this.services = [];
     this.serviceDay = null;
     this.busRequests = new Map(); // "bus:hat:sefer" -> binilecek/inilecek durak sıraları
+    this.stopRiders = new Map(); // "bus:hat:sefer:durak" -> o duraktan binen sayısı
     this.simT = null;
   }
 
@@ -451,13 +453,13 @@ export class Traffic {
       const pieces = [];
       this._lanesToPieces(pieces, seq, 0, this.lanes[seq[seq.length - 1]].len);
       const route = new Route(pieces);
-      // Duraklar: ~340 m'de bir, kavşaklardan uzakta, sağ şeritte; sundurma kaldırımın arkasında.
+      // Duraklar: ~230 m'de bir, kavşaklardan uzakta, sağ şeritte; sundurma kaldırımın arkasında.
       const stops = [];
       let nextAt = 40;
       for (const p of pieces) {
         if (p.kind !== "lane") continue;
         const L = this.lanes[p.lane];
-        if (L.road.type !== "cadde") continue;
+        if (L.road.type !== "cadde" && L.road.type !== "sokak") continue; // sokakta da durak (mahalle içi)
         const plen = p.s1 - p.s0;
         for (let c = 32; c < plen - 32; c += 10) {
           const s = p.s0 + c;
@@ -471,8 +473,7 @@ export class Traffic {
           const shelter = [cx + r[0] * (hw + 1.3), cz + r[1] * (hw + 1.3)];
           if (!w.isLand(...shelter) || w.obstacles?.has(w._obKey(...shelter))) continue;
           stops.push({ s, x: pos.x, z: pos.z, heading: pos.heading, shelter, wait: [cx + r[0] * (hc + 1.0), cz + r[1] * (hc + 1.0)], curb: [cx + r[0] * (hc + 0.7), cz + r[1] * (hc + 0.7)] });
-          nextAt = s + 340;
-          break;
+          nextAt = s + 230;
         }
       }
       stops.forEach((st, k) => { st.offset = (st.s / BUS_NOMINAL + k * BUS_DWELL) / 60; });
@@ -487,6 +488,15 @@ export class Traffic {
       for (const c of cells) pts.push([c.cx * CELL_W, c.cz * CELL_D]);
       pts.push([-halfW, -halfD + 20]);
       make("Mahalle Hattı", "#2f6fb5", pts, 10);
+      // Her mahallenin kendi hattı: dış caddeleri ve orta caddesi boyunca halka.
+      const colors = ["#3e8a86", "#8a62d1", "#d9822b", "#2f7a4f", "#b8312f"];
+      cells.forEach((c, k) => {
+        const ox = c.cx * CELL_W, oz = c.cz * CELL_D;
+        make(`${mahalleName(c.mahalle).replace(" Mahallesi", "")} Hattı`, colors[k % colors.length], [
+          [ox, oz - halfD + 40], [ox + halfW - 30, oz - halfD], [ox + halfW, oz + halfD - 40],
+          [ox, oz + halfD], [ox - halfW, oz + halfD - 40], [ox - halfW + 30, oz - halfD],
+        ], 12);
+      });
     }
   }
 
@@ -643,6 +653,11 @@ export class Traffic {
     const key = `bus:${line}:${dep}`;
     if (!this.busRequests.has(key)) this.busRequests.set(key, new Set());
     this.busRequests.get(key).add(stop);
+    // Bu durakta bu sefere binecek kaçıncı yolcu (bekleme yerindeki sırası için).
+    const rk = `${key}:${stop}`;
+    const n = this.stopRiders.get(rk) ?? 0;
+    this.stopRiders.set(rk, n + 1);
+    return n;
   }
 
   _substep(dt, tSec) {

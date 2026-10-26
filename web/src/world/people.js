@@ -195,7 +195,28 @@ export class People {
     const add = (name, item) => (pools[name] ??= []).push({ ...item, busy: [] });
     for (const s of w.seats) add("seat:" + s.place, s);
     for (const s of w.places.iskele.spots) add("fish", s);
-    for (const s of w.places.fener.spots.slice(1)) add("view", s); // ilki fener bekçisinin
+    // İskele dolunca kıyıdan da balık tutulur: sahil yolunun deniz kenarında, 7 m arayla.
+    for (let x = -165; x <= 20; x += 7) {
+      if (Math.abs(x - w.places.iskele.spots[0].x) < 6 || Math.abs(x) < 9) continue;
+      const [cx, cz] = w.coastPoint(x, 60, 0, 1, 1.6);
+      if (w.isWalkable(cx, cz) && w.height(cx, cz) > 0.2) add("fish", { x: cx, z: cz, heading: 0 });
+    }
+    // Fotoğrafçılar: fenerin seyir noktaları (birbirine en az 2,5 m), sahil yolunun deniz kenarı, tepenin
+    // zirvesi ve vapur iskelesinin ucu. Hepsi aynı yere yığılmaz.
+    const views = [];
+    const addView = (s) => { if (!views.some((v) => Math.hypot(v.x - s.x, v.z - s.z) < 2.5)) { views.push(s); add("view", s); } };
+    for (const s of w.places.fener.spots.slice(1)) addView(s); // ilki fener bekçisinin
+    for (let x = -160; x <= 25; x += 12) {
+      const [cx, cz] = w.coastPoint(x + 3.5, 60, 0, 1, 2.2);
+      if (w.isWalkable(cx, cz) && w.height(cx, cz) > 0.2) addView({ x: cx, z: cz, heading: 0 });
+    }
+    const summit = w.places.tepe.anchors[0];
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2, [x, z] = w.nearestWalkable(summit[0] + Math.cos(a) * 9, summit[1] + Math.sin(a) * 9, 3);
+      addView({ x, z, heading: Math.atan2(x - summit[0], z - summit[1]) });
+    }
+    const pier = w.piers[0];
+    if (pier) for (const dx of [-3, 0, 3]) addView({ x: (pier.x0 + pier.x1) / 2 + dx, z: pier.z1 - 1.5, heading: 0 });
     // Park (şövale), plaj (yoga, yüzme), tepe (uçurtma): engelsiz noktalar.
     const scatter = (name, cx, cz, radius, count, heading, salt, accept = (x, z) => w.isWalkable(x, z)) => {
       for (let k = 0, tries = 0; k < count && tries < count * 20; tries++) {
@@ -245,9 +266,12 @@ export class People {
         if (!loc?.outdoor) return;
         if (kind === "liman" && w.port) { for (const q of w.port.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
         const center = loc.anchor;
-        const rad = Math.max(9, (loc.spread ?? 6) * 1.6);
+        // Nokta sayısı alanın büyüklüğüne göre: tarla geniş, kıyıdaki iş yerleri dar. Noktası olmayan
+        // çalışan görünmez (atölyenin içinde, denizde, tarlanın uzak ucunda) — kimse bir noktaya yığılmaz.
+        const count = { tarla: 30, balikci_koyu: 10, tersane: 10, plaj: 8, fener: 2 }[kind] ?? 14;
+        const rad = kind === "tarla" ? 34 : Math.max(9, (loc.spread ?? 6) * 1.6);
         const toward = (x, z) => Math.atan2(center[0] - x, center[1] - z);
-        scatter(`work:${kind}:${idx}`, center[0], center[1], rad, 14, toward, 31 + idx * 7 + kind.length);
+        scatter(`work:${kind}:${idx}`, center[0], center[1], rad, count, toward, 31 + idx * 7 + kind.length);
       });
     }
     this.groupPools = groups;
@@ -260,8 +284,18 @@ export class People {
     if (ov) return ov;
     const seg = this.plans[i][k];
     if (!seg || seg.ne !== "meydan") return seg?.yer;
-    const key = "mahalle:" + this.homes[i].parts.mahalle;
-    if (this.world.places[key] && roll(this.residents[i].seed, "yakin", this.day * 16 + k) % 100 < 50) return key;
+    // Buluşma yeri saatine göre, mekânların kapasitesiyle orantılı seçilir: kimse tek bir meydana yığılmaz.
+    const local = "mahalle:" + this.homes[i].parts.mahalle;
+    const t = seg.bas;
+    const table = t >= 1290
+      ? [[local, 45], ["meydan", 40], ["kahvehane", 15]]
+      : t < 1080
+        ? [[local, 25], ["meydan", 24], ["park", 20], ["sahil_yolu", 16], ["pazar", 10], ["kahvehane", 5]]
+        : [[local, 30], ["meydan", 27], ["sahil_yolu", 19], ["park", 14], ["kahvehane", 10]];
+    const opts = table.filter(([name]) => this.world.places[name]);
+    const total = opts.reduce((a, [, wgt]) => a + wgt, 0);
+    let x = roll(this.residents[i].seed, "mekan", this.day * 16 + k) % total;
+    for (const [name, wgt] of opts) { if (x < wgt) return name; x -= wgt; }
     return "meydan";
   }
 
@@ -278,6 +312,7 @@ export class People {
     if (seg.ne === "meydan") {
       const m = roll(s, "meydanMod", this.day * 16 + k) % 100;
       const pl = this._placeOf(i, k);
+      if (pl === "sahil_yolu") return "stroll"; // sahil yolunda akşam yürüyüşü
       if (pl !== "meydan") return m < 55 ? "seat:" + pl : "group:" + pl;
       return m < 22 ? "seat:meydan" : m < 50 ? "seat:kafe" : m < 72 ? "shop" : "group:meydan";
     }
@@ -431,7 +466,7 @@ export class People {
     this.dogs = this.residents.map((r) => pet(r, day) === "Köpek");
     this.travelCache.fill(null);
     this.tripStore = this.residents.map(() => new Map());
-    if (this.traffic) this.traffic.busRequests = new Map(); // yolculuklar yeniden kurulurken duraklar yeniden bildirilir
+    if (this.traffic) { this.traffic.busRequests = new Map(); this.traffic.stopRiders = new Map(); } // yolculuklar yeniden kurulurken duraklar yeniden bildirilir
     if (this.traffic) {
       // Günlük park kayıtları sıfırlanır; evlerin önündeki sabit yerler korunur.
       this.traffic.resetBookings();
@@ -450,7 +485,11 @@ export class People {
     const p = this._tmp;
     p.height = this.colors[i].height;
     resetPose(p);
-    this._placeState(i, k, atEnd ? seg.son - 0.001 : seg.bas, 0, p);
+    if (!this._placeState(i, k, atEnd ? seg.son - 0.001 : seg.bas, 0, p)) {
+      // O yerde görünmüyor (ör. ambarın içinde çalışıyor): yolculuk iç kapıda biter.
+      const loc = seg.ne === "is" ? this.works[i].loc : null;
+      return loc?.innerDoor ?? loc?.door ?? this.homes[i].door;
+    }
     return [p.x, p.z];
   }
 
@@ -675,17 +714,21 @@ export class People {
     const r1 = this._walkRoute(i, A, stA.wait, k), r2 = this._walkRoute(i, stB.curb, B, k + 1);
     const w1 = this._walkLeg(i, r1, { start: seg.bas });
     const ride = T.rideMinutes(line, sa.stop, sb.stop);
-    let chosen = null;
+    // Yetişilen seferlerden biri seçilir: herkes son sefere yığılmasın diye son üç seferden kişiye göre
+    // biri (aynı sakin için herkes aynı seferi görür; seçim yolculukların kurulma sırasına bağlı değil).
+    const viable = [];
     for (let nb = T.nextBus(line, sa.stop, w1.t1 + 0.3); nb; nb = T.nextBus(line, sa.stop, nb.t + 0.01)) {
       const w2 = this._walkLeg(i, r2, { start: nb.t + ride + 0.45 });
       if (w2.t1 > seg.son + 0.5) break;
-      chosen = { nb, w2 };
+      viable.push({ nb, w2 });
       if (nb.t > seg.son) break;
     }
-    if (!chosen) return null;
+    if (!viable.length) return null;
+    const pickBack = roll(this.residents[i].seed, "sefer", this.day * 16 + k) % Math.min(3, viable.length);
+    const chosen = viable[viable.length - 1 - pickBack];
     const { nb, w2 } = chosen;
     // Otobüs yalnızca binen ya da inen olan duraklarda durur: binişi ve inişi sefere bildir.
-    T.requestStop(li, nb.dep, sa.stop);
+    const queue = T.requestStop(li, nb.dep, sa.stop);
     T.requestStop(li, nb.dep, sb.stop);
     let walk1 = this._walkLeg(i, r1, { end: nb.t - 1.0 });
     if (walk1.t0 < seg.bas) walk1 = w1;
@@ -695,7 +738,7 @@ export class People {
       mode: "otobus", line: li,
       legs: [
         walk1,
-        { kind: "wait", t0: walk1.t1, t1: nb.t + 0.1, x: wait[0], z: wait[1], heading },
+        { kind: "wait", t0: walk1.t1, t1: nb.t + 0.1, x: wait[0], z: wait[1], heading, queue },
         { kind: "bus", t0: nb.t + 0.1, t1: nb.t + ride + 0.45, line: li, dep: nb.dep, a: sa.stop, b: sb.stop, exit: stB.curb },
         w2,
       ],
@@ -735,6 +778,7 @@ export class People {
 
     if (role.mode.startsWith("work:")) {
       const loc = this.works[i].loc;
+      if (!it && this.works[i].job !== "fener_bekcisi") return false; // görev noktası yok: görünmeyen yerde çalışıyor
       const [ax, az] = it ? [it.x, it.z] : loc.anchor;
       switch (this.works[i].job) {
         case "liman_iscisi": {
@@ -843,7 +887,19 @@ export class People {
           return true;
         }
         case "cankurtaran": {
+          // Biri kulede gözcülük yapar; diğerleri kıyı boyunca devriye gezer, ara ara dürbünle bakar.
           const tower = w.features.find((f) => f.type === "cankurtaran");
+          const idx = this.pools[role.mode]?.indexOf(it) ?? 0;
+          if (tower && idx > 0) {
+            const shore = w.places.plaj.anchors;
+            const a = shore[(idx * 3) % shore.length], b = shore[(idx * 3 + 4) % shore.length];
+            const r = pingPong([[a[0], a[1] + 3], [b[0], b[1] + 3]], 0.55, ph * 30);
+            const look = Math.sin(sec * 0.07 + ph * 4) > 0.75;
+            stand(at.x, at.z, look ? 0 : r.heading);
+            if (look) { p.shL = p.shR = 1.3; p.elL = p.elR = 2.2; p.props = ["durbun"]; }
+            else walkPose(p, r.d / (0.72 * kk) * Math.PI);
+            return true;
+          }
           if (tower) {
             stand(tower.x, tower.z, Math.PI * 0.05);
             p.y = w.groundY(tower.x, tower.z);
@@ -1057,7 +1113,20 @@ export class People {
     if (g) {
       stand(g.x, g.z, g.heading);
     } else {
-      const place = w.placeOf((this._placeOf(i, k) ?? seg.yer).replace("hobi:", ""));
+      // Yerde boş köşe kalmadı: tek noktaya yığılmak yerine yerin çevresinde ağır ağır dolaşır.
+      const key = (this._placeOf(i, k) ?? seg.yer).replace("hobi:", "");
+      const loop = this._strollLoop(key);
+      if (loop) {
+        const d = (sec * 0.75 + frac(roll(s, "gezinti", k)) * loop.L) % loop.L;
+        along(loop.pts, loop.lens, d, at);
+        const lat = ((s % 5) - 2) * 0.55;
+        const nx = at.x + Math.cos(at.heading) * lat, nz = at.z - Math.sin(at.heading) * lat;
+        stand(w.isWalkable(nx, nz) ? nx : at.x, w.isWalkable(nx, nz) ? nz : at.z, at.heading);
+        walkPose(p, (d / (0.72 * kk)) * Math.PI);
+        p.dog = true;
+        return true;
+      }
+      const place = w.placeOf(key);
       const a = place.anchors[s % place.anchors.length];
       const [x, z] = w.nearestWalkable(a[0] + ((s % 7) - 3) * 1.4, a[1] + (((s >> 3) % 7) - 3) * 1.4, 6);
       stand(x, z, ph);
@@ -1065,6 +1134,62 @@ export class People {
     idleGesture(p, t, ph, true);
     p.dog = true;
     return true;
+  }
+
+  /**
+   * Bir yerin çevresinde gezinti halkası: yerin noktalarının ortasından 24 yönde, yürünebilir ve
+   * aralarındaki doğru boyunca engelsiz noktalar. Bulunamazsa null.
+   */
+  _strollLoop(key) {
+    this._loops ??= new Map();
+    if (this._loops.has(key)) return this._loops.get(key);
+    const w = this.world;
+    const place = w.places[key];
+    let loop = null;
+    if (place?.anchors?.length) {
+      const cx = place.anchors.reduce((a, q) => a + q[0], 0) / place.anchors.length;
+      const cz = place.anchors.reduce((a, q) => a + q[1], 0) / place.anchors.length;
+      const spreadR = Math.max(...place.anchors.map((q) => Math.hypot(q[0] - cx, q[1] - cz)));
+      const R = Math.max(14, spreadR + 10, (place.spread ?? 0) * 2);
+      const pts = [];
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        const [x, z] = w.nearestWalkable(cx + Math.cos(a) * R, cz + Math.sin(a) * R, 8);
+        if (!w.isWalkable(x, z) || w.height(x, z) < 0.3) continue;
+        const prev = pts[pts.length - 1];
+        if (prev) {
+          const L = Math.hypot(x - prev[0], z - prev[1]);
+          let ok = L > 1.5;
+          for (let u = 0.5; ok && u < L; u += 0.8) ok = w.isWalkable(prev[0] + ((x - prev[0]) * u) / L, prev[1] + ((z - prev[1]) * u) / L);
+          if (!ok) continue;
+        }
+        pts.push([x, z]);
+      }
+      if (pts.length >= 6) {
+        pts.push(pts[0]);
+        const lens = lengths(pts);
+        loop = { pts, lens, L: lens[lens.length - 1] };
+      }
+    }
+    // Sahil yolu: gezinti yolu boyunca gidip gelinir (halka yerine yolun kendisi).
+    if (key === "sahil_yolu" && w.promenade?.length > 2) {
+      const pts = [...w.promenade, ...[...w.promenade].reverse().slice(1)];
+      const lens = lengths(pts);
+      loop = { pts, lens, L: lens[lens.length - 1] };
+    }
+    this._loops.set(key, loop);
+    return loop;
+  }
+
+  /** Durakta bekleme yeri: geliş sırasına göre kaldırım boyunca 12'şerli sıralar (u: yerine geçme 0→1). */
+  _queuePos(i, leg, u = 1) {
+    const w = this.world;
+    const slot = leg.queue ?? this.residents[i].seed % 10, h = leg.heading ?? 0;
+    const row = Math.floor(slot / 12);
+    const lat = ((slot % 12) - 5.5) * 0.72 + (row % 2) * 0.36, back = Math.min(row, 3) * 0.7 + Math.max(0, row - 3) * 0.35;
+    const x = leg.x + (Math.cos(h) * lat - Math.sin(h) * back) * u, z = leg.z + (-Math.sin(h) * lat - Math.cos(h) * back) * u;
+    // Sundurma ya da direk araya giriyorsa en yakın boş yere (durağın tam ortasına değil).
+    return w.isWalkable(x, z) ? [x, z] : w.nearestWalkable(x, z, 2.5);
   }
 
   /** Yürüyüş anı: zaman çizelgesinden konum, ışıkta bekleme ya da yürüme duruşu. */
@@ -1148,7 +1273,8 @@ export class People {
         return true;
       }
       case "wait": {
-        p.x = leg.x; p.z = leg.z; p.y = w.groundY(leg.x, leg.z); p.heading = leg.heading ?? 0;
+        const [wx, wz] = this._queuePos(i, leg, Math.min(1, (minute - leg.t0) * 30));
+        p.x = wx; p.z = wz; p.y = w.groundY(wx, wz); p.heading = leg.heading ?? 0;
         idleGesture(p, time, i, false);
         if (roll(this.residents[i].seed, "durakTel") % 2) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
         // Taksi son yarım dakikada gelip kaldırım kenarında bekler.
@@ -1180,16 +1306,31 @@ export class People {
         if (veh && veh.served <= leg.a && veh.s < line.stops[leg.a].s - 1) {
           // Otobüs gecikti: durakta beklemeye devam.
           const prev = this.travelCache[i].legs.find((l) => l.kind === "wait");
-          if (prev) { p.x = prev.x; p.z = prev.z; p.y = w.groundY(prev.x, prev.z); p.heading = prev.heading; idleGesture(p, time, i, false); return true; }
+          if (prev) { const [qx, qz] = this._queuePos(i, prev, 1); p.x = qx; p.z = qz; p.y = w.groundY(qx, qz); p.heading = prev.heading; idleGesture(p, time, i, false); return true; }
           return false;
         }
         if (veh && veh.served <= leg.b) {
           const n = (this.busSeat.get(veh) ?? 0);
           this.busSeat.set(veh, n + 1);
-          const row = Math.floor(n / 2) % 9, side = n % 2 ? -0.62 : 0.62;
-          this._seatIn(veh, side, 4.0 - row * 1.05, 0.88, p);
-          p.shL = p.shR = 0.35; p.elL = p.elR = 0.9;
-          return true;
+          if (n < 18) {
+            // 9 sıra çift koltuk.
+            const row = Math.floor(n / 2), side = n % 2 ? -0.62 : 0.62;
+            this._seatIn(veh, side, 4.0 - row * 1.05, 0.88, p);
+            p.shL = p.shR = 0.35; p.elL = p.elR = 0.9;
+            return true;
+          }
+          if (n < 30) {
+            // Koridorda ayakta, tutamağa tutunarak.
+            this._seatIn(veh, ((n % 2) - 0.5) * 0.25, 3.6 - (n - 18) * 0.62, 0, p);
+            resetPose(p);
+            const sp = this.traffic.pose ? this.traffic.pose(veh) : veh.route.position(veh.s);
+            const h = sp.heading, lx = ((n % 2) - 0.5) * 0.25, lz = 3.6 - (n - 18) * 0.62;
+            p.x = sp.x + Math.cos(h) * lx + Math.sin(h) * lz; p.z = sp.z - Math.sin(h) * lx + Math.cos(h) * lz;
+            p.y = w.surfaceY(sp.x, sp.z) + 0.06 + 0.38; p.heading = h; p.inVehicle = true; p.vehicleKey = veh.key; p.radius = 0;
+            p.shR = 2.6; p.elR = 0.2; p.headYaw = 0.3 * Math.sin(time * 0.3 + i);
+            return true;
+          }
+          return false; // dolu otobüste camdan görünmeyen yolcular
         }
         if (!veh) return false;
         const ex = leg.exit;

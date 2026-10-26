@@ -268,27 +268,30 @@ def day_plan(r: dict, day: int) -> list:
         start, end = int(shift["bas"]), int(shift["son"])
         if job(r)["vardiya"] == "erken":
             sleep = 1290 + roll(s, "uyku", day) % 60
+        # İşe 0-24 dk erken varılır, işten 0-15 dk geç çıkılır: herkes aynı otobüse/aynı dakikaya yığılmaz.
+        arrive = start - roll(s, "erken_varis", day) % 25
+        leave = end + roll(s, "gec_cikis", day) % 16
         if job(r)["vardiya"] == "gec":
             # Akşam vardiyası: sabah kalkar, işe gitmeden önce çoğu bir süre dışarı çıkar.
             wake = 510 + roll(s, "uyan", day) % 90
             _add(plan, wake, "uyku", PLACE_HOME)
             out = wake + 60 + roll(s, "sabah_cikis", day) % 60
             length = 60 + roll(s, "sabah_sure", day) % 60
-            if roll(s, "sabah", day) % 100 < 60 and out + length + commute <= start - commute - 30:
+            if roll(s, "sabah", day) % 100 < 60 and out + length + commute <= arrive - commute - 30:
                 _add(plan, out - commute, "ev", PLACE_HOME)
                 _travel(plan, commute, PLACE_HOME, "meydan")
                 _add(plan, _end(plan) + length, "meydan", "meydan")
                 _travel(plan, commute, "meydan", PLACE_HOME)
         else:
-            _add(plan, start - commute - 45 - roll(s, "uyan", day) % 30, "uyku", PLACE_HOME)
-        _add(plan, start - commute, "ev", PLACE_HOME)
+            _add(plan, arrive - commute - 45 - roll(s, "uyan", day) % 30, "uyku", PLACE_HOME)
+        _add(plan, arrive - commute, "ev", PLACE_HOME)
         _travel(plan, commute, PLACE_HOME, PLACE_WORK)
-        _add(plan, end, "is", PLACE_WORK)
+        _add(plan, leave, "is", PLACE_WORK)
         outing = _evening_place(s, day, hobby_place)
         duration = 60 + roll(s, "sure", day) % 120
         # Hobiler 20:00'den, meydan buluşmaları 21:30'dan önce başlar.
         latest = OUTING_LATEST_HOBBY if outing.startswith("hobi:") else OUTING_LATEST_MEYDAN
-        if outing and end + commute <= latest and end + 3 * commute + duration <= sleep - 10:
+        if outing and leave + commute <= latest and leave + 3 * commute + duration <= sleep - 10:
             _travel(plan, commute, PLACE_WORK, outing)
             _add(plan, _end(plan) + duration, _activity_of(outing), outing)
             _travel(plan, commute, outing, PLACE_HOME)
