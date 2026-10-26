@@ -285,7 +285,7 @@ export function buildRoads(world) {
           M.curb.wall(oa, ob, ga - 0.08, ga + H.walk, gb - 0.08, gb + H.walk);
         }
       }
-      if (road.type === "cadde" && Math.floor((a.d + b.d) / 2 / 3) % 2 === 0) {
+      if ((road.type === "cadde" || road.type === "sokak") && Math.floor((a.d + b.d) / 2 / 3) % 2 === 0) {
         M.mark.quad(P(a, -0.07, ga + H.marking), P(b, -0.07, gb + H.marking), P(b, 0.07, gb + H.marking), P(a, 0.07, ga + H.marking), [0, 0], [0, 1], [1, 1], [1, 0]);
       }
     }
@@ -495,7 +495,7 @@ export function buildGrounds(world) {
       materials.push(f.material);
     } else if (p.kind === "pazar") slab(w, d, cx, cz, T.slabs(), 5, 0.1);
     else if (p.kind === "avlu") slab(w, d, cx, cz, T.slabs(), 5, 0.12);
-    else if (p.kind === "oyun") slab(w, d, cx, cz, T.dirt(), 4, 0.06, 0xd6b48a);
+    else if (p.kind === "oyun") slab(w, d, cx, cz, T.paving(), 3, 0.06, new THREE.Color(p.color ?? "#d6b48a").lerp(new THREE.Color("#d9d2c6"), 0.45));
     else if (p.kind === "basket") {
       slab(w + 2, d + 2, cx, cz, T.paving(), 2.4, 0.06);
       const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: T.court(), roughness: 0.8 }));

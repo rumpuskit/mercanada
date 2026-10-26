@@ -280,7 +280,10 @@ export class World {
     for (const b of this.buildings) this.addObstacleRect(b.x, b.z, b.w + 0.3, b.d + 0.3, b.rot);
     for (const f of this.features) {
       switch (f.type) {
-        case "cesme": this.addObstacleCircle(f.x, f.z, 6.7); break;
+        case "cesme":
+          this.addObstacleCircle(f.x, f.z, 8.3);
+          for (const [bx, bz] of this.flowerBeds ?? []) this.addObstacleCircle(bx, bz, 1.8);
+          break;
         case "gol": this.addObstacleCircle(f.x, f.z, f.r + 0.9); break;
         case "havuz": this.addObstacleRect(f.x, f.z, f.w + 1, f.d + 1); break;
         case "tezgah": this.addObstacleRect(f.x, f.z, 3.4, 2.2); break;
@@ -293,7 +296,7 @@ export class World {
         case "fener": this.addObstacleCircle(f.x, f.z, 4.6); break;
         case "minare": this.addObstacleCircle(f.x, f.z, 1.8); break;
         case "sadirvan": this.addObstacleCircle(f.x, f.z, 2.9); break;
-        case "oyun": this.addObstacleRect(f.x, f.z, 12, 8); break;
+        case "oyun": for (const o of playgroundItems(f)) this.addObstacleRect(o.x, o.z, o.w, o.d, o.rot); break;
         case "pota": this.addObstacleCircle(f.x, f.z, 0.5); break;
         case "vinc": this.addObstacleRect(f.x, f.z, 1.8, 1.8); break;
       }
@@ -487,6 +490,7 @@ export class World {
       const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
       this.addBench(Math.cos(a) * 15, Math.sin(a) * 15, Math.atan2(-Math.cos(a), -Math.sin(a)), "meydan");
       this.features.push({ type: "agac", x: Math.cos(a) * 22, z: Math.sin(a) * 22 });
+      this.flowerBeds = (this.flowerBeds ?? []).concat([[Math.cos(i / 8 * Math.PI * 2) * 18.5, Math.sin(i / 8 * Math.PI * 2) * 18.5]]);
     }
     this.places.meydan = { anchors: [[0, 0]], spread: R - 6, path: [HUB] };
     for (let i = 0; i < 8; i++) {
@@ -603,7 +607,8 @@ export class World {
         }
       }
     }
-    for (const gx of [90, 200]) this.features.push({ type: "kale", x: gx, z: -84, dir: gx < 145 ? 1 : -1 });
+    // Kaleler kale çizgisinde (saha dokusunda çizgiler kenardan 4,3 m içeride).
+    for (const gx of [90 + 4.3, 200 - 4.3]) this.features.push({ type: "kale", x: gx, z: -84, dir: gx < 145 ? 1 : -1 });
     for (const [mx, mz] of [[87, -125], [203, -125], [87, -43], [203, -43]]) {
       this.features.push({ type: "projektor", x: mx, z: mz });
       this.lamps.push({ x: mx, z: mz, dir: Math.atan2(145 - mx, -84 - mz), r: 48, flood: true });
@@ -918,7 +923,7 @@ export class World {
         const perFloor = Math.ceil(perBina / floors);
         this.addBuilding({
           kind: "konut", x: home.bx, z: home.bz, rot: home.rot,
-          w: perFloor * 4.6 + 2.4, d: BINA_D, floors, perFloor,
+          w: perFloor * 4.6 + 2.4, d: BINA_D, floors, perFloor, yard: style.yard, pathSeed: key,
           roofType: hash2(key, 2, 5) < 0.75 ? "hip" : "flat",
           wall: HOUSE_WALLS[Math.floor(hash2(key, 3, 5) * HOUSE_WALLS.length)],
           roof: HOUSE_ROOFS[Math.floor(hash2(key, 4, 5) * HOUSE_ROOFS.length)],
@@ -985,8 +990,9 @@ export class World {
             break;
           }
           case "oyun": {
-            this.plazas.push({ x0: x - 11, z0: cz - g.h / 2 + 2, x1: x + 11, z1: cz + g.h / 2 - 2, kind: "oyun" });
-            this.features.push({ type: "oyun", x, z: cz });
+            const seedP = m * 7 + r * 3 + (side > 0 ? 1 : 0);
+            this.plazas.push({ x0: x - 11, z0: cz - g.h / 2 + 2, x1: x + 11, z1: cz + g.h / 2 - 2, kind: "oyun", color: ["#c86a5a", "#6f9a5a", "#5a7fa8", "#d8b46a", "#9a7ab8"][seedP % 5] });
+            this.features.push({ type: "oyun", x, z: cz, seed: seedP, w: 20, d: g.h - 6 });
             for (const dz of [-1, 1]) this.addBench(x + side * -10, cz + dz * 6, side < 0 ? Math.PI / 2 : -Math.PI / 2, place);
             anchors.push([x + side * -8, cz]);
             break;
@@ -1052,4 +1058,22 @@ export class World {
   placeOf(name) {
     return this.places[name] ?? this.places.meydan;
   }
+}
+
+/** Oyun parkındaki aletler: tohuma göre seçilir ve yerleştirilir (her park farklı). */
+export function playgroundItems(f) {
+  const h = (n) => ((Math.imul((f.seed + 1) * 2654435761 + n * 40503, 2246822519) >>> 0) % 10000) / 10000;
+  const pool = ["kule", "salincak", "tahterevalli", "yayli", "kum", "kubbe", "atlikarinca", "tirmanma"];
+  // Karıştır ve 4-5 alet seç.
+  const order = pool.map((k, i) => [h(i + 1), k]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+  const n = 4 + (h(20) < 0.5 ? 1 : 0);
+  const SIZES = { kule: [5, 4], salincak: [4.5, 2.6], tahterevalli: [3.6, 1.2], yayli: [3, 1.4], kum: [3.4, 3.4], kubbe: [3.6, 3.6], atlikarinca: [3.2, 3.2], tirmanma: [4.4, 1.6] };
+  const cells = [[-5.5, -3.2], [5.5, -3.2], [-5.5, 3.4], [5.5, 3.4], [0, 0]];
+  const flip = h(21) < 0.5 ? -1 : 1;
+  return order.slice(0, n).map((kind, i) => {
+    const [cx, cz] = cells[i];
+    const [w, d] = SIZES[kind];
+    const rot = Math.floor(h(30 + i) * 4) * (Math.PI / 2) + (h(40 + i) - 0.5) * 0.3;
+    return { kind, x: f.x + cx * flip + (h(50 + i) - 0.5) * 1.2, z: f.z + cz * Math.min(1, f.d / 16) + (h(60 + i) - 0.5) * 0.8, w, d, rot, c: Math.floor(h(70 + i) * 5) };
+  });
 }

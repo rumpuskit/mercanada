@@ -127,7 +127,9 @@ export function buildWater(world) {
       diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.96, 0.98, 0.98), clamp(foamBand * (0.6 + 0.4 * foamNoise), 0.0, 0.85));
       diffuseColor.a *= mix(0.62, 1.0, smoothstep(0.0, 0.25, depth));`)
       .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
-      vec2 sl = waveSlope(vWaterWorld.xz, uTime);
+      // Uzakta dalga eğimi söner (uzaktan bakınca çizgilenme olmasın).
+      float wfade = smoothstep(700.0, 120.0, length(vWaterWorld - cameraPosition));
+      vec2 sl = waveSlope(vWaterWorld.xz, uTime) * wfade;
       vec3 wn = normalize(vec3(-sl.x, 1.0, -sl.y));
       normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);`);
   };

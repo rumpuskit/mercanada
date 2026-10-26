@@ -223,7 +223,7 @@ export class People {
       (groups[place] ??= []).push({ x, z, cap, slots: Array.from({ length: cap }, () => []) });
     };
     for (let g = 0; g < 44; g++) {
-      const a = g * 2.39996, r = 9.5 + ((g * 7) % 17);
+      const a = g * 2.39996, r = 9.8 + ((g * 7) % 16);
       addGroup("meydan", Math.cos(a) * r, Math.sin(a) * r, 2 + (g % 4));
     }
     for (const place of ["park", "tepe", "sahil_yolu", "plaj", "pazar", "fener", ...Object.keys(w.places).filter((k) => k.startsWith("mahalle:"))]) {
@@ -1229,7 +1229,7 @@ export class People {
         const side = 0.75;
         const dx = Math.cos(p.heading) * side, dz = -Math.sin(p.heading) * side;
         const x = p.x + dx + Math.sin(p.heading) * 0.5, z = p.z + dz + Math.cos(p.heading) * 0.5;
-        if (w.isWalkable(x, z)) crowd.addDog(x, w.groundY(x, z), z, p.heading, (p.phase ?? 0) * 1.6, DOG_COLORS[this.residents[i].seed % DOG_COLORS.length]);
+        if (w.isWalkable(x, z)) crowd.addDog(x, w.groundY(x, z), z, p.heading + (p.moving ? 0 : 0.6), (p.phase ?? 0) * 1.6, DOG_COLORS[this.residents[i].seed % DOG_COLORS.length], !!p.moving, time, this.residents[i].seed % 97);
       }
     }
     // Taksi, otobüs ve hizmet aracı şoförleri (sakin değil).

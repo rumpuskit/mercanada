@@ -123,42 +123,42 @@ const REF = { cam: 11, servi: 11, cinar: 10, zeytin: 5, palmiye: 8.5 };
 const KINDS = {
   cam: {
     h: [9, 13], trunkR: 0.3, colors: ["#4f7a3e", "#5b8546", "#46703a"],
-    trunk: () => mergeColored([
-      branch([0, 0, 0], [0.35, 8.6, 0], 0.32, 0.2, "#7a5b45"),
-      branch([0.3, 7.6, 0], [1.9, 9.2, 0.6], 0.14, 0.07, "#7a5b45"),
-      branch([0.3, 7.9, 0], [-1.4, 9.3, -0.9], 0.14, 0.07, "#7a5b45"),
-      branch([0.33, 8.2, 0], [0.6, 9.3, 1.8], 0.12, 0.06, "#7a5b45"),
-    ]),
-    crown: () => colored(clumps("cam", 7, 2.7, 2.3, 0.42, 9.7), "#ffffff"),
+    trunk: (v) => { const lean = [0.35, 0.9, -0.6][v]; return mergeColored([
+      branch([0, 0, 0], [lean, 8.6, 0], 0.32, 0.2, "#7a5b45"),
+      branch([lean * 0.85, 7.6, 0], [lean + 1.6, 9.2, 0.6], 0.14, 0.07, "#7a5b45"),
+      branch([lean * 0.85, 7.9, 0], [lean - 1.7, 9.3, -0.9], 0.14, 0.07, "#7a5b45"),
+      branch([lean * 0.95, 8.2, 0], [lean + 0.3, 9.3, 1.8], 0.12, 0.06, "#7a5b45"),
+    ]); },
+    crown: (v) => colored(clumps("cam" + v, 6 + v, 2.5 + v * 0.3, 2.3, 0.42, 9.7).translate([0.35, 0.9, -0.6][v], 0, 0), "#ffffff"),
   },
   servi: {
     h: [9, 14], trunkR: 0.18, colors: ["#3c5e34", "#35552f", "#40633a"],
     trunk: () => mergeColored([branch([0, 0, 0], [0, 1.6, 0], 0.17, 0.13, "#6b5040")]),
-    crown: () => cypress(REF.servi),
+    crown: (v) => cypress(REF.servi * [1, 0.92, 1.06][v]),
   },
   cinar: {
     h: [8, 12], trunkR: 0.38, colors: ["#6f9d4c", "#7aa755", "#64913f", "#86ad5c"],
-    trunk: () => mergeColored([
-      branch([0, 0, 0], [0.1, 5.6, 0], 0.4, 0.26, "#8a7560"),
-      branch([0.1, 4.6, 0], [1.6, 6.6, 0.5], 0.16, 0.08, "#8a7560"),
-      branch([0.1, 4.9, 0], [-1.3, 6.8, -0.8], 0.16, 0.08, "#8a7560"),
-      branch([0.1, 5.2, 0], [0.2, 7.0, 1.5], 0.14, 0.07, "#8a7560"),
-    ]),
-    crown: () => colored(clumps("cinar", 8, 2.1, 2.2, 0.85, 7.2), "#ffffff"),
+    trunk: (v) => { const t = [0.1, 0.5, -0.3][v]; return mergeColored([
+      branch([0, 0, 0], [t, 5.6, 0], 0.4, 0.26, "#8a7560"),
+      branch([t, 4.6, 0], [t + 1.6, 6.6, 0.5], 0.16, 0.08, "#8a7560"),
+      branch([t, 4.9, 0], [t - 1.3, 6.8, -0.8], 0.16, 0.08, "#8a7560"),
+      branch([t, 5.2, 0], [t + 0.2, 7.0, 1.5], 0.14, 0.07, "#8a7560"),
+    ]); },
+    crown: (v) => colored(clumps("cinar" + v, 7 + v, 1.9 + v * 0.25, 2.2, [0.85, 0.75, 0.95][v], 7.2).translate([0.1, 0.5, -0.3][v], 0, 0), "#ffffff"),
   },
   zeytin: {
     h: [4, 6], trunkR: 0.25, colors: ["#8a9c6d", "#7d9163", "#93a578"],
-    trunk: () => mergeColored([
-      branch([0, 0, 0], [0.4, 1.6, 0.1], 0.26, 0.2, "#6e5a48"),
-      branch([0.4, 1.5, 0.1], [-0.2, 2.9, 0.3], 0.18, 0.12, "#6e5a48"),
-      branch([0.4, 1.6, 0.1], [1.2, 2.8, -0.3], 0.14, 0.09, "#6e5a48"),
-    ]),
-    crown: () => colored(clumps("zeytin", 6, 1.3, 1.35, 0.68, 3.4), "#ffffff"),
+    trunk: (v) => { const t = [0.4, -0.3, 0.7][v]; return mergeColored([
+      branch([0, 0, 0], [t, 1.6, 0.1], 0.26, 0.2, "#6e5a48"),
+      branch([t, 1.5, 0.1], [t - 0.6, 2.9, 0.3], 0.18, 0.12, "#6e5a48"),
+      branch([t, 1.6, 0.1], [t + 0.8, 2.8, -0.3], 0.14, 0.09, "#6e5a48"),
+    ]); },
+    crown: (v) => colored(clumps("zeytin" + v, 5 + v, 1.2 + v * 0.2, 1.35, 0.68, 3.4).translate([0.4, -0.3, 0.7][v] * 0.6, 0, 0), "#ffffff"),
   },
   palmiye: {
     h: [7, 10], trunkR: 0.26, colors: ["#ffffff", "#f2f6ea", "#eef4e2"],
-    trunk: () => palmTrunk(REF.palmiye, 0.9),
-    crown: () => palmCrown(REF.palmiye, 0.9, "palmiye"),
+    trunk: (v) => palmTrunk(REF.palmiye, [0.9, 1.6, 0.4][v]),
+    crown: (v) => palmCrown(REF.palmiye, [0.9, 1.6, 0.4][v], "palmiye" + v),
   },
 };
 
@@ -215,27 +215,41 @@ export function buildTrees(world) {
   const bark = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const color = new THREE.Color();
+  const tilt = new THREE.Quaternion(), axis = new THREE.Vector3();
+  const VARIANTS = 3;
   for (const [name, kind] of Object.entries(KINDS)) {
-    const list = spots.filter((t) => t.kind === name && world.isWalkable(t.x, t.z));
-    if (!list.length) continue;
-    const trunk = new THREE.InstancedMesh(kind.trunk(), bark, list.length);
-    const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: name !== "servi", transparent: true, opacity: 1, side: name === "palmiye" ? THREE.DoubleSide : THREE.FrontSide });
-    crowns.push(crownMat);
-    const crown = new THREE.InstancedMesh(kind.crown(), crownMat, list.length);
-    list.forEach((t, i) => {
-      const h = kind.h[0] + t.r * (kind.h[1] - kind.h[0]);
-      const k = h / REF[name];
-      q.setFromAxisAngle(up, t.t * 6.283);
-      m.compose(pos.set(t.x, t.y, t.z), q, sc.set(k, k, k));
-      trunk.setMatrixAt(i, m);
-      crown.setMatrixAt(i, m);
-      crown.setColorAt(i, color.set(kind.colors[Math.floor(t.t * 97) % kind.colors.length]));
-      world.addObstacleCircle(t.x, t.z, kind.trunkR * k + 0.25);
-    });
-    for (const mesh of [trunk, crown]) {
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      group.add(mesh);
+    const all = spots.filter((t) => t.kind === name && world.isWalkable(t.x, t.z));
+    for (let v = 0; v < VARIANTS; v++) {
+      // Her türün üç biçimi: gövde eğimi, dal yapısı ve taç şekli farklı.
+      const list = all.filter((t) => Math.floor(t.t * 1000) % VARIANTS === v);
+      if (!list.length) continue;
+      const trunk = new THREE.InstancedMesh(kind.trunk(v), bark, list.length);
+      const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: name !== "servi", transparent: true, opacity: 1, side: name === "palmiye" ? THREE.DoubleSide : THREE.FrontSide });
+      crowns.push(crownMat);
+      const crown = new THREE.InstancedMesh(kind.crown(v), crownMat, list.length);
+      list.forEach((t, i) => {
+        const h = kind.h[0] + t.r * (kind.h[1] - kind.h[0]);
+        const k = h / REF[name];
+        // Her ağaç biraz farklı: en-boy oranı, hafif eğim, renk tonu.
+        const r2 = (t.t * 7.31) % 1, r3 = (t.r * 5.17 + t.t) % 1;
+        const wide = 0.85 + r2 * 0.32, deep = 0.85 + r3 * 0.32;
+        q.setFromAxisAngle(up, t.t * 6.283);
+        axis.set(Math.cos(r2 * 6.283), 0, Math.sin(r2 * 6.283));
+        tilt.setFromAxisAngle(axis, (r3 - 0.5) * (name === "servi" ? 0.05 : 0.12));
+        q.premultiply(tilt);
+        m.compose(pos.set(t.x, t.y, t.z), q, sc.set(k * wide, k, k * deep));
+        trunk.setMatrixAt(i, m);
+        crown.setMatrixAt(i, m);
+        color.set(kind.colors[Math.floor(t.t * 97) % kind.colors.length]);
+        color.offsetHSL((r2 - 0.5) * 0.04, (r3 - 0.5) * 0.12, (r2 - 0.5) * 0.08);
+        crown.setColorAt(i, color);
+        world.addObstacleCircle(t.x, t.z, kind.trunkR * k + 0.25);
+      });
+      for (const mesh of [trunk, crown]) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        group.add(mesh);
+      }
     }
   }
   return group;

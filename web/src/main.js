@@ -327,6 +327,7 @@ function tick() {
   if (frame % 8 === 0 && ambience.enabled) ambience.update(soundEnv(dist, light, minute));
   driftClouds(clouds, dt);
   water.userData.tick(real);
+  city.tick(real);
   harbor.userData.tick(real);
   fadeTrees(trees, dist);
   // Telefonda kart ekranın altını kapatır; görüntüyü yukarı kaydır.

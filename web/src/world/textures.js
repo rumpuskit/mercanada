@@ -285,3 +285,19 @@ export function stoneBase() {
     }
   }));
 }
+
+/** Balkon parmaklığı: saydam zeminde dikey çubuklar ve alt-üst lamalar (alfa testli). */
+export function railing() {
+  if (cache.railing) return cache.railing;
+  const canvas = document.createElement("canvas");
+  canvas.width = 256; canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  for (let x = 4; x < 256; x += 14) ctx.fillRect(x, 0, 3, 64);
+  ctx.fillRect(0, 0, 256, 4);
+  ctx.fillRect(0, 58, 256, 6);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  cache.railing = tex;
+  return tex;
+}

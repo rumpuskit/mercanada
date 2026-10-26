@@ -137,17 +137,23 @@ const PROPS = {
   ip: () => merge([tint(new THREE.CylinderGeometry(0.006, 0.006, 1, 3).translate(0, 0.5, 0), "#f4f4f4")]),
 };
 
+/** Köpek parçaları: gövde, baş (boyundan döner), kuyruk (kökünden döner), bacak (omuzdan/kalçadan). */
 function dogGeometries() {
   return {
     body: merge([
       tint(new THREE.CylinderGeometry(0.13, 0.12, 0.6, 8).rotateX(Math.PI / 2).translate(0, 0.42, 0), W),
-      tint(new THREE.SphereGeometry(0.12, 8, 6).scale(1, 1, 1.25).translate(0, 0.58, 0.36), W),
-      tint(new THREE.BoxGeometry(0.1, 0.08, 0.14).translate(0, 0.55, 0.5), W),
-      tint(new THREE.SphereGeometry(0.025, 5, 4).translate(0, 0.57, 0.58), "#141414"),
-      tint(new THREE.BoxGeometry(0.05, 0.12, 0.04).rotateZ(0.3).translate(-0.08, 0.68, 0.33), "#9a9a9a"),
-      tint(new THREE.BoxGeometry(0.05, 0.12, 0.04).rotateZ(-0.3).translate(0.08, 0.68, 0.33), "#9a9a9a"),
-      tint(new THREE.CylinderGeometry(0.02, 0.03, 0.28, 5).rotateX(-0.9).translate(0, 0.55, -0.38), W),
+      tint(new THREE.CylinderGeometry(0.06, 0.08, 0.16, 6).rotateX(-0.6).translate(0, 0.5, 0.3), W),
     ]),
+    head: merge([
+      tint(new THREE.SphereGeometry(0.115, 8, 6).scale(1, 1, 1.2).translate(0, 0.06, 0.06), W),
+      tint(new THREE.BoxGeometry(0.1, 0.08, 0.14).translate(0, 0.02, 0.18), W),
+      tint(new THREE.SphereGeometry(0.025, 5, 4).translate(0, 0.04, 0.26), "#141414"),
+      tint(new THREE.SphereGeometry(0.016, 4, 3).translate(-0.045, 0.1, 0.13), "#141414"),
+      tint(new THREE.SphereGeometry(0.016, 4, 3).translate(0.045, 0.1, 0.13), "#141414"),
+      tint(new THREE.BoxGeometry(0.05, 0.12, 0.04).rotateZ(0.35).translate(-0.08, 0.15, 0.03), "#8a8a8a"),
+      tint(new THREE.BoxGeometry(0.05, 0.12, 0.04).rotateZ(-0.35).translate(0.08, 0.15, 0.03), "#8a8a8a"),
+    ]),
+    tail: merge([tint(new THREE.CylinderGeometry(0.018, 0.03, 0.28, 5).translate(0, 0.14, 0), W)]),
     leg: merge([tint(new THREE.CylinderGeometry(0.035, 0.03, 0.34, 6).translate(0, -0.17, 0), W)]),
   };
 }
@@ -183,9 +189,11 @@ export class Crowd {
     const dog = dogGeometries();
     const dogCap = Math.max(16, Math.ceil(capacity / 4));
     this.dogBody = make(dog.body, true, dogCap);
+    this.dogHead = make(dog.head, false, dogCap);
+    this.dogTail = make(dog.tail, false, dogCap);
     this.dogLegs = make(dog.leg, false, dogCap * 4);
     this.group = new THREE.Group();
-    for (const m of [...this.parts, ...this.hair, ...Object.values(this.extras), ...Object.values(this.props), this.dogBody, this.dogLegs]) if (m) this.group.add(m);
+    for (const m of [...this.parts, ...this.hair, ...Object.values(this.extras), ...Object.values(this.props), this.dogBody, this.dogHead, this.dogTail, this.dogLegs]) if (m) this.group.add(m);
     this.drawToIndex = new Int32Array(capacity);
 
     this._m = Array.from({ length: 12 }, () => new THREE.Matrix4());
@@ -339,22 +347,62 @@ export class Crowd {
     }
   }
 
-  /** Köpek: dört bacaklı, tırıs giden basit beden. */
-  addDog(x, y, z, heading, phase, color) {
+  /**
+   * Köpek. moving: sahibiyle yürüyor mu; durunca sırayla oturur, yatar, yeri koklar ya da etrafına
+   * bakınıp kuyruk sallar (köpeğe ve zamana göre).
+   */
+  addDog(x, y, z, heading, phase, color, moving = true, t = 0, seed = 0) {
     const i = this.dogCount;
     if (i >= this.dogBody.instanceMatrix.count) return;
     this.dogCount++;
-    const [root, leg] = this._m;
+    const [root, leg, head, tail, tmp] = this._m;
+    const slot = Math.floor((t + seed * 13) / 25);
+    const state = moving ? "walk" : ["stand", "sit", "sniff", "lie", "sit", "stand"][(slot + seed) % 6];
+    let lift = 0, pitch = 0, headPitch = 0, headYaw = 0;
+    const legA = [0, 0, 0, 0]; // ön sol, ön sağ, arka sol, arka sağ
+    let legDrop = [0, 0, 0, 0];
+    let wag = Math.sin(t * (moving ? 6 : 9)) * (state === "lie" ? 0.15 : 0.5);
+    if (state === "walk") {
+      lift = Math.abs(Math.sin(phase)) * 0.03;
+      legA[0] = Math.sin(phase) * 0.5; legA[1] = Math.sin(phase + Math.PI) * 0.5;
+      legA[2] = Math.sin(phase + Math.PI) * 0.5; legA[3] = Math.sin(phase) * 0.5;
+      headPitch = 0.05 * Math.sin(phase * 2);
+    } else if (state === "sit") {
+      pitch = -0.45; lift = -0.04;
+      legA[2] = legA[3] = -1.25; legDrop = [0, 0, 0.1, 0.1];
+      legA[0] = legA[1] = 0.25;
+      headYaw = 0.5 * Math.sin(t * 0.4 + seed);
+    } else if (state === "lie") {
+      lift = -0.25;
+      legA[0] = legA[1] = -1.35; legA[2] = legA[3] = 1.3;
+      headPitch = 0.25; headYaw = 0.3 * Math.sin(t * 0.2 + seed);
+    } else if (state === "sniff") {
+      headPitch = 0.7 + 0.08 * Math.sin(t * 7);
+      headYaw = 0.4 * Math.sin(t * 0.7 + seed);
+      pitch = 0.08;
+      legA[0] = 0.15;
+    } else {
+      headYaw = 0.6 * Math.sin(t * 0.5 + seed);
+      headPitch = -0.1;
+    }
     this._q.setFromAxisAngle(AY, heading);
-    root.compose(this._p.set(x, y + Math.abs(Math.sin(phase)) * 0.03, z), this._q, this._one);
+    if (pitch) this._q.multiply(this._q2.setFromAxisAngle(AX, pitch));
+    root.compose(this._p.set(x, y + lift, z), this._q, this._one);
     this.dogBody.setMatrixAt(i, root);
     this.dogBody.setColorAt(i, color);
-    const legs = [[-0.08, 0.22, 0], [0.08, 0.22, Math.PI], [-0.08, -0.22, Math.PI], [0.08, -0.22, 0]];
-    legs.forEach(([lx, lz, off], j) => {
-      this._joint(leg, root, lx, 0.34, lz, Math.sin(phase + off) * 0.5);
+    this._joint(head, root, 0, 0.55, 0.33, headPitch, headYaw);
+    this.dogHead.setMatrixAt(i, head);
+    this.dogHead.setColorAt(i, color);
+    this._joint(tail, root, 0, 0.5, -0.3, -0.9 - (state === "lie" ? -0.7 : 0), wag * 0.6, wag);
+    this.dogTail.setMatrixAt(i, tail);
+    this.dogTail.setColorAt(i, color);
+    const legs = [[-0.08, 0.22], [0.08, 0.22], [-0.08, -0.22], [0.08, -0.22]];
+    legs.forEach(([lx, lz], j) => {
+      this._joint(leg, root, lx, 0.34 - legDrop[j], lz, legA[j]);
       this.dogLegs.setMatrixAt(i * 4 + j, leg);
       this.dogLegs.setColorAt(i * 4 + j, color);
     });
+    void tmp;
   }
 
   end() {
@@ -378,9 +426,9 @@ export class Crowd {
       m.count = this.propCounts[k];
       m.instanceMatrix.needsUpdate = true;
     }
-    this.dogBody.count = this.dogCount;
+    this.dogBody.count = this.dogHead.count = this.dogTail.count = this.dogCount;
     this.dogLegs.count = this.dogCount * 4;
-    for (const m of [this.dogBody, this.dogLegs]) {
+    for (const m of [this.dogBody, this.dogHead, this.dogTail, this.dogLegs]) {
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
