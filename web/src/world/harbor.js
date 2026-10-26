@@ -85,7 +85,8 @@ function ferry() {
   parts.push(colored(hull, "#1f2226"));
   const deckShape = new THREE.Shape(hullShape.getPoints(24));
   parts.push(colored(new THREE.ExtrudeGeometry(deckShape, { depth: 1.6, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, 1.6, 0), "#f4f4f1"));
-  parts.push(colored(new THREE.ExtrudeGeometry(deckShape, { depth: 0.35, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, 1.25, 0), "#b8312f"));
+  // Kırmızı şerit gövdenin birkaç santim dışında (aynı yüzeyde titreşmesin).
+  parts.push(colored(new THREE.ExtrudeGeometry(deckShape, { depth: 0.35, bevelEnabled: false }).rotateX(-Math.PI / 2).scale(1.012, 1, 1.003).translate(0, 1.25, 0), "#b8312f"));
   // Üst yapı: iki kat.
   parts.push(box(9.4, 2.6, 34, 0, 4.5, -1, "#f6f6f3"));
   parts.push(box(8.2, 2.3, 18, 0, 7.0, 0, "#f6f6f3"));
@@ -104,31 +105,159 @@ function ferry() {
   parts.push(cyl(0.08, 0.1, 6, 0, 11.2, 7, "#2f3540", 6));
   // Can simitleri.
   for (const side of [-1, 1]) for (const z of [-10, 0, 10]) parts.push(colored(new THREE.TorusGeometry(0.38, 0.1, 6, 12).rotateY(Math.PI / 2).translate(side * 4.75, 4.2, z + 1.1), "#f07a2a"));
-  // Korkuluk (ana güverte, açık kısımlar).
-  for (const side of [-1, 1]) parts.push(box(0.05, 0.05, 48, side * 5.45, 4.25, 0, "#c9ced4"));
+  // Korkuluk: ana güvertenin kenarını (pruvada daralan çizgiyi) izler; dikmeler iki metrede bir.
+  const edge = hullShape.getSpacedPoints(64).map((q) => new THREE.Vector3(q.x * 0.97, 0, -q.y * 0.985));
+  let acc = 0;
+  for (let k = 1; k < edge.length; k++) {
+    const a = edge[k - 1], b = edge[k];
+    parts.push(rod(a.clone().setY(4.2), b.clone().setY(4.2), 0.04, "#c9ced4"));
+    parts.push(rod(a.clone().setY(3.7), b.clone().setY(3.7), 0.025, "#c9ced4"));
+    acc += a.distanceTo(b);
+    if (acc >= 2) { acc = 0; parts.push(rod(b.clone().setY(3.2), b.clone().setY(4.2), 0.03, "#c9ced4")); }
+  }
   const g = new THREE.Mesh(merged(parts), MAT);
   g.castShadow = g.receiveShadow = true;
   return g;
 }
 
-/** Ahşap balıkçı teknesi: sivri pruva, kamara, direk. len metre. */
-function boat(len, light) {
-  const W = len * 0.34;
-  const shape = new THREE.Shape();
-  shape.moveTo(-W / 2, -len / 2); shape.lineTo(W / 2, -len / 2);
-  shape.quadraticCurveTo(W / 2 + 0.1, len * 0.15, 0, len / 2);
-  shape.quadraticCurveTo(-W / 2 - 0.1, len * 0.15, -W / 2, -len / 2);
-  const parts = [
-    colored(new THREE.ExtrudeGeometry(shape, { depth: len * 0.13, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, -len * 0.05, 0), light ? "#f4f1ea" : "#2f5d8a"),
-    colored(new THREE.ExtrudeGeometry(shape, { depth: 0.12, bevelEnabled: false }).rotateX(-Math.PI / 2).translate(0, len * 0.07, 0), "#a77e57"),
-    box(W * 0.62, len * 0.14, len * 0.24, 0, len * 0.15, -len * 0.12, light ? "#2f5d8a" : "#f4f1ea"),
-    box(W * 0.64, 0.05, len * 0.06, 0, len * 0.16, len * 0.0 - 0.02, "#28323e"),
-    cyl(0.04, 0.05, len * 0.5, 0, len * 0.32, len * 0.12, "#6e5038", 5),
-    box(W + 0.05, 0.12, len * 0.92, 0, len * 0.065, -len * 0.02, light ? "#2f5d8a" : "#f4f1ea"),
+/** a'dan b'ye ince çubuk (boru, halat). */
+function rod(a, b, r, color) {
+  const d = new THREE.Vector3().subVectors(b, a), L = d.length();
+  const g = new THREE.CylinderGeometry(r, r, L, 6).translate(0, L / 2, 0);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+  return colored(g.translate(a.x, a.y, a.z), color);
+}
+
+/**
+ * Tekne gövdesi kesitlerden örülür: kıçta düz ayna, pruvaya doğru daralan ve yükselen borda, U kesitli
+ * karina. Güverte, küpeşte ve iç borda aynı kesit işlevlerinden türetilir; hiçbir parça gövdeden taşmaz.
+ * Su hattı y = 0'dadır (altı zehirli boya rengi). Dönen: geometri ve güverte yardımcıları.
+ */
+function hull(len, beam, depth, colors) {
+  const N = 18, J = 7;
+  const halfW = (s) => (s < 0.55 ? 0.86 + 0.14 * Math.sin((s / 0.55) * Math.PI / 2) : Math.pow(Math.cos(((s - 0.55) / 0.45) * Math.PI / 2), 0.75)) * beam / 2 + 0.015;
+  const sheer = (s) => depth * (0.62 + 0.3 * s * s);
+  const keel = (s) => -depth * 0.42 * (s > 0.8 ? 1 - ((s - 0.8) / 0.2) * 0.7 : 1);
+  const z = (s) => (s - 0.5) * len;
+  // Kesit noktası: t = 0 küpeşte, t = 1 omurga (orta hat).
+  const sec = (s, t) => {
+    const w = halfW(s), g = sheer(s), k = keel(s);
+    return [w * Math.pow(Math.cos((t * Math.PI) / 2), 0.45), g + (k - g) * Math.pow(t, 1.25)];
+  };
+  const deckY = (s) => sheer(s) - Math.min(0.32, depth * 0.3);
+  const tDeck = (s) => { const g = sheer(s), k = keel(s); return Math.pow((g - deckY(s)) / (g - k), 1 / 1.25); };
+  const deckW = (s) => Math.max(0, sec(s, tDeck(s))[0] - 0.06);
+  const pos = [], col = [];
+  const C = (c) => new THREE.Color(c);
+  const [top, stripe, bottom, deckC, inner] = [C(colors.top), C(colors.stripe), C("#7a2a26"), C(colors.deck), C(colors.inner ?? colors.top)];
+  const colorAt = (y, g) => (y < 0.02 ? bottom : y > g - 0.18 ? stripe : top);
+  const tri = (a, b, c, ca, cb, cc) => { pos.push(...a, ...b, ...c); col.push(ca.r, ca.g, ca.b, cb.r, cb.g, cb.b, cc.r, cc.g, cc.b); };
+  const quad = (a, b, c, d, ca, cb = ca, cc = ca, cd = ca) => { tri(a, b, c, ca, cb, cc); tri(a, c, d, ca, cc, cd); };
+  for (let i = 0; i < N; i++) {
+    const s0 = i / N, s1 = (i + 1) / N;
+    for (let j = 0; j < J; j++) {
+      const t0 = j / J, t1 = (j + 1) / J;
+      for (const side of [-1, 1]) {
+        const P = (s, t) => { const [x, y] = sec(s, t); return [side * x, y, z(s)]; };
+        const a = P(s0, t0), b = P(s1, t0), c = P(s1, t1), d = P(s0, t1);
+        const ca = colorAt(a[1], sheer(s0)), cb = colorAt(b[1], sheer(s1)), cc = colorAt(c[1], sheer(s1)), cd = colorAt(d[1], sheer(s0));
+        if (side > 0) quad(a, b, c, d, ca, cb, cc, cd); else quad(a, d, c, b, ca, cd, cc, cb);
+      }
+    }
+    // Güverte, iç borda ve küpeşte üstü.
+    const dy0 = deckY(s0), dy1 = deckY(s1), w0 = deckW(s0), w1 = deckW(s1);
+    quad([-w0, dy0, z(s0)], [w0, dy0, z(s0)], [w1, dy1, z(s1)], [-w1, dy1, z(s1)], deckC);
+    for (const side of [-1, 1]) {
+      const g0 = sheer(s0), g1 = sheer(s1), o0 = halfW(s0), o1 = halfW(s1);
+      const a = [side * w0, dy0, z(s0)], b = [side * w1, dy1, z(s1)], c = [side * w1, g1, z(s1)], d = [side * w0, g0, z(s0)];
+      if (side > 0) quad(a, d, c, b, inner); else quad(a, b, c, d, inner);
+      const e = [side * o0, g0, z(s0)], f = [side * o1, g1, z(s1)];
+      if (side > 0) quad(d, e, f, c, stripe); else quad(d, c, f, e, stripe);
+    }
+  }
+  // Kıç aynası: düz, iki yandan ortaya üçgenlerle kapanır.
+  for (let j = 0; j < J; j++) {
+    const t0 = j / J, t1 = (j + 1) / J;
+    const [x0, y0] = sec(0, t0), [x1, y1] = sec(0, t1);
+    const cz = z(0), cy = keel(0);
+    tri([-x0, y0, cz], [x0, y0, cz], [x1, y1, cz], colorAt(y0, sheer(0)), colorAt(y0, sheer(0)), colorAt(y1, sheer(0)));
+    tri([-x0, y0, cz], [x1, y1, cz], [-x1, y1, cz], colorAt(y0, sheer(0)), colorAt(y1, sheer(0)), colorAt(y1, sheer(0)));
+    void cy;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  g.computeVertexNormals();
+  return { geo: g, z, deckY, deckW, halfW, sheer };
+}
+
+/**
+ * Tekne. len < 7: sandal (oturaklar, dıştan takma motor, kürekler). Daha büyükleri balıkçı teknesi:
+ * kaptan köşkü (camlı), direk ve seren, seyir feneri, usturmaçalar, ağ makarası.
+ */
+function boat(len, seed = 0) {
+  const PAL = [
+    { top: "#f4f1ea", stripe: "#2f5d8a", deck: "#b08a62" },
+    { top: "#2f5d8a", stripe: "#f4f1ea", deck: "#a77e57" },
+    { top: "#e9e2cf", stripe: "#b8312f", deck: "#9b7350" },
+    { top: "#3e8a86", stripe: "#f2d36b", deck: "#a77e57" },
   ];
-  const g = new THREE.Mesh(merged(parts), MAT);
-  g.castShadow = g.receiveShadow = true;
-  return g;
+  const pal = PAL[seed % PAL.length];
+  const small = len < 7;
+  const beam = len * (small ? 0.38 : 0.32), depth = small ? 0.75 : len * 0.12;
+  const H = hull(len, beam, depth, pal);
+  const parts = [H.geo]; // gövde kendi köşe renkleriyle
+  const at = (s) => ({ z: H.z(s), y: H.deckY(s), w: H.deckW(s) });
+  if (small) {
+    for (const s of [0.28, 0.55, 0.78]) { const a = at(s); parts.push(box(a.w * 2, 0.05, 0.24, 0, a.y + 0.28, a.z, "#9b7350"), box(0.05, 0.28, 0.05, 0, a.y + 0.14, a.z, "#7a5a3e")); }
+    // Dıştan takma motor (aynanın dışında).
+    const k = at(0.0);
+    parts.push(box(0.3, 0.42, 0.34, 0, H.sheer(0) + 0.12, k.z - 0.24, "#2a2d33"), box(0.12, 0.8, 0.12, 0, H.sheer(0) - 0.4, k.z - 0.3, "#3a3d43"), box(0.05, 0.2, 0.28, 0, -0.55, k.z - 0.3, "#2a2d33"));
+    // Kürekler (oturakların üstünde, borda boyunca).
+    for (const side of [-1, 1]) { const a = at(0.5); parts.push(box(0.05, 0.04, len * 0.55, side * a.w * 0.7, a.y + 0.34, a.z, "#c9a27a")); }
+  } else {
+    // Kaptan köşkü: güvertenin kıç-orta bölümünde, güverte genişliğine sığar.
+    const s0 = 0.22, s1 = 0.46;
+    const cw = Math.min(at(s0).w, at(s1).w) * 1.55, cz = (H.z(s0) + H.z(s1)) / 2, cl = H.z(s1) - H.z(s0), cy = Math.max(at(s0).y, at(s1).y);
+    const ch = len * 0.13;
+    parts.push(box(cw, ch, cl, 0, cy + ch / 2, cz, pal.stripe === "#f4f1ea" ? "#f4f1ea" : "#f6f4ee"));
+    parts.push(box(cw + 0.2, 0.08, cl + 0.3, 0, cy + ch + 0.04, cz, pal.stripe));
+    parts.push(box(cw + 0.02, ch * 0.32, cl * 0.8, 0, cy + ch * 0.68, cz, "#28323e"));
+    parts.push(box(cw * 0.86, ch * 0.32, 0.03, 0, cy + ch * 0.68, cz + cl / 2 + 0.01, "#28323e"));
+    // Direk, seren ve seyir feneri; köşkün önünde.
+    const m = at(0.66);
+    const mh = len * 0.55;
+    parts.push(cyl(0.05, 0.07, mh, 0, m.y + mh / 2, m.z, "#d9d4c8", 6));
+    parts.push(box(Math.min(m.w * 2.4, len * 0.22), 0.05, 0.05, 0, m.y + mh * 0.72, m.z, "#d9d4c8"));
+    parts.push(colored(new THREE.SphereGeometry(0.09, 8, 6).translate(0, m.y + mh + 0.05, m.z), "#fff3c4"));
+    // Ağ makarası ve kasalar (kıç güvertede).
+    const a = at(0.1);
+    parts.push(colored(new THREE.CylinderGeometry(0.28, 0.28, Math.min(1.1, a.w * 1.4), 10).rotateZ(Math.PI / 2).translate(0, a.y + 0.45, a.z), "#c94f3a"));
+    for (const [dx, dz] of [[-0.35, 0.55], [0.35, 0.55]]) parts.push(box(0.5, 0.3, 0.4, dx * a.w, a.y + 0.15, a.z + dz, "#3e7fb0"));
+    // Küpeşte üstünde paslanmaz tutamak (pruva bölümünde), dikmeleri gövdenin içinde.
+    for (const side of [-1, 1]) {
+      const tops = [];
+      for (let s = 0.6; s <= 0.93; s += 0.11) {
+        const q = at(s), x = side * (q.w + 0.03), y = H.sheer(s);
+        parts.push(cyl(0.02, 0.02, 0.5, x, y + 0.25, q.z, "#c9ced4", 5));
+        tops.push(new THREE.Vector3(x, y + 0.5, q.z));
+      }
+      // Dikmelerin üstünden geçen tutamak borusu, pruvada iki yan birleşir.
+      tops.push(new THREE.Vector3(0, H.sheer(0.99) + 0.5, H.z(0.99)));
+      for (let k = 1; k < tops.length; k++) parts.push(rod(tops[k - 1], tops[k], 0.022, "#c9ced4"));
+    }
+  }
+  // Usturmaçalar: bordanın dışında, su hattının üstünde asılı.
+  for (const side of [-1, 1]) for (const s of [0.3, 0.55]) {
+    const w = H.halfW(s), y = H.sheer(s) * 0.5;
+    parts.push(cyl(0.085, 0.085, 0.36, side * (w + 0.09), y, H.z(s), "#f4f4f1", 8));
+    parts.push(rod(new THREE.Vector3(side * (w + 0.09), y + 0.18, H.z(s)), new THREE.Vector3(side * (w - 0.02), H.sheer(s), H.z(s)), 0.01, "#d9cfa8"));
+  }
+  const geo = mergeGeometries(parts.filter(Boolean).map((g) => (g.index ? g.toNonIndexed() : g)).map((g) => { if (g.attributes.uv) g.deleteAttribute("uv"); if (g.attributes.normal) g.deleteAttribute("normal"); return g; }));
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.65, side: THREE.DoubleSide }));
+  mesh.castShadow = mesh.receiveShadow = true;
+  return mesh;
 }
 
 export function buildHarbor(world) {
@@ -148,11 +277,11 @@ export function buildHarbor(world) {
       group.add(plank);
     } else if (f.type === "tekne") {
       const len = f.len ?? 8;
-      const m = boat(len, len < 10);
-      m.position.set(f.x, 0.15, f.z);
+      const m = boat(len, Math.round(Math.abs(f.x * 7 + f.z * 3)));
+      m.position.set(f.x, 0.05, f.z);
       m.rotation.y = f.rot ?? 0;
       group.add(m);
-      floating.push({ obj: m, base: 0.15, amp: 0.08 + 0.02 * (10 - Math.min(10, len)), roll: 0.04, ph: f.x * 0.13 + f.z * 0.07, rot: f.rot ?? 0 });
+      floating.push({ obj: m, base: 0.05, amp: 0.08 + 0.02 * (10 - Math.min(10, len)), roll: 0.04, ph: f.x * 0.13 + f.z * 0.07, rot: f.rot ?? 0 });
     }
   }
   group.userData.tick = (t) => {

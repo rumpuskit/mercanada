@@ -778,7 +778,7 @@ export class World {
     const [tx, tz] = coast(198);
     this.addBuilding({ kind: "tersane", x: tx, z: tz - 13, rot: 0, w: 30, d: 18, floors: 3, roofType: "gable", wall: "#c9d2dc", roof: "#6f7f92", workplace: true, industrial: true, address: "Tersane Yolu No 1, Doğu Kıyısı" });
     this.features.push({ type: "vinc", x: tx + 21, z: tz - 3 });
-    this.features.push({ type: "tekne", x: tx - 6, z: tz + 10, rot: 0.15, len: 16 });
+    this.features.push({ type: "tekne", x: tx - 6, z: tz + 17, rot: 0.15, len: 16 });
     const tDoor = [tx, tz - 23];
     this._addWorkplace("tersane", 0, { door: tDoor, path: [tDoor, [tx, this.avenueZ(tx)], ...toHub(tx)], anchor: [tx + 8, tz - 2], spread: 5 });
 
@@ -787,7 +787,7 @@ export class World {
     for (let i = 0; i < 3; i++) {
       this.addBuilding({ kind: "kulube", x: bx - 14 + i * 12, z: bz - 9, rot: 0, w: 8, d: 6, floors: 1, roofType: "gable", wall: ["#e9edf0", "#dbe7ee", "#f3e3c8"][i], roof: "#7a8a9a", address: `Balıkçı Koyu No ${i + 1}` });
     }
-    for (let i = 0; i < 3; i++) this.features.push({ type: "tekne", x: bx - 14 + i * 13, z: bz + 12 + (i % 2) * 5, rot: -0.3 + i * 0.3, len: 7 });
+    for (let i = 0; i < 3; i++) this.features.push({ type: "tekne", x: bx - 14 + i * 13, z: bz + 15 + (i % 2) * 5, rot: -0.3 + i * 0.3, len: i === 1 ? 5.5 : 8 });
     const bDoor = [bx, bz - 15];
     cat().isyerleri.balikci_koyu.forEach((_, i) => this._addWorkplace("balikci_koyu", i, {
       door: bDoor, path: [bDoor, [bx, this.avenueZ(bx)], ...toHub(bx)], anchor: [bx, bz + 1], spread: 7,
