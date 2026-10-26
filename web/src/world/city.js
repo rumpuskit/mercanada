@@ -3,6 +3,37 @@
 import * as THREE from "three";
 import { FLAT_Y, FLOOR_H } from "./layout.js";
 import * as P from "./palette.js";
+import * as T from "./textures.js";
+
+/**
+ * Dünya koordinatından üç yönlü doku: duvarlarda (x+z, y), çatılarda eğim yönüne göre. Instance ölçeği
+ * dokuyu esnetmez; her binada aynı ölçekte sıva ve kiremit görünür.
+ */
+function worldTextured(material, tex, scale) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.wTex = { value: tex };
+    shader.uniforms.wScale = { value: scale };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos; varying vec3 vWNrm;")
+      .replace("#include <project_vertex>", `#include <project_vertex>
+      vec4 wp4 = vec4(transformed, 1.0);
+      vec3 wn = objectNormal;
+      #ifdef USE_INSTANCING
+        wp4 = instanceMatrix * wp4;
+        wn = mat3(instanceMatrix) * wn;
+      #endif
+      vWPos = (modelMatrix * wp4).xyz;
+      vWNrm = normalize(mat3(modelMatrix) * wn);`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vWPos; varying vec3 vWNrm; uniform sampler2D wTex; uniform float wScale;")
+      .replace("#include <color_fragment>", `#include <color_fragment>
+      vec3 an = abs(vWNrm);
+      vec2 uvw = an.y > 0.6 ? vWPos.xz : (an.x > an.z ? vWPos.zy : vWPos.xy);
+      diffuseColor.rgb *= texture2D(wTex, uvw / wScale).rgb * 1.08;`);
+  };
+  material.needsUpdate = true;
+  return material;
+}
 
 const v = new THREE.Vector3();
 const s = new THREE.Vector3();
@@ -80,11 +111,11 @@ export function makeKit() {
   const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   return {
     B: {
-      walls: new Batch(box, std(0xffffff, { roughness: 0.92 })),
-      plinth: new Batch(box, std("#8d877e")),
+      walls: new Batch(box, worldTextured(std(0xffffff, { roughness: 0.92 }), T.plaster(), 6)),
+      plinth: new Batch(box, worldTextured(std("#b4ada3"), T.stoneBase(), 2.4)),
       trims: new Batch(box, std(0xffffff, { roughness: 0.7 }), { shadow: false }),
-      hips: HIP_RATIOS.map((r) => new Batch(hipRoof(r), std(0xffffff, { roughness: 0.75, flatShading: true }))),
-      gable: new Batch(gableRoof(), std(0xffffff, { roughness: 0.75, flatShading: true })),
+      hips: HIP_RATIOS.map((r) => new Batch(hipRoof(r), worldTextured(std(0xffffff, { roughness: 0.75, flatShading: true }), T.tiles(), 1.6))),
+      gable: new Batch(gableRoof(), worldTextured(std(0xffffff, { roughness: 0.75, flatShading: true }), T.tiles(), 1.6)),
       parapet: new Batch(box, std("#e7e2d9")),
       frames: new Batch(box, std("#f7f5f0", { roughness: 0.6 }), { shadow: false }),
       doors: new Batch(box, std("#6b4a35", { roughness: 0.6 }), { shadow: false }),

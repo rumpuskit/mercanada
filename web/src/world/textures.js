@@ -226,3 +226,62 @@ export function court() {
     ctx.beginPath(); ctx.arc(sz / 2, sz - 6, sz * 0.32, Math.PI, 2 * Math.PI); ctx.stroke();
   }, false));
 }
+
+/** Sıva: açık gri tonlu, hafif lekeli; köşe/instance rengiyle çarpılır. */
+export function plaster() {
+  return (cache.plaster ??= canvasTexture(256, (ctx, sz) => {
+    const rand = rng("siva");
+    ctx.fillStyle = "#ececec";
+    ctx.fillRect(0, 0, sz, sz);
+    for (let i = 0; i < 260; i++) {
+      const v = 222 + Math.floor(rand() * 33);
+      ctx.fillStyle = `rgba(${v},${v},${v},0.35)`;
+      ctx.beginPath();
+      ctx.arc(rand() * sz, rand() * sz, 4 + rand() * 18, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    speckle(ctx, sz, rand, 7000, ["rgba(0,0,0,0.05)", "rgba(255,255,255,0.1)"], 1.2);
+  }));
+}
+
+/** Kiremit: sıra sıra yarım yuvarlak oluklar (gri tonlu; çatı rengiyle çarpılır). */
+export function tiles() {
+  return (cache.tiles ??= canvasTexture(128, (ctx, sz) => {
+    const rand = rng("kiremit");
+    ctx.fillStyle = "#d8d8d8";
+    ctx.fillRect(0, 0, sz, sz);
+    const rows = 6, cols = 5;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = c * (sz / cols) + (r % 2) * (sz / cols / 2), y = r * (sz / rows);
+        const g = ctx.createLinearGradient(x, 0, x + sz / cols, 0);
+        const v = 200 + Math.floor(rand() * 40);
+        g.addColorStop(0, `rgb(${v - 40},${v - 40},${v - 40})`);
+        g.addColorStop(0.5, `rgb(${v + 15},${v + 15},${v + 15})`);
+        g.addColorStop(1, `rgb(${v - 40},${v - 40},${v - 40})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(x, y, sz / cols - 1, sz / rows - 2);
+        ctx.fillStyle = "rgba(0,0,0,0.25)";
+        ctx.fillRect(x, y + sz / rows - 3, sz / cols, 2);
+      }
+    }
+  }));
+}
+
+/** Taş kaplama (bina tabanı). */
+export function stoneBase() {
+  return (cache.stone ??= canvasTexture(128, (ctx, sz) => {
+    const rand = rng("tas");
+    ctx.fillStyle = "#9a948b";
+    ctx.fillRect(0, 0, sz, sz);
+    for (let r = 0; r < 4; r++) {
+      let x = (r % 2) * 16 - 16;
+      while (x < sz) {
+        const w = 24 + rand() * 20, v = 150 + Math.floor(rand() * 40);
+        ctx.fillStyle = `rgb(${v},${v - 4},${v - 10})`;
+        ctx.fillRect(x + 1.5, r * (sz / 4) + 1.5, w - 3, sz / 4 - 3);
+        x += w;
+      }
+    }
+  }));
+}
