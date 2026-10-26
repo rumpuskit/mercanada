@@ -877,11 +877,18 @@ function buildFeatures(world) {
         const y0 = world.groundY((f.x0 + f.x1) / 2, f.z);
         const len = f.x1 - f.x0, cx = (f.x0 + f.x1) / 2;
         const concrete = std("#cfcac2");
+        // Basamaklar, koridor merdivenleri, kenar duvarları, ön korkuluk; koltuklar ayrıca (kova koltuk).
         for (let r = 0; r < 4; r++) {
           const z = f.z + f.side * (1.2 + r * 0.8);
           add(new THREE.BoxGeometry(len, 0.4 + r * 0.4, 0.8), concrete, cx, y0 + (0.4 + r * 0.4) / 2, z);
-          add(new THREE.BoxGeometry(len, 0.08, 0.45), std(r % 2 ? "#d8433d" : "#2f6fb5"), cx, y0 + 0.45 + r * 0.4, z - f.side * 0.05, 0, false);
+          for (let ax = f.x0; ax <= f.x1; ax += 15) {
+            add(new THREE.BoxGeometry(1.1, 0.2, 0.4), std("#bdb7ae"), ax + 0.6, y0 + 0.4 + r * 0.4 + 0.1, z - f.side * 0.2, 0, false);
+            add(new THREE.BoxGeometry(0.05, 0.04, 0.05), std("#e8c22e"), ax + 0.6, y0 + 0.62 + r * 0.4, z - f.side * 0.38, 0, false);
+          }
         }
+        for (const ex of [f.x0 - 0.15, f.x1 + 0.15]) for (let r = 0; r < 4; r++) add(new THREE.BoxGeometry(0.3, 0.9 + r * 0.4, 0.8), concrete, ex, y0 + (0.9 + r * 0.4) / 2, f.z + f.side * (1.2 + r * 0.8));
+        for (let x = f.x0; x <= f.x1; x += 2.5) add(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 5), metal, x, y0 + 0.5, f.z + f.side * 0.75, 0, false);
+        add(new THREE.BoxGeometry(len, 0.05, 0.05), metal, cx, y0 + 1.0, f.z + f.side * 0.75, 0, false);
         add(new THREE.BoxGeometry(len, 2.6, 0.25), concrete, cx, y0 + 1.3, f.z + f.side * 4.4);
         if (f.side < 0) {
           // Kuzey tribününe çatı.
@@ -1098,6 +1105,23 @@ function buildFeatures(world) {
   }
   for (const batch of [benchSeat, benchBack, benchLegs, tables, tableLegs, chairs, chairBacks, chairLegs, chairBackLegs, bins, binPoles, containers]) group.add(batch.build());
   group.userData.fenerLamps = fenerLamps;
+  // Tribün koltukları: her oturma yerinde kova koltuk (oturak + sırtlık), bölüm bölüm renkli.
+  {
+    const seats = world.seats.filter((s) => s.place === "tribun");
+    if (seats.length) {
+      const geo = mergeGeometries([new THREE.BoxGeometry(0.44, 0.06, 0.4).translate(0, 0, 0), new THREE.BoxGeometry(0.44, 0.42, 0.05).translate(0, 0.22, -0.2)]);
+      const mesh = new THREE.InstancedMesh(geo, std(0xffffff, { roughness: 0.6 }), seats.length);
+      const m = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), pv = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+      seats.forEach((s, i) => {
+        q.setFromAxisAngle(up, s.heading);
+        mesh.setMatrixAt(i, m.compose(pv.set(s.x, s.top - 0.03, s.z), q, one));
+        const sec = Math.floor((s.x - 100) / 15);
+        mesh.setColorAt(i, col.set(["#d8433d", "#2f6fb5", "#f4f1ea", "#2f6fb5", "#d8433d", "#e8c22e"][sec % 6]));
+      });
+      mesh.castShadow = true;
+      group.add(mesh);
+    }
+  }
   group.userData.setFlood = (n) => {
     floodLens.emissiveIntensity = 3.2 * n;
     floodGlareMat.opacity = 0.75 * n;

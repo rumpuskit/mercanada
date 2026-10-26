@@ -630,6 +630,7 @@ export class World {
       this.features.push({ type: "tribun", x0: 100, x1: 190, z: edge, side });
       for (let r = 0; r < 4; r++) {
         for (let x = 101; x < 190; x += 0.62) {
+          if ((x - 100) % 15 < 1.3) continue; // merdivenli koridorlar
           const z = edge + side * (1.2 + r * 0.8);
           this.seats.push({ x, z, heading: side < 0 ? 0 : Math.PI, h: 0.45 + r * 0.4, place: "tribun", absolute: true });
         }
@@ -643,7 +644,7 @@ export class World {
     }
     this.addRoad([[145, -CELL_D / 2], [145, -124.5]], "patika");
     this.places.saha = { anchors: [[145, -84]], spread: 20, path: [[145, -CELL_D / 2]] };
-    this.block(90, -120, 200, -48, 0);
+    this.block(88, -127, 202, -41, 0); // saha, tribünler ve arka duvarları (ağaç dikilmez)
     this.features.push({ type: "havuz", x: 140, z: 85, w: 25, d: 12 });
     this.block(140 - 12.5 - 10, 85 - 6 - 10, 140 + 12.5 + 10, 85 + 6 + 10, 0); // havuz, güvertesi ve ağaç taçları için pay
     // Otoparklar: çevre yolunun iç kenarında, çarşının iki yanında; girişleri çevre yolundan.
