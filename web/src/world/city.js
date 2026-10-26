@@ -602,6 +602,7 @@ function buildFeatures(world) {
   };
 
   const fenerLamps = [];
+  const fruit = [];
   const fountains = [];
   for (const f of world.features) {
     switch (f.type) {
@@ -788,9 +789,16 @@ function buildFeatures(world) {
       case "tezgah": {
         const c = P.CLOTHES[f.c % P.CLOTHES.length];
         add(new THREE.BoxGeometry(3, 0.9, 1.6), wood, f.x, FLAT_Y + 0.5, f.z);
-        add(new THREE.BoxGeometry(3.4, 0.08, 2.2), std(c), f.x, FLAT_Y + 2.4, f.z, 0, true).rotation.x = -0.12;
+        add(new THREE.BoxGeometry(3.4, 0.08, 2.2), std(c), f.x, FLAT_Y + 2.4, f.z, 0, true).rotation.x = -0.12 * (f.dir ?? 1);
         for (const dx of [-1.6, 1.6]) for (const dz of [-1, 1]) add(new THREE.CylinderGeometry(0.04, 0.04, 2.3, 4), metal, f.x + dx, FLAT_Y + 1.2, f.z + dz, 0, false);
-        add(new THREE.BoxGeometry(2.6, 0.25, 1.2), std(["#e0a33a", "#d2552f", "#7fae45", "#e8c95a"][f.c % 4]), f.x, FLAT_Y + 1.05, f.z, 0, false);
+        // Mallar: üç kasa, içlerinde yığın yığın meyve-sebze (tezgâha göre).
+        const goods = [["#d8342b", "#c62f28"], ["#f28c28", "#e88a1e"], ["#f2d03a", "#e8c22e"], ["#7fae45", "#6e9e3a"], ["#5b2a6e", "#4a2259"], ["#e86a5a", "#7fae45"]];
+        for (let k = 0; k < 3; k++) {
+          const gx = f.x - 1.0 + k * 1.0;
+          add(new THREE.BoxGeometry(0.9, 0.22, 1.0), std("#b08a5a"), gx, FLAT_Y + 1.06, f.z, 0, false);
+          const [c1, c2] = goods[(f.c + k) % goods.length];
+          for (let i = 0; i < 9; i++) fruit.push([gx - 0.28 + (i % 3) * 0.28, FLAT_Y + 1.22 + (i % 2) * 0.05, f.z - 0.3 + Math.floor(i / 3) * 0.3, i % 2 ? c2 : c1]);
+        }
         break;
       }
       case "vinc": {
@@ -1105,6 +1113,13 @@ function buildFeatures(world) {
   }
   for (const batch of [benchSeat, benchBack, benchLegs, tables, tableLegs, chairs, chairBacks, chairLegs, chairBackLegs, bins, binPoles, containers]) group.add(batch.build());
   group.userData.fenerLamps = fenerLamps;
+  // Pazar tezgâhlarındaki meyve-sebze yığınları (tek InstancedMesh).
+  if (fruit.length) {
+    const fm = new THREE.InstancedMesh(new THREE.SphereGeometry(0.13, 8, 6), std(0xffffff, { roughness: 0.5 }), fruit.length);
+    const m4 = new THREE.Matrix4(), col = new THREE.Color();
+    fruit.forEach(([x, y, z, c], i) => { fm.setMatrixAt(i, m4.makeTranslation(x, y, z)); fm.setColorAt(i, col.set(c)); });
+    group.add(fm);
+  }
   // Tribün koltukları: her oturma yerinde kova koltuk (oturak + sırtlık), bölüm bölüm renkli.
   {
     const seats = world.seats.filter((s) => s.place === "tribun");

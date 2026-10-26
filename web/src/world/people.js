@@ -315,6 +315,7 @@ export class People {
       const m = roll(s, "meydanMod", this.day * 16 + k) % 100;
       const pl = this._placeOf(i, k);
       if (pl === "sahil_yolu") return "stroll"; // sahil yolunda akşam yürüyüşü
+      if (pl === "pazar" && m % 3) return "stroll"; // pazarda koridorlarda gezinir (kalanı sohbette)
       if (pl !== "meydan") return m < 55 ? "seat:" + pl : "group:" + pl;
       return m < 22 ? "seat:meydan" : m < 50 ? "seat:kafe" : m < 72 ? "shop" : "group:meydan";
     }
@@ -1241,6 +1242,13 @@ export class People {
         loop = { pts, lens, L: lens[lens.length - 1] };
       }
     }
+    // Pazar: iki koridor boyunca dolaşılır.
+    if (key === "pazar" && place?.aisles) {
+      const [a, b] = place.aisles;
+      const pts = [[a[0], a[2]], [a[1], a[2]], [b[1], b[2]], [b[0], b[2]], [a[0], a[2]]];
+      const lens = lengths(pts);
+      loop = { pts, lens, L: lens[lens.length - 1] };
+    }
     // Sahil yolu: gezinti yolu boyunca gidip gelinir (halka yerine yolun kendisi).
     if (key === "sahil_yolu" && w.promenade?.length > 2) {
       const pts = [...w.promenade, ...[...w.promenade].reverse().slice(1)];
@@ -1578,6 +1586,24 @@ export class People {
       for (const v of this.traffic.active.values()) {
         const st = seats[v.kind];
         if (st && !(v.phase === "wait")) addDriver(v, st[0], st[1], st[2], v.kind === "bus" ? DRIVER_TOP : v.kind === "itfaiye" ? FIRE_TOP : v.kind === "ambulans" ? MEDIC_TOP : COP_TOP);
+      }
+    }
+    // Pazarcılar (sakin değil): pazar saatlerinde her tezgâhın arkasında; seslenir, malını düzeltir.
+    if (minute >= 480 && minute < 1140) {
+      const v = (this._vendorPose ??= {});
+      let k = 0;
+      for (const f of this.world.features) {
+        if (f.type !== "tezgah") continue;
+        resetPose(v);
+        v.height = 1.62 + (k % 5) * 0.05; v.t = time;
+        const dir = f.dir ?? 1;
+        v.x = f.x + ((k % 3) - 1) * 0.6; v.z = f.z - 1.35 * dir; v.y = this.world.groundY(v.x, v.z); v.heading = dir > 0 ? 0 : Math.PI;
+        const ph = k * 1.7;
+        if (Math.sin(time * 0.2 + ph) > 0.5) { v.lean = 0.45; v.shL = v.shR = 1.0; v.elL = v.elR = 0.5; }
+        else idleGesture(v, time, ph, k % 2 === 0);
+        Object.assign(v, { style: k % 2, skin: P.SKIN[k % P.SKIN.length], hairColor: P.HAIR[(k * 3) % P.HAIR.length], top: P.CLOTHES[(k * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[k % P.BOTTOMS.length], sleeves: k % 3 !== 0, skirt: false, beard: k % 4 === 1, glasses: k % 5 === 2 });
+        crowd.add(-1, v);
+        k++;
       }
     }
     crowd.end();

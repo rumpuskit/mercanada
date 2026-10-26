@@ -677,12 +677,21 @@ export class World {
     const market = { x0: -190, z0: 50, x1: -90, z1: 100 };
     this.plazas.push({ ...market, kind: "pazar" });
     this.block(market.x0, market.z0, market.x1, market.z1, 0);
-    for (let r = 0; r < 3; r++) {
-      for (let c = 0; c < 9; c++) {
-        this.features.push({ type: "tezgah", x: market.x0 + 8 + c * 10.6, z: market.z0 + 9 + r * 16, c: (r * 9 + c) % 10 });
+    // Semt pazarı: iki koridor boyunca karşılıklı tezgâh sıraları (pazarcı arkada, müşteri koridorda);
+    // her altı tezgâhta bir ara geçit.
+    const aisles = [market.z0 + 13, market.z0 + 37];
+    let n = 0;
+    for (const az of aisles) {
+      for (const dir of [1, -1]) {
+        let k = 0;
+        for (let x = market.x0 + 12; x <= market.x1 - 12; x += 3.6, k++) {
+          if (k % 6 === 5) continue;
+          this.features.push({ type: "tezgah", x, z: az - dir * 2.4, dir, c: n++ % 10 });
+        }
       }
     }
-    this.places.pazar = { anchors: [[(market.x0 + market.x1) / 2, (market.z0 + market.z1) / 2]], spread: 45, path: [[market.x1, 0], HUB] };
+    const aisleAnchors = aisles.flatMap((az) => [-30, 0, 30].map((dx) => [(market.x0 + market.x1) / 2 + dx, az]));
+    this.places.pazar = { anchors: aisleAnchors, spread: 6, path: [[market.x1, 0], HUB], aisles: aisles.map((az) => [market.x0 + 10, market.x1 - 10, az]) };
     this.labels.push({ text: "Çarşı", x: 0, z: 0, h: 45 });
   }
 
