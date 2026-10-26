@@ -35,7 +35,7 @@
   },
   "meslekler": [
     { "id": "balikci", "yer": "balikci_koyu", "vardiya": "erken", "hafta_sonu": true, "agirlik": 18, "kademeler": ["Tayfa", "Balıkçı", "Usta Balıkçı", "Reis"] },
-    { "id": "liman_iscisi", "yer": "liman", "vardiya": "erken", "hafta_sonu": true, "agirlik": 31, "kademeler": ["Liman İşçisi", "Vinç Operatörü", "Liman Formeni", "Liman Şefi"] },
+    { "id": "liman_iscisi", "yer": "liman", "vardiya": ["erken", "gec"], "hafta_sonu": true, "agirlik": 31, "kademeler": ["Liman İşçisi", "Vinç Operatörü", "Liman Formeni", "Liman Şefi"] },
     { "id": "gemi_ustasi", "yer": "tersane", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 15, "kademeler": ["Tersane Çırağı", "Gemi Ustası", "Baş Usta", "Tersane Müdürü"] },
     { "id": "barista", "yer": "kafe", "vardiya": ["sabah", "gec"], "hafta_sonu": true, "agirlik": 8, "kademeler": ["Stajyer Barista", "Barista", "Baş Barista", "Kafe Müdürü"] },
     { "id": "garson", "yer": "kafe", "vardiya": ["sabah", "gec"], "hafta_sonu": true, "agirlik": 8, "kademeler": ["Komi", "Garson", "Kıdemli Garson", "Salon Şefi"] },

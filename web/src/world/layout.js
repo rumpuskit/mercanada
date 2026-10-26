@@ -654,7 +654,7 @@ export class World {
     for (const gx of [90 + 4.3, 200 - 4.3]) this.features.push({ type: "kale", x: gx, z: -84, dir: gx < 145 ? 1 : -1 });
     for (const [mx, mz] of [[87, -125], [203, -125], [87, -43], [203, -43]]) {
       this.features.push({ type: "projektor", x: mx, z: mz });
-      this.lamps.push({ x: mx, z: mz, dir: Math.atan2(145 - mx, -84 - mz), r: 48, flood: true });
+      this.lamps.push({ x: mx, z: mz, dir: Math.atan2(145 - mx, -84 - mz), r: 48, flood: true, stadium: true });
     }
     this.addRoad([[145, -CELL_D / 2], [145, -124.5]], "patika");
     this.places.saha = { anchors: [[145, -84]], spread: 20, path: [[145, -CELL_D / 2]] };

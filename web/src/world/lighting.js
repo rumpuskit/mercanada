@@ -7,14 +7,21 @@ export function createLampLight(world, spots, materials, { wallMaterials = [] } 
   const x0 = world.bounds.x0 - pad, z0 = world.bounds.z0 - pad;
   const w = world.bounds.x1 - world.bounds.x0 + 2 * pad, d = world.bounds.z1 - world.bounds.z0 + 2 * pad + 300;
   const scale = Math.min(1, 2048 / Math.max(w, d)); // piksel / metre
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.ceil(w * scale);
-  canvas.height = Math.ceil(d * scale);
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.globalCompositeOperation = "lighter";
+  // İki katman: sokak lambaları (gece boyu) ve saha projektörleri (yalnızca akşam, ayrıca yakılır).
+  const makeCanvas = () => {
+    const c = document.createElement("canvas");
+    c.width = Math.ceil(w * scale);
+    c.height = Math.ceil(d * scale);
+    const g = c.getContext("2d");
+    g.fillStyle = "#000";
+    g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = "lighter";
+    return [c, g];
+  };
+  const [canvas, ctx0] = makeCanvas();
+  const [fcanvas, fctx] = makeCanvas();
   for (const s of spots) {
+    const ctx = s.stadium ? fctx : ctx0;
     // Işık armatürün altına, yola doğru düşer.
     const reach = s.flood ? 34 : s.deco ? 0 : 1.3;
     const ox = Math.sin(s.dir) * reach, oz = Math.cos(s.dir) * reach;
@@ -36,16 +43,22 @@ export function createLampLight(world, spots, materials, { wallMaterials = [] } 
     ctx.arc(px, pz, r, 0, Math.PI * 2);
     ctx.fill();
   }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.minFilter = THREE.LinearFilter;
-  tex.generateMipmaps = false;
-  tex.flipY = false; // tuval satırı 0 = z0
+  const toTex = (c) => {
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.minFilter = THREE.LinearFilter;
+    t.generateMipmaps = false;
+    t.flipY = false; // tuval satırı 0 = z0
+    return t;
+  };
+  const tex = toTex(canvas), ftex = toTex(fcanvas);
 
   const uniforms = {
     lampMap: { value: tex },
     lampRect: { value: new THREE.Vector4(x0, z0, w, d) },
     lampNight: { value: 0 },
+    floodMap: { value: ftex },
+    floodOn: { value: 0 },
     lampFloor: { value: world.flatY },
   };
   const patch = (material, wall) => {
@@ -65,9 +78,12 @@ export function createLampLight(world, spots, materials, { wallMaterials = [] } 
         uniform sampler2D lampMap;
         uniform vec4 lampRect;
         uniform float lampNight;
+        uniform sampler2D floodMap;
+        uniform float floodOn;
         uniform float lampFloor;`)
         .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-        vec3 lampLight = texture2D(lampMap, (vLampWorld.xz - lampRect.xy) / lampRect.zw).rgb;
+        vec2 lampUv = (vLampWorld.xz - lampRect.xy) / lampRect.zw;
+        vec3 lampLight = texture2D(lampMap, lampUv).rgb + texture2D(floodMap, lampUv).rgb * floodOn;
         float lampFall = ${wall ? "clamp(1.0 - (vLampWorld.y - lampFloor) / 7.0, 0.0, 1.0)" : "1.0"};
         totalEmissiveRadiance += lampLight * lampNight * lampFall * diffuseColor.rgb * ${wall ? "0.9" : "1.5"};`);
     };
@@ -78,6 +94,9 @@ export function createLampLight(world, spots, materials, { wallMaterials = [] } 
   return {
     setNight(n) {
       uniforms.lampNight.value = n;
+    },
+    setStadium(n) {
+      uniforms.floodOn.value = n;
     },
   };
 }

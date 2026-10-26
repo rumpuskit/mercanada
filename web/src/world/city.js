@@ -429,7 +429,7 @@ export function buildCity(world) {
   return {
     group,
     tick: (t) => features.userData.tick(t),
-    setFlood: (n) => features.userData.setFlood(n),
+    setFlood: (s, f) => features.userData.setFlood(s, f),
     windows: K.glass.mesh,
     windowOwners: K.windowOwners,
     wallMaterials: [K.B.walls.material, K.B.plinth.material, K.B.doors.material],
@@ -1165,10 +1165,11 @@ function buildFeatures(world) {
       group.add(mesh);
     }
   }
-  group.userData.setFlood = (n) => {
-    floodLens.emissiveIntensity = 3.2 * n;
-    floodGlareMat.opacity = 0.75 * n;
-    for (const f of fenerLamps) { f.lensMat.emissiveIntensity = 0.15 + 3.5 * n; f.beamMat.uniforms.uOpacity.value = 0.35 * n; f.beam.visible = n > 0; }
+  /** stadium: saha projektörleri (akşam saatlerinde), fener: gece boyunca. */
+  group.userData.setFlood = (stadium, fener = stadium) => {
+    floodLens.emissiveIntensity = 3.2 * stadium;
+    floodGlareMat.opacity = 0.75 * stadium;
+    for (const f of fenerLamps) { f.lensMat.emissiveIntensity = 0.15 + 3.5 * fener; f.beamMat.uniforms.uOpacity.value = 0.35 * fener; f.beam.visible = fener > 0; }
   };
   group.userData.tick = (t) => {
     for (const f of fenerLamps) f.beam.rotation.y = t * 0.6;

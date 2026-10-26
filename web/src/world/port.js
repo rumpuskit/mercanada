@@ -102,7 +102,7 @@ export function shipBob(t) {
  *  forklift: {x, z, heading, forkY, carry}
  *  box: taşınan konteynerin alt-orta noktası [x, y, z]
  */
-export function portMotion(P, t) {
+export function portMotion(P, t, tf = t) {
   const L = plan(P);
   const tt = ((t % CYCLE) + CYCLE) % CYCLE;
   const top = P.top;
@@ -162,7 +162,7 @@ export function portMotion(P, t) {
   const boxHeading = s.carry ? s.heading : 0;
 
   // Forklift: ambar kapısından tırın arkasına palet taşır (60 sn döngü).
-  const f = forkliftMotion(P, t);
+  const f = forkliftMotion(P, tf);
 
   return { crane: { z: cz, y: cy, carry: ccarry }, stacker: s, forklift: f, box: bx, boxHeading, bob };
 }
@@ -542,8 +542,11 @@ export function buildPort(world) {
   // Her kare.
   const tmpM = new THREE.Matrix4(), tq = new THREE.Quaternion(), tv = new THREE.Vector3();
   const shipStatic = shipSlots.map(([x, y, z]) => [x, y, z]);
+  // Vardiya dışında (gece ve vardiya arası) makineler park konumunda durur.
+  let working = true;
+  group.userData.setMinute = (m) => { working = (m >= 335 && m < 805) || (m >= 845 && m < 1315); };
   group.userData.tick = (t) => {
-    const M = portMotion(P, t);
+    const M = working ? portMotion(P, t) : portMotion(P, 120, 40);
     // Gemi sallantısı (gövde ve güvertedeki konteynerler birlikte).
     ship.position.y = M.bob.y;
     ship.rotation.z = M.bob.roll;

@@ -429,6 +429,7 @@ export function buildHarbor(world) {
   group.userData.setNight = (n) => port?.userData.setNight(n);
   // Vapur seferleri: kalkışta açığa doğru döner ve uzaklaşır, yenisi aynı yoldan yanaşır.
   group.userData.setMinute = (m) => {
+    port?.userData.setMinute(m);
     if (!ferryObj) return;
     const u = ferryOut(m);
     const o = ferryObj.obj;
