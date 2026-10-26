@@ -261,6 +261,93 @@ function boat(len, seed = 0) {
   return mesh;
 }
 
+/**
+ * Tersane kızağı: beton rampa (düz kısım + denize inen eğim, kenarlarında ray), beşik üstünde yapımdaki
+ * tekne (gövde hull() ile; karina boyası henüz yarım), iki katlı tüp iskele, üstte portal vinç ve
+ * kancası, kereste yığını, boya varilleri, kaynak makinesi.
+ */
+export function buildShipyard(world) {
+  const S = world.tersane;
+  const group = new THREE.Group();
+  const top = S.top;
+  const conc = [], steel = [], wood = [];
+  const W = S.x1 - S.x0, cx = (S.x0 + S.x1) / 2;
+  // Düz kısım (kalın beton döşeme, denize doğru kenarları duvar).
+  conc.push(box(W, top + 3, S.zFlat - S.z0, cx, (top - 3) / 2, (S.z0 + S.zFlat) / 2, "#a9aaa5"));
+  // Eğimli rampa: düz kısımdan denize tek parça eğimli beton (kalın levha), raylar onunla birlikte iner.
+  const dz = S.z1 - S.zFlat, dy = top + 2.5, L = Math.hypot(dz, dy), ang = Math.atan2(dy, dz);
+  const slope = (w, h, x, color, lift = 0) => {
+    const g = new THREE.BoxGeometry(w, h, L).translate(0, -h / 2 + lift, L / 2).rotateX(ang).translate(x, top, S.zFlat);
+    return colored(g, color);
+  };
+  conc.push(slope(W, 1.2, cx, "#9a9b96"));
+  for (const rx of [-2.2, 2.2]) {
+    steel.push(box(0.15, 0.12, S.zFlat - S.z0, S.x + rx, top + 0.06, (S.z0 + S.zFlat) / 2, "#4a4f57"));
+    steel.push(slope(0.15, 0.12, S.x + rx, "#4a4f57", 0.12));
+  }
+  // Beşik: omurga takozları ve yan payandalar.
+  const B = S.boat, len = B.len, beam = len * 0.32, depth = len * 0.12;
+  const keelY = top + 0.8;
+  for (let z = B.z - len / 2 + 1.5; z < B.z + len / 2 - 1; z += 2) wood.push(box(1.2, 0.8, 0.5, B.x, top + 0.4, z, "#7a5a3e"));
+  const H = hull(len, beam, depth, { top: "#e9e2cf", stripe: "#2f5d8a", deck: "#b08a62", inner: "#e9e2cf" });
+  const boatMesh = new THREE.Mesh(H.geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: THREE.DoubleSide }));
+  const oy = keelY + depth * 0.42;
+  boatMesh.position.set(B.x, oy, B.z);
+  boatMesh.castShadow = boatMesh.receiveShadow = true;
+  group.add(boatMesh);
+  // Yarım kalmış kaplama: kıç tarafında açıkta kalan postalar (kaburgalar).
+  for (let s = 0.05; s < 0.3; s += 0.05) {
+    const z = B.z + H.z(s), w = H.halfW(s), g = H.sheer(s);
+    wood.push(box(0.12, g + depth * 0.42, 0.12, B.x - w + 0.06, oy - depth * 0.42 + (g + depth * 0.42) / 2, z, "#8a6a4a"));
+    wood.push(box(0.12, g + depth * 0.42, 0.12, B.x + w - 0.06, oy - depth * 0.42 + (g + depth * 0.42) / 2, z, "#8a6a4a"));
+  }
+  for (const side of [-1, 1]) {
+    for (const s of [0.25, 0.5, 0.75]) {
+      const z = B.z + H.z(s), w = H.halfW(s);
+      wood.push(rod(new THREE.Vector3(B.x + side * (w + 1.4), top, z), new THREE.Vector3(B.x + side * (w - 0.1), oy + H.sheer(s) * 0.35, z), 0.09, "#7a5a3e"));
+    }
+  }
+  // İskele: iki kat, dikmeler, platform kalasları, korkuluk.
+  for (const side of [-1, 1]) {
+    const x = B.x + side * 3.6;
+    for (let z = B.z - len / 2; z <= B.z + len / 2 + 0.1; z += 2) {
+      for (const dx of [-0.6, 0.6]) steel.push(cyl(0.04, 0.04, 4.2, x + dx, top + 2.1, z, "#9aa1a8", 6));
+    }
+    for (const lv of [1.4, 2.8]) {
+      wood.push(box(1.3, 0.06, len, x, top + lv, B.z, "#b08a5a"));
+      steel.push(box(0.05, 0.05, len, x + side * 0.6, top + lv + 1.0, B.z, "#9aa1a8"));
+      steel.push(box(0.05, 0.05, len, x + side * 0.6, top + lv + 0.5, B.z, "#9aa1a8"));
+    }
+    for (let z = B.z - len / 2; z < B.z + len / 2; z += 2) steel.push(rod(new THREE.Vector3(x + side * 0.6, top, z), new THREE.Vector3(x + side * 0.6, top + 2.8, z + 2), 0.03, "#9aa1a8"));
+    // Merdiven (iskelenin baş ucunda).
+    for (let y = 0.3; y < 2.8; y += 0.35) steel.push(box(0.5, 0.04, 0.04, x, top + y, B.z + len / 2 + 0.4, "#9aa1a8"));
+  }
+  // Portal vinç: kızağın iki yanında ayaklar, üstte kiriş ve kanca.
+  const cy = top + 10;
+  for (const z of [B.z - 6, B.z + 6]) {
+    for (const x of [S.x0 - 0.6, S.x1 + 0.6]) steel.push(box(0.6, cy - top, 0.6, x, (cy + top) / 2, z, "#e8b62a"));
+    steel.push(box(W + 1.8, 0.8, 0.7, cx, cy, z, "#e8b62a"));
+  }
+  for (const x of [S.x0 - 0.6, S.x1 + 0.6]) steel.push(box(0.5, 0.6, 12.6, x, cy + 0.2, B.z, "#e8b62a"));
+  steel.push(box(2.0, 1.0, 13, cx, cy + 0.8, B.z, "#d29a22"));
+  steel.push(box(1.4, 1.0, 1.6, cx, cy - 0.2, B.z - 1, "#3a3f47"));
+  steel.push(box(0.03, cy - (top + 4.5), 0.03, cx, (cy + top + 4.5) / 2 - 0.4, B.z - 1, "#2a2d33"));
+  steel.push(colored(new THREE.TorusGeometry(0.25, 0.06, 6, 10, Math.PI * 1.5).translate(cx, top + 4.4, B.z - 1), "#e8b62a"));
+  // Kereste yığını, varil, kaynak makinesi.
+  const [tx, tz] = S.timber;
+  for (let r = 0; r < 4; r++) for (let k = 0; k < 6; k++) wood.push(box(0.25, 0.2, 6, tx - 1.2 + k * 0.45, top + 0.12 + r * 0.22, tz, ["#b08a5a", "#a07a50", "#c49a68"][(r + k) % 3]));
+  for (let k = 0; k < 3; k++) steel.push(cyl(0.3, 0.3, 0.9, S.x0 - 1.5, top + 0.45, B.z - 4 + k * 0.7, ["#c8312f", "#2f5d8a", "#c8312f"][k], 10));
+  steel.push(box(0.6, 0.7, 0.9, S.x1 + 1.8, top + 0.35, B.z + 2, "#2f5d8a"));
+  for (const [list, mat] of [[conc, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 })], [steel, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.15 })], [wood, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 })]]) {
+    const g = mergeGeometries(list.map((q) => { const n2 = q.index ? q.toNonIndexed() : q; if (n2.attributes.uv) n2.deleteAttribute("uv"); return n2; }));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, mat);
+    m.castShadow = m.receiveShadow = true;
+    group.add(m);
+  }
+  return group;
+}
+
 export function buildHarbor(world) {
   const group = new THREE.Group();
   const floating = [];
@@ -287,6 +374,7 @@ export function buildHarbor(world) {
   }
   const port = world.port ? buildPort(world) : null;
   if (port) group.add(port);
+  if (world.tersane) group.add(buildShipyard(world));
   group.userData.setNight = (n) => port?.userData.setNight(n);
   group.userData.tick = (t) => {
     port?.userData.tick(globalThis.__portT ?? t); // __portT: denetimde belirli bir anı görmek için

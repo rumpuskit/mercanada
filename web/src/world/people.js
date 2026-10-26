@@ -265,6 +265,7 @@ export class People {
       list.forEach((loc, idx) => {
         if (!loc?.outdoor) return;
         if (kind === "liman" && w.port) { for (const q of w.port.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
+        if (kind === "tersane" && w.tersane) { for (const q of w.tersane.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
         const center = loc.anchor;
         // Nokta sayısı alanın büyüklüğüne göre: tarla geniş, kıyıdaki iş yerleri dar. Noktası olmayan
         // çalışan görünmez (atölyenin içinde, denizde, tarlanın uzak ucunda) — kimse bir noktaya yığılmaz.
@@ -936,10 +937,50 @@ export class People {
           return true;
         }
         case "gemi_ustasi": {
-          stand(ax, az, it?.heading ?? 0);
-          const hit = Math.max(0, Math.sin(t * 2.2 + ph));
-          p.shR = 1.0 + 1.3 * hit; p.elR = 0.4 + 0.8 * (1 - hit); p.lean = 0.15;
-          return true;
+          // Tersanede görev yeri: iskelede, teknenin dibinde, kereste taşırken; yoksa atölyede.
+          const S = w.tersane;
+          if (!S || !it?.post) return false;
+          switch (it.post) {
+            case "iskele1": case "iskele2": {
+              p.x = it.x; p.z = it.z; p.heading = it.heading; p.y = S.top + (it.level === 2 ? 2.8 : 1.4) + 0.03;
+              const hit = Math.max(0, Math.sin(t * 2.2 + ph));
+              if (s % 2) { p.shR = 1.0 + 1.0 * hit; p.elR = 0.4 + 0.8 * (1 - hit); p.shL = 0.8; p.elL = 0.7; }
+              else { const u = Math.sin(t * 1.6 + ph); p.shL = p.shR = 1.2 + 0.25 * u; p.elL = p.elR = 0.5; p.twist = 0.1 * u; }
+              p.lean = 0.12;
+              return true;
+            }
+            case "boya": {
+              stand(it.x, it.z, it.heading);
+              const u = Math.sin(t * 1.4 + ph);
+              p.shL = p.shR = 1.15 + 0.45 * u; p.elL = p.elR = 0.45; p.headPitch = -0.2;
+              return true;
+            }
+            case "kaynak": {
+              stand(it.x, it.z, it.heading);
+              p.drop = 0.38 * kk; p.hipL = p.hipR = 1.25; p.kneeL = p.kneeR = 2.0; p.lean = 0.4;
+              p.shL = p.shR = 1.0; p.elL = p.elR = 0.9 + 0.05 * Math.sin(t * 9 + ph); p.headPitch = 0.4;
+              return true;
+            }
+            case "tasima": {
+              const a = [S.timber[0] + 1.6 + it.k * 0.8, S.timber[1] + 3.5], b = [S.x0 + 0.8 + it.k * 0.6, S.boat.z - S.boat.len / 2 - 1.5];
+              const r = pingPong([a, b], 0.75, ph * 20 + it.k * 9);
+              stand(at.x, at.z, r.heading);
+              walkPose(p, r.d / (0.72 * kk) * Math.PI);
+              if (!r.back) { p.props = ["kasa"]; p.shL = p.shR = 0.9; p.elL = p.elR = 1.1; }
+              return true;
+            }
+            case "vinc": {
+              stand(it.x, it.z, it.heading);
+              p.shR = 0.7; p.elR = 1.6; p.headPitch = -0.45;
+              return true;
+            }
+            default: {
+              stand(it.x, it.z, it.heading);
+              idleGesture(p, t, ph, false);
+              p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.4; p.props = ["telefon"];
+              return true;
+            }
+          }
         }
       }
       stand(ax, az, it?.heading ?? ph);

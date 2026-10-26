@@ -830,10 +830,36 @@ export class World {
     // Tersane: gezinti yolunun bittiği doğu kıyısında, deniz tarafında.
     const [tx, tz] = coast(198);
     this.addBuilding({ kind: "tersane", x: tx, z: tz - 13, rot: 0, w: 30, d: 18, floors: 3, roofType: "gable", wall: "#c9d2dc", roof: "#6f7f92", workplace: true, industrial: true, style: { door: "#2f5d8a", sign: "#2f5d8a" }, address: "Tersane Yolu No 1, Doğu Kıyısı" });
-    this.features.push({ type: "vinc", x: tx + 21, z: tz - 3 });
-    this.features.push({ type: "tekne", x: tx - 6, z: tz + 17, rot: 0.15, len: 16 });
+    // Kızak: atölyenin önünden denize inen beton rampa; düz kısmında beşik üstünde yapımdaki tekne,
+    // çevresinde iki katlı iskele, üstünde portal vinç. Yanında suda bağlı bitmiş bir tekne.
+    const top = FLAT_Y + 0.25;
+    const S = {
+      x: tx, x0: tx - 6, x1: tx + 6, z0: tz - 3.5, zFlat: tz + 16, z1: tz + 40, top,
+      boat: { x: tx, z: tz + 6.5, len: 16 },
+      timber: [tx - 11, tz - 1],
+    };
+    this.tersane = S;
+    this.piers.push({ x0: S.x0, x1: S.x1, z0: S.z0, z1: S.zFlat, top });
+    this.block(S.x0 - 6, S.z0, S.x1 + 6, S.z1, 1);
+    this.features.push({ type: "tekne", x: tx + 15, z: tz + 22, rot: 0.1, len: 12 });
+    const posts = [];
+    const post = (type, x, z, heading, extra = {}) => posts.push({ post: type, x, z, heading, ...extra });
+    const half = S.boat.len / 2;
+    for (const side of [-1, 1]) {
+      post("iskele2", S.x + side * 3.6, S.boat.z - 3.5, side > 0 ? -Math.PI / 2 : Math.PI / 2, { level: 2 });
+      post("iskele2", S.x + side * 3.6, S.boat.z + 3, side > 0 ? -Math.PI / 2 : Math.PI / 2, { level: 2 });
+      post("iskele1", S.x + side * 3.6, S.boat.z, side > 0 ? -Math.PI / 2 : Math.PI / 2, { level: 1 });
+      post("boya", S.x + side * 2.2, S.boat.z + side * 4.5, side > 0 ? -Math.PI / 2 : Math.PI / 2);
+    }
+    post("kaynak", S.x + 0.9, S.boat.z - half + 2.5, -Math.PI / 2);
+    post("kaynak", S.x - 0.9, S.boat.z + half - 3, Math.PI / 2);
+    post("tasima", 0, 0, 0, { k: 0 });
+    post("tasima", 0, 0, 0, { k: 1 });
+    post("vinc", S.x1 + 0.8, S.boat.z - 6, -Math.PI / 2);
+    post("kontrol", S.x - 2.5, S.boat.z + half + 1.8, Math.PI);
+    S.posts = posts;
     const tDoor = [tx, tz - 23];
-    this._addWorkplace("tersane", 0, { door: tDoor, path: [tDoor, [tx, this.avenueZ(tx)], ...toHub(tx)], anchor: [tx + 8, tz - 2], spread: 5 });
+    this._addWorkplace("tersane", 0, { door: tDoor, innerDoor: [tx + 15 - 1.6, tz - 13 + 9 + 0.6], path: [tDoor, [tx, this.avenueZ(tx)], ...toHub(tx)], anchor: [tx, S.boat.z], spread: 5 });
 
     // Balıkçı koyu: gezinti yolunun batısında kulübeler ve tekneler.
     const [bx, bz] = coast(-218);
