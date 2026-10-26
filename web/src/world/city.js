@@ -422,6 +422,40 @@ function buildFeatures(world) {
         fenerLamps.push(lamp);
         break;
       }
+      case "tribun": {
+        const y0 = world.groundY((f.x0 + f.x1) / 2, f.z);
+        const len = f.x1 - f.x0, cx = (f.x0 + f.x1) / 2;
+        const concrete = std("#cfcac2");
+        for (let r = 0; r < 4; r++) {
+          const z = f.z + f.side * (1.2 + r * 0.8);
+          add(new THREE.BoxGeometry(len, 0.4 + r * 0.4, 0.8), concrete, cx, y0 + (0.4 + r * 0.4) / 2, z);
+          add(new THREE.BoxGeometry(len, 0.08, 0.45), std(r % 2 ? "#d8433d" : "#2f6fb5"), cx, y0 + 0.45 + r * 0.4, z - f.side * 0.05, 0, false);
+        }
+        add(new THREE.BoxGeometry(len, 2.6, 0.25), concrete, cx, y0 + 1.3, f.z + f.side * 4.4);
+        if (f.side < 0) {
+          // Kuzey tribününe çatı.
+          for (let x = f.x0; x <= f.x1; x += 15) add(new THREE.BoxGeometry(0.2, 4.6, 0.2), metal, x, y0 + 2.3, f.z - 4.3);
+          const roof = add(new THREE.BoxGeometry(len + 1, 0.15, 4.6), std("#e9eef2", { metalness: 0.3, roughness: 0.4 }), cx, y0 + 4.7, f.z - 2.4);
+          roof.rotation.x = -0.08;
+        }
+        break;
+      }
+      case "kale": {
+        const y0 = world.groundY(f.x, f.z) + 0.1;
+        const post = std("#ffffff");
+        for (const dz of [-3.66, 3.66]) add(new THREE.CylinderGeometry(0.06, 0.06, 2.44, 8), post, f.x, y0 + 1.22, f.z + dz);
+        add(new THREE.CylinderGeometry(0.06, 0.06, 7.32, 8).rotateX(Math.PI / 2), post, f.x, y0 + 2.44, f.z);
+        const net = new THREE.MeshStandardMaterial({ color: "#f4f4f4", transparent: true, opacity: 0.35, roughness: 1, side: THREE.DoubleSide });
+        add(new THREE.BoxGeometry(2, 2.44, 7.32), net, f.x - f.dir * 1, y0 + 1.22, f.z, 0, false);
+        break;
+      }
+      case "projektor": {
+        const y0 = world.groundY(f.x, f.z);
+        add(new THREE.CylinderGeometry(0.25, 0.4, 24, 8), metal, f.x, y0 + 12, f.z);
+        const head = add(new THREE.BoxGeometry(3.2, 1.6, 0.4), new THREE.MeshBasicMaterial({ color: "#fff6dc", toneMapped: false }), f.x, y0 + 24.5, f.z, Math.atan2(145 - f.x, -84 - f.z), false);
+        head.rotation.x = 0.35;
+        break;
+      }
       case "minare": {
         const y0 = world.groundY(f.x, f.z);
         add(new THREE.CylinderGeometry(1.5, 1.6, 2, 12), stone, f.x, y0 + 1, f.z);

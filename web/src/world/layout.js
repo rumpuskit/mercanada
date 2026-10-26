@@ -587,6 +587,25 @@ export class World {
 
     // Kuzeydoğu: futbol sahası; güneydoğu: otel bahçesi ve havuz; güneybatı: pazar yeri.
     this.plazas.push({ x0: 90, z0: -120, x1: 200, z1: -48, kind: "saha" });
+    // Futbol: tribünler (iki uzun kenar), kaleler, ışık direkleri; seyirci oturakları.
+    this.pitch = { x0: 90, z0: -120, x1: 200, z1: -48, cx: 145, cz: -84 };
+    for (const side of [-1, 1]) {
+      const edge = side < 0 ? -120 : -48;
+      this.features.push({ type: "tribun", x0: 100, x1: 190, z: edge, side });
+      for (let r = 0; r < 4; r++) {
+        for (let x = 101; x < 190; x += 0.62) {
+          const z = edge + side * (1.2 + r * 0.8);
+          this.seats.push({ x, z, heading: side < 0 ? 0 : Math.PI, h: 0.45 + r * 0.4, place: "tribun", absolute: true });
+        }
+      }
+    }
+    for (const gx of [90, 200]) this.features.push({ type: "kale", x: gx, z: -84, dir: gx < 145 ? 1 : -1 });
+    for (const [mx, mz] of [[87, -125], [203, -125], [87, -43], [203, -43]]) {
+      this.features.push({ type: "projektor", x: mx, z: mz });
+      this.lamps.push({ x: mx, z: mz, dir: Math.atan2(145 - mx, -84 - mz), r: 48, flood: true });
+    }
+    this.addRoad([[145, -CELL_D / 2], [145, -124.5]], "patika");
+    this.places.saha = { anchors: [[145, -84]], spread: 20, path: [[145, -CELL_D / 2]] };
     this.block(90, -120, 200, -48, 0);
     this.features.push({ type: "havuz", x: 140, z: 85, w: 25, d: 12 });
     this.block(124, 76, 156, 94, 0);

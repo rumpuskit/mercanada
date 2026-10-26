@@ -16,9 +16,10 @@ export function createLampLight(world, spots, materials, { wallMaterials = [] } 
   ctx.globalCompositeOperation = "lighter";
   for (const s of spots) {
     // Işık armatürün altına, yola doğru düşer.
-    const ox = s.deco ? 0 : Math.sin(s.dir) * 1.3, oz = s.deco ? 0 : Math.cos(s.dir) * 1.3;
+    const reach = s.flood ? 30 : s.deco ? 0 : 1.3;
+    const ox = Math.sin(s.dir) * reach, oz = Math.cos(s.dir) * reach;
     const px = (s.x + ox - x0) * scale, pz = (s.z + oz - z0) * scale;
-    const r = (s.deco ? 7 : 11) * scale;
+    const r = (s.r ?? (s.deco ? 7 : 11)) * scale;
     const g = ctx.createRadialGradient(px, pz, 0, px, pz, r);
     g.addColorStop(0, "rgba(255,206,140,0.95)");
     g.addColorStop(0.45, "rgba(255,190,120,0.45)");

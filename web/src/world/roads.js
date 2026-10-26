@@ -374,7 +374,8 @@ export function buildRoads(world) {
     }
   }
 
-  for (const l of world.lamps) lampSpots.push({ ...l, y: world.groundY(l.x, l.z), deco: true });
+  // Projektörler kendi direkleriyle çizilir; yalnızca ışık haritasına girer.
+  for (const l of world.lamps) lampSpots.push({ ...l, y: world.groundY(l.x, l.z), deco: true, hidden: !!l.flood });
   world.lampSpots = lampSpots;
 
   const mat = (map, opts = {}) => new THREE.MeshStandardMaterial({ map, roughness: 0.92, ...opts });
@@ -418,6 +419,7 @@ function buildLamps(spots) {
   const decoCap = make(new THREE.ConeGeometry(0.27, 0.22, 6).translate(0, 4.18, 0), metal, false);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), one = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3();
   for (const s of spots) {
+    if (s.hidden) continue;
     q.setFromAxisAngle(up, s.dir);
     m.compose(p.set(s.x, s.y, s.z), q, one);
     for (const mesh of s.deco ? [decoPole, decoBase, decoHead, decoCap] : [pole, arm, head]) mesh.setMatrixAt(mesh.count++, m);

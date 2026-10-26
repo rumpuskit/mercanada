@@ -19,6 +19,8 @@ const UNIFORMS = {
   cankurtaran: "#e0463c", liman_iscisi: "#f28c28", balikci: "#f2c230", gemi_ustasi: "#33507a",
   bahcivan: "#6a8f3c", zeytinci: "#7d8a4e", fener_bekcisi: "#2f3f5f", rehber: "#3e8a86",
 };
+const TEAM_COLORS = ["#c8312f", "#2f5fb5", "#1d1d22"].map((c) => new Color(c));
+const WHITE = new Color("#f4f4f2");
 const DOG_COLORS = ["#8a5a32", "#2b2622", "#e8dcc4", "#c9954f", "#6b6b6b"].map((c) => new Color(c));
 const HUB = [0, 0];
 const POSE_KEYS = ["y", "lie", "drop", "lean", "twist", "headYaw", "headPitch", "hipL", "hipR", "kneeL", "kneeR", "shL", "shR", "abL", "abR", "elL", "elR"];
@@ -285,6 +287,8 @@ export class People {
 
   /** Akşam buluşması (simülasyonda "meydan"): yarısı kendi mahallesinin çay bahçesine/parkına gider. */
   _placeOf(i, k) {
+    const ov = this.override?.[i]?.get(k);
+    if (ov) return ov;
     const seg = this.plans[i][k];
     if (!seg || seg.ne !== "meydan") return seg?.yer;
     const key = "mahalle:" + this.homes[i].parts.mahalle;
@@ -326,6 +330,28 @@ export class People {
       });
     });
     requests.sort((a, b) => a.seg.bas - b.seg.bas || a.i - b.i);
+    // Maçlar: boş zamanı maç saatine denk gelenlerden 22 oyuncu ve bir hakem; bir kısmı tribüne gelir.
+    this.override = this.residents.map(() => null);
+    this.matches = this._matchWindows(this.day).map((w, mi) => ({ ...w, id: this.day * 4 + mi, players: [] }));
+    for (const m of this.matches) {
+      for (const q of requests) {
+        if (q.seg.ne !== "hobi" && q.seg.ne !== "meydan") continue;
+        if (q.seg.bas > m.start + 10 || q.seg.son < m.start + 30) continue;
+        if (this.override[q.i]) continue;
+        const s = this.residents[q.i].seed;
+        if (m.players.length < 23 && roll(s, "futbol", m.id) % 100 < 35) {
+          const num = m.players.length;
+          m.players.push(q.i);
+          q.mode = "football";
+          q.match = m;
+          q.num = num;
+          (this.override[q.i] = new Map()).set(q.k, "saha");
+        } else if (roll(s, "seyirci", m.id) % 100 < 30) {
+          q.mode = "seat:tribun";
+          (this.override[q.i] = new Map()).set(q.k, "saha");
+        }
+      }
+    }
     for (const q of requests) {
       const { i, k, seg } = q;
       const s = this.residents[i].seed;
@@ -376,8 +402,57 @@ export class People {
           }
         }
       }
+      if (q.mode === "football") role = { mode: "football", match: q.match, num: q.num };
       this.roles[i][k] = role;
     }
+  }
+
+  /** Günün maç saatleri: her akşam 19:30, hafta sonu ayrıca 15:00. */
+  _matchWindows(day) {
+    const wd = (day + 3) % 7;
+    const out = [{ start: 1170, end: 1260 }];
+    if (wd >= 5) out.unshift({ start: 900, end: 1005 });
+    return out;
+  }
+
+  /** Maç anı: top ve 23 kişinin (iki takım + hakem) konumu; maç kimliği ve dakikaya göre. */
+  footballState(match, minute) {
+    const key = match.id * 100000 + Math.round(minute * 60 * 4);
+    if (this._fbKey === key) return this._fb;
+    const P = this.world.pitch;
+    const t = Math.max(0, (minute - match.start) * 60);
+    const ph = (n) => ((match.id * 7919 + n * 104729) % 1000) / 159;
+    const halfL = (P.x1 - P.x0) / 2 - 2, halfW = (P.z1 - P.z0) / 2 - 2;
+    const ballAt = (tt) => [
+      P.cx + halfL * (0.78 * Math.sin(tt * 0.045 + ph(1)) + 0.18 * Math.sin(tt * 0.19 + ph(2))),
+      P.cz + halfW * (0.7 * Math.sin(tt * 0.061 + ph(3)) + 0.22 * Math.sin(tt * 0.27 + ph(4))),
+    ];
+    const [bx, bz] = ballAt(t);
+    const live = minute >= match.start && minute <= match.end;
+    // 4-4-2 dizilişi (kendi yarısında), topa doğru kayar; en yakın ikisi topa koşar.
+    const base = [[-0.95, 0], [-0.62, -0.6], [-0.62, -0.2], [-0.62, 0.2], [-0.62, 0.6], [-0.3, -0.65], [-0.3, -0.22], [-0.3, 0.22], [-0.3, 0.65], [-0.05, -0.25], [-0.05, 0.25]];
+    const players = [];
+    for (let team = 0; team < 2; team++) {
+      const dir = team ? -1 : 1;
+      const list = base.map(([fx, fz], n) => {
+        let x = P.cx + dir * fx * halfL, z = P.cz + fz * halfW;
+        if (n === 0) z = P.cz + (bz - P.cz) * 0.3;
+        else { x += (bx - P.cx) * 0.45; z += (bz - P.cz) * 0.3; }
+        return { x, z, n };
+      });
+      const chase = list.slice(1).map((q) => [Math.hypot(q.x - bx, q.z - bz), q.n]).sort((a, b) => a[0] - b[0]).slice(0, 2).map((c) => c[1]);
+      for (const q of list) {
+        if (live && chase.includes(q.n)) {
+          const w = q.n === chase[0] ? 0.92 : 0.6;
+          q.x += (bx - 1.2 * dir - q.x) * w; q.z += (bz + (q.n % 2 ? 1 : -1) * 0.8 - q.z) * w;
+        }
+        players.push({ x: q.x + Math.sin(t * 0.3 + q.n) * 0.6, z: q.z + Math.cos(t * 0.27 + q.n) * 0.6, team, keeper: q.n === 0 });
+      }
+    }
+    players.push({ x: bx - 8, z: bz + 6, team: 2 }); // hakem
+    this._fb = { ball: [bx, bz, live ? 0.11 + Math.abs(Math.sin(t * 2.3)) * 0.5 : 0.11], players, live, t };
+    this._fbKey = key;
+    return this._fb;
   }
 
   setDay(day) {
@@ -397,7 +472,7 @@ export class People {
 
   /** Yer için meydana giden yol (kapı/yer tarafından meydana doğru). */
   _roadPath(i, yer, k) {
-    if (yer === "meydan" && k != null) yer = this._placeOf(i, k);
+    if (k != null && (yer === "meydan" || this.override?.[i]?.has(k))) yer = this._placeOf(i, k);
     if (yer === "ev") return this.homes[i].path;
     if (yer === "is") return this.works[i].loc.path;
     return this.world.placeOf(yer.replace("hobi:", "")).path;
@@ -754,6 +829,30 @@ export class People {
       return true;
     }
 
+    if (role.mode === "football") {
+      const m = role.match;
+      const st = this.footballState(m, minute);
+      const me = st.players[role.num] ?? st.players[0];
+      const P = w.pitch;
+      if (!st.live) {
+        // Maçtan önce ve sonra: kenarda ısınır / sohbet eder.
+        const bench = [P.x0 + 30 + role.num * 2.2, P.z1 + 2.2];
+        stand(bench[0], bench[1], Math.PI);
+        idleGesture(p, t, ph, true);
+      } else {
+        const prev = this.footballState(m, minute - 0.5 / 60);
+        const pm = prev.players[role.num] ?? me;
+        const speed = Math.hypot(me.x - pm.x, me.z - pm.z) / 0.5;
+        stand(me.x, me.z, speed > 0.3 ? Math.atan2(me.x - pm.x, me.z - pm.z) : Math.atan2(st.ball[0] - me.x, st.ball[1] - me.z));
+        if (speed > 0.3) walkPose(p, sec * (speed > 3 ? 2.6 : 1.6), speed > 3 ? 1 : 0);
+        else idleGesture(p, t, ph, false);
+        if (me.keeper && speed <= 0.3) { p.shL = p.shR = 0.5; p.abL = p.abR = 0.4; p.kneeL = p.kneeR = 0.35; p.hipL = p.hipR = 0.3; }
+      }
+      p.team = me.team;
+      p.shorts = true; p.sleeves = false;
+      return true;
+    }
+
     switch (role.mode) {
       case "fish": {
         stand(it.x, it.z, it.heading);
@@ -1049,6 +1148,12 @@ export class People {
       p.beard = c.beard; p.glasses = c.glasses;
       p.top = p.atWork && c.uniform ? c.uniform : c.top;
       p.bottom = c.bottom;
+      if (p.team != null) {
+        p.top = TEAM_COLORS[p.team];
+        p.bottom = p.team === 2 ? TEAM_COLORS[2] : WHITE;
+        p.skirt = false;
+        p.team = null;
+      }
       crowd.add(i, p);
       if (p.dog && this.dogs[i] && !p.indoor) {
         const side = 0.75;
@@ -1059,6 +1164,9 @@ export class People {
     }
     crowd.end();
     this.visibleCount = shown.length;
+    // Maç varsa top.
+    const m = this.matches?.find((mm) => minute >= mm.start && minute <= mm.end && mm.players.length >= 10);
+    this.ball = m ? this.footballState(m, minute).ball : null;
   }
 
   /** Dokunulan figürün sakin indeksi. */

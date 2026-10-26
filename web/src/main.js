@@ -112,6 +112,11 @@ people.dollhouse = dollhouse;
 const sky = createSky(scene);
 sky.sun.shadow.mapSize.set(2048, 2048);
 
+// Maç topu.
+const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.11, 1), new THREE.MeshStandardMaterial({ color: "#f4f4f4", roughness: 0.6, flatShading: true }));
+ball.castShadow = true;
+scene.add(ball);
+
 // Seçili sakin işareti.
 const marker = new THREE.Group();
 const pin = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.75, 12).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: "#e0607a", toneMapped: false }));
@@ -217,6 +222,8 @@ function tick() {
   people.update(minute, real);
   if (frame < 3 && params.has("denetle")) console.info(`kare ${frame}: gün ${Math.round(U1 - U0)} ms, güncelleme ${Math.round(performance.now() - U1)} ms`);
   city.setOpenDoors(people.openDoors);
+  ball.visible = !!people.ball;
+  if (people.ball) ball.position.set(people.ball[0], world.groundY(people.ball[0], people.ball[1]) + people.ball[2], people.ball[1]);
   // Araçlar: sürülenler, park halindekiler ve otobüsler.
   vehicles.begin();
   for (const v of people.vehicleStates) vehicles.addCar(v.x, world.groundY(v.x, v.z), v.z, v.heading, v.color, v.taxi);
