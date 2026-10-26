@@ -346,6 +346,7 @@ export function buildCity(world) {
   return {
     group,
     tick: (t) => features.userData.tick(t),
+    setFlood: (n) => features.userData.setFlood(n),
     windows: K.glass.mesh,
     windowOwners: K.windowOwners,
     wallMaterials: [K.B.walls.material, K.B.plinth.material, K.B.doors.material],
@@ -391,6 +392,20 @@ export function buildCity(world) {
       return hit?.instanceId != null ? K.B.walls.items[hit.instanceId].owner : null;
     },
   };
+}
+
+/** Yumuşak ışık halkası dokusu (parlama için). */
+function glareTexture() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, "rgba(255,255,255,1)");
+  r.addColorStop(0.25, "rgba(255,255,255,0.55)");
+  r.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = r;
+  g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
 }
 
 // --- apartman önü patikaları: kaldırımdan kapıya, her binada farklı ---
@@ -468,6 +483,11 @@ function buildFeatures(world) {
     return mesh;
   };
   const water = new THREE.MeshStandardMaterial({ color: "#6fc6d8", roughness: 0.08, metalness: 0.1 });
+  // Stadyum ışıkları: gece yanan mercekler ve parlama (setFlood ile).
+  const floodPole = std("#8a929c", { metalness: 0.6, roughness: 0.45 });
+  const floodHousing = std("#3a3f47", { metalness: 0.5, roughness: 0.5 });
+  const floodLens = new THREE.MeshStandardMaterial({ color: "#c9d2dc", roughness: 0.15, metalness: 0.2, emissive: new THREE.Color("#f4f7ff"), emissiveIntensity: 0 });
+  const floodGlareMat = new THREE.SpriteMaterial({ map: glareTexture(), color: "#eef3ff", transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false });
   const stone = std("#d8d0c4");
   const wood = std("#9b7353", { roughness: 0.9 });
   const darkWood = std("#6b4a35");
@@ -653,10 +673,55 @@ function buildFeatures(world) {
         break;
       }
       case "projektor": {
+        // Stadyum ışık direği: konik direk, bakım merdiveni, platform ve korkuluk; çerçevede 4×3
+        // projektör sahanın ortasına eğik bakar. Gece yanar, uzaktan parlama görünür.
         const y0 = world.groundY(f.x, f.z);
-        add(new THREE.CylinderGeometry(0.25, 0.4, 24, 8), metal, f.x, y0 + 12, f.z);
-        const head = add(new THREE.BoxGeometry(3.2, 1.6, 0.4), new THREE.MeshBasicMaterial({ color: "#fff6dc", toneMapped: false }), f.x, y0 + 24.5, f.z, Math.atan2(145 - f.x, -84 - f.z), false);
-        head.rotation.x = 0.35;
+        const H = 24, facing = Math.atan2(145 - f.x, -84 - f.z);
+        add(new THREE.CylinderGeometry(0.28, 0.6, H, 12), floodPole, f.x, y0 + H / 2, f.z);
+        add(new THREE.CylinderGeometry(0.9, 1.1, 0.6, 12), stone, f.x, y0 + 0.3, f.z);
+        const g = new THREE.Group();
+        g.position.set(f.x, y0 + H, f.z);
+        g.rotation.y = facing;
+        group.add(g);
+        const put = (geo, mat, x, y, z, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; g.add(m); return m; };
+        // Merdiven (direğin arkasında), platform ve korkuluk.
+        for (const sx of [-0.22, 0.22]) put(new THREE.BoxGeometry(0.05, H - 1, 0.05), floodPole, sx, -(H - 1) / 2 - 0.5, -0.75, false);
+        for (let y = 1; y < H - 1; y += 0.6) put(new THREE.BoxGeometry(0.44, 0.03, 0.03), floodPole, 0, -y, -0.75, false);
+        put(new THREE.BoxGeometry(4.8, 0.12, 1.6), floodPole, 0, 0.1, 0.1);
+        for (const [x, z, w, d] of [[0, 0.88, 4.8, 0.04], [0, -0.68, 4.8, 0.04], [-2.4, 0.1, 0.04, 1.6], [2.4, 0.1, 0.04, 1.6]]) {
+          put(new THREE.BoxGeometry(w, 0.04, d), floodPole, x, 1.1, z, false);
+          put(new THREE.BoxGeometry(w, 0.03, d), floodPole, x, 0.6, z, false);
+        }
+        for (const x of [-2.4, -1.2, 0, 1.2, 2.4]) for (const z of [-0.68, 0.88]) put(new THREE.BoxGeometry(0.04, 1.0, 0.04), floodPole, x, 0.6, z, false);
+        // Projektör çerçevesi: platformun üstünde, sahaya doğru öne eğik.
+        const frame = new THREE.Group();
+        frame.position.set(0, 2.9, 0.4);
+        frame.rotation.x = 0.42;
+        g.add(frame);
+        for (const y of [-1.35, 1.35]) { const m = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.12, 0.12), floodPole); m.position.y = y; frame.add(m); }
+        for (const x of [-2.3, 2.3]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.8, 0.12), floodPole); m.position.x = x; frame.add(m); }
+        const sup = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.6, 0.16), floodPole);
+        sup.position.set(0, 1.4, 0.2); g.add(sup);
+        for (let r = 0; r < 3; r++) {
+          for (let k = 0; k < 4; k++) {
+            const x = -1.65 + k * 1.1, y = -0.9 + r * 0.9;
+            const house = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.5), floodHousing);
+            house.position.set(x, y, -0.05);
+            house.castShadow = true;
+            frame.add(house);
+            const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.76, 0.56), floodLens);
+            lens.position.set(x, y, 0.205);
+            frame.add(lens);
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.04, 0.22), floodHousing);
+            visor.position.set(x, y + 0.36, 0.3);
+            frame.add(visor);
+          }
+        }
+        // Parlama: gece projektörlerin önünde yumuşak bir ışık halkası.
+        const glare = new THREE.Sprite(floodGlareMat);
+        glare.scale.set(9, 7, 1);
+        glare.position.set(0, 0, 0.6);
+        frame.add(glare);
         break;
       }
       case "minare": {
@@ -797,6 +862,10 @@ function buildFeatures(world) {
   }
   for (const batch of [benchSeat, benchBack, benchLegs, tables, tableLegs, chairs, chairBacks, chairLegs, chairBackLegs, bins, binPoles, containers]) group.add(batch.build());
   group.userData.fenerLamps = fenerLamps;
+  group.userData.setFlood = (n) => {
+    floodLens.emissiveIntensity = 3.2 * n;
+    floodGlareMat.opacity = 0.75 * n;
+  };
   group.userData.tick = (t) => {
     for (const fo of fountains) {
       fo.curtains.forEach((c, i) => { c.scale.set(1 + Math.sin(t * 3 + i) * 0.015, 1, 1 + Math.cos(t * 3 + i) * 0.015); c.material.opacity = 0.45 + 0.1 * Math.sin(t * 5); });

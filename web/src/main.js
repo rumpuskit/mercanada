@@ -258,6 +258,7 @@ function updateWindows(minute, light, sunDeg) {
   const on = sunDeg < -1.5;
   for (const m of roads.userData.lampHeads) m.color.copy(LAMP_OFF).lerp(P.WINDOW_NIGHT, on ? 1 : 0);
   lampLight.setNight(on ? Math.min(1, (-1.5 - sunDeg) / 6 + 0.35) : 0);
+  city.setFlood(on ? 1 : 0);
 }
 
 // --- döngü ---
