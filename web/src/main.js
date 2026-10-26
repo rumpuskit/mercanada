@@ -93,7 +93,7 @@ const T4 = performance.now();
 const trees = buildTrees(world);
 const T5 = performance.now();
 const lampLight = createLampLight(world, world.lampSpots,
-  [terrain.material, ...roads.userData.groundMaterials, ...grounds.userData.groundMaterials],
+  [terrain.material, ...roads.userData.groundMaterials, ...grounds.userData.groundMaterials, ...(harbor.userData.groundMaterials ?? [])],
   { wallMaterials: city.wallMaterials });
 scene.add(city.group, trees);
 const clouds = buildClouds(world);

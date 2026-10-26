@@ -262,7 +262,9 @@ export function buildPort(world) {
 
   // Rıhtım platformu: üstü beton döşeme (işaretli), yanları beton duvar.
   const wall = new THREE.MeshStandardMaterial({ color: "#9a9c98", roughness: 0.95 });
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(W, top + 9, D), [wall, wall, new THREE.MeshStandardMaterial({ map: concreteTop(P), roughness: 0.92 }), wall, wall, wall]);
+  const deckTop = new THREE.MeshStandardMaterial({ map: concreteTop(P), roughness: 0.92 });
+  group.userData.groundMaterials = [deckTop]; // gece direk ışıkları bu zemine düşer
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(W, top + 9, D), [wall, wall, deckTop, wall, wall, wall]);
   deck.position.set(cx, (top - 9) / 2, cz);
   deck.receiveShadow = true;
   group.add(deck);

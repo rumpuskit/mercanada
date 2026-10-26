@@ -419,6 +419,7 @@ export function buildHarbor(world) {
   }
   const port = world.port ? buildPort(world) : null;
   if (port) group.add(port);
+  group.userData.groundMaterials = [...(port?.userData.groundMaterials ?? [])];
   if (world.tersane) group.add(buildShipyard(world));
   if (world.koy) group.add(buildFishingCove(world));
   group.userData.setNight = (n) => port?.userData.setNight(n);
