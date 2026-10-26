@@ -1,0 +1,5 @@
+game/.godot/
+game/export/
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,93 @@
+{
+  "surum": 1,
+  "kapasite": {
+    "daire_per_bina": 10,
+    "bina_per_sokak": 10,
+    "sokak_per_mahalle": 20,
+    "mahalle_per_ada": 50
+  },
+  "vardiyalar": {
+    "gunduz": { "bas": 540, "son": 1080 },
+    "erken": { "bas": 330, "son": 810 },
+    "gec": { "bas": 840, "son": 1320 }
+  },
+  "terfi_gunleri": [7, 30, 90, 240],
+  "isyerleri": {
+    "liman": ["Mercanada Limanı"],
+    "balikci_koyu": ["Balıkçı Koyu"],
+    "tersane": ["Mercan Tersanesi"],
+    "kafe": ["Yakamoz Kafe", "Lodos Kahvesi", "İskele Çay Bahçesi", "Martı Kafe", "Kumsal Kahvecisi", "Dalga Kafe"],
+    "firin": ["Mercan Fırını", "Simitçi Martı", "Taş Fırın"],
+    "market": ["Ada Market", "Liman Bakkalı", "Yokuş Manavı", "Mercan Şarküteri"],
+    "plaza": ["Mercan Plaza", "Dalga Plaza", "Fener Plaza"],
+    "okul": ["Mercanada İlkokulu", "Deniz Feneri Lisesi"],
+    "saglik": ["Mercanada Sağlık Merkezi"],
+    "belediye": ["Mercanada Belediyesi"],
+    "otel": ["Grand Mercan Oteli", "Kumsal Pansiyon"],
+    "tarla": ["Zeytinlik", "Bağ Evi"],
+    "atolye": ["Seramik Atölyesi", "Marangozhane", "Resim Atölyesi", "Yelken Atölyesi"],
+    "kutuphane": ["Ada Kütüphanesi"],
+    "muze": ["Deniz Müzesi"],
+    "fener": ["Mercan Feneri"],
+    "plaj": ["Mercan Plajı"]
+  },
+  "meslekler": [
+    { "id": "balikci", "yer": "balikci_koyu", "vardiya": "erken", "hafta_sonu": true, "agirlik": 6, "kademeler": ["Tayfa", "Balıkçı", "Usta Balıkçı", "Reis"] },
+    { "id": "liman_iscisi", "yer": "liman", "vardiya": "erken", "hafta_sonu": true, "agirlik": 6, "kademeler": ["Liman İşçisi", "Vinç Operatörü", "Liman Formeni", "Liman Şefi"] },
+    { "id": "gemi_ustasi", "yer": "tersane", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 3, "kademeler": ["Tersane Çırağı", "Gemi Ustası", "Baş Usta", "Tersane Müdürü"] },
+    { "id": "barista", "yer": "kafe", "vardiya": "gec", "hafta_sonu": true, "agirlik": 5, "kademeler": ["Stajyer Barista", "Barista", "Baş Barista", "Kafe Müdürü"] },
+    { "id": "garson", "yer": "kafe", "vardiya": "gec", "hafta_sonu": true, "agirlik": 4, "kademeler": ["Komi", "Garson", "Kıdemli Garson", "Salon Şefi"] },
+    { "id": "firinci", "yer": "firin", "vardiya": "erken", "hafta_sonu": true, "agirlik": 4, "kademeler": ["Fırın Çırağı", "Fırıncı", "Usta Fırıncı", "Fırın Sahibi"] },
+    { "id": "kasiyer", "yer": "market", "vardiya": "gunduz", "hafta_sonu": true, "agirlik": 4, "kademeler": ["Stajyer Kasiyer", "Kasiyer", "Reyon Sorumlusu", "Market Müdürü"] },
+    { "id": "ogretmen", "yer": "okul", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 5, "kademeler": ["Stajyer Öğretmen", "Öğretmen", "Kıdemli Öğretmen", "Okul Müdürü"] },
+    { "id": "doktor", "yer": "saglik", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 3, "kademeler": ["Asistan Doktor", "Doktor", "Uzman Doktor", "Başhekim"] },
+    { "id": "hemsire", "yer": "saglik", "vardiya": "gec", "hafta_sonu": true, "agirlik": 3, "kademeler": ["Stajyer Hemşire", "Hemşire", "Sorumlu Hemşire", "Başhemşire"] },
+    { "id": "yazilimci", "yer": "plaza", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 6, "kademeler": ["Stajyer Yazılımcı", "Yazılımcı", "Kıdemli Yazılımcı", "Teknik Lider"] },
+    { "id": "tasarimci", "yer": "plaza", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 5, "kademeler": ["Stajyer Tasarımcı", "Tasarımcı", "Kıdemli Tasarımcı", "Sanat Yönetmeni"] },
+    { "id": "muhasebeci", "yer": "plaza", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 4, "kademeler": ["Stajyer Muhasebeci", "Muhasebeci", "Kıdemli Muhasebeci", "Mali Müşavir"] },
+    { "id": "avukat", "yer": "plaza", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 3, "kademeler": ["Stajyer Avukat", "Avukat", "Kıdemli Avukat", "Hukuk Bürosu Ortağı"] },
+    { "id": "mimar", "yer": "plaza", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 3, "kademeler": ["Stajyer Mimar", "Mimar", "Kıdemli Mimar", "Proje Lideri"] },
+    { "id": "memur", "yer": "belediye", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 3, "kademeler": ["Belediye Memuru", "Şef", "Müdür Yardımcısı", "Müdür"] },
+    { "id": "bahcivan", "yer": "belediye", "vardiya": "erken", "hafta_sonu": false, "agirlik": 2, "kademeler": ["Bahçıvan", "Usta Bahçıvan", "Park Sorumlusu", "Parklar Müdürü"] },
+    { "id": "resepsiyonist", "yer": "otel", "vardiya": "gec", "hafta_sonu": true, "agirlik": 3, "kademeler": ["Stajyer Resepsiyonist", "Resepsiyonist", "Ön Büro Şefi", "Otel Müdürü"] },
+    { "id": "asci", "yer": "otel", "vardiya": "gec", "hafta_sonu": true, "agirlik": 3, "kademeler": ["Komi", "Aşçı", "Sous Chef", "Şef"] },
+    { "id": "zeytinci", "yer": "tarla", "vardiya": "erken", "hafta_sonu": true, "agirlik": 3, "kademeler": ["Tarım İşçisi", "Zeytin Üreticisi", "Usta Üretici", "Çiftlik Sahibi"] },
+    { "id": "seramikci", "yer": "atolye", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 2, "kademeler": ["Çırak", "Seramik Sanatçısı", "Usta Seramikçi", "Atölye Sahibi"] },
+    { "id": "marangoz", "yer": "atolye", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 2, "kademeler": ["Çırak", "Marangoz", "Usta Marangoz", "Atölye Sahibi"] },
+    { "id": "ressam", "yer": "atolye", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 2, "kademeler": ["Resim Öğrencisi", "Ressam", "Tanınan Ressam", "Usta Ressam"] },
+    { "id": "kutuphaneci", "yer": "kutuphane", "vardiya": "gunduz", "hafta_sonu": false, "agirlik": 1, "kademeler": ["Kütüphane Görevlisi", "Kütüphaneci", "Kıdemli Kütüphaneci", "Kütüphane Müdürü"] },
+    { "id": "rehber", "yer": "muze", "vardiya": "gunduz", "hafta_sonu": true, "agirlik": 1, "kademeler": ["Stajyer Rehber", "Müze Rehberi", "Kıdemli Rehber", "Müze Müdürü"] },
+    { "id": "fener_bekcisi", "yer": "fener", "vardiya": "gec", "hafta_sonu": true, "agirlik": 1, "kademeler": ["Fener Bekçisi Yardımcısı", "Fener Bekçisi", "Kıdemli Fener Bekçisi", "Fener Ustası"] },
+    { "id": "cankurtaran", "yer": "plaj", "vardiya": "gunduz", "hafta_sonu": true, "agirlik": 2, "kademeler": ["Stajyer Cankurtaran", "Cankurtaran", "Kıdemli Cankurtaran", "Plaj Şefi"] }
+  ],
+  "hobiler": [
+    { "id": "balik", "ad": "Balık tutmak", "yer": "iskele" },
+    { "id": "kitap", "ad": "Kitap okumak", "yer": "park" },
+    { "id": "satranc", "ad": "Satranç", "yer": "meydan" },
+    { "id": "resim", "ad": "Resim yapmak", "yer": "park" },
+    { "id": "bisiklet", "ad": "Bisiklete binmek", "yer": "sahil_yolu" },
+    { "id": "yuzme", "ad": "Yüzmek", "yer": "plaj" },
+    { "id": "ucurtma", "ad": "Uçurtma uçurmak", "yer": "tepe" },
+    { "id": "gitar", "ad": "Gitar çalmak", "yer": "meydan" },
+    { "id": "fotograf", "ad": "Fotoğraf çekmek", "yer": "fener" },
+    { "id": "kosu", "ad": "Koşmak", "yer": "sahil_yolu" },
+    { "id": "tavla", "ad": "Tavla", "yer": "kahvehane" },
+    { "id": "yoga", "ad": "Yoga", "yer": "plaj" }
+  ],
+  "evcil_hayvanlar": ["Kedi", "Köpek", "Papağan", "Kaplumbağa"],
+  "evcil_orani": 35,
+  "gorunus": { "ten": 5, "sac": 8, "sac_renk": 6, "ust": 10, "alt": 6 },
+  "adalar": ["Mercanada", "Yakamoz Adası", "İnci Adası", "Lodos Adası", "Martı Adası", "Poyraz Adası", "Yosun Adası", "Kumsal Adası"],
+  "mahalleler": [
+    "Yakamoz", "Lodos", "Poyraz", "Kumsal", "Dalga", "Martı", "Yosun", "İnci", "Lavanta", "Begonvil",
+    "Zeytin", "Defne", "Akasya", "Fesleğen", "Nane", "Kekik", "Sardunya", "Mimoza", "Manolya", "Ihlamur",
+    "Çınar", "Söğüt", "Nergis", "Papatya", "Gelincik", "Lale", "Menekşe", "Karanfil", "Yasemin", "Hanımeli",
+    "Ayva", "Nar", "İncir", "Limon", "Portakal", "Mandalina", "Erik", "Kiraz", "Vişne", "Badem",
+    "Fındık", "Ceviz", "Kestane", "Sedir", "Ardıç", "Mersin", "Kavak", "Meşe"
+  ],
+  "sokaklar": [
+    "Kabuk", "Midye", "İstiridye", "Ahtapot", "Yengeç", "Denizatı", "Fener", "İskele", "Kayık", "Yelken",
+    "Pupa", "Rıhtım", "Mendirek", "Kıyı", "Burun", "Koy", "Gemi", "Halat", "Çapa", "Pusula",
+    "Dümen", "Kürek", "Kumsal", "Mercan"
+  ]
+}
