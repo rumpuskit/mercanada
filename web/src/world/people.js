@@ -23,6 +23,7 @@ const UNIFORMS = {
 };
 const TEAM_COLORS = ["#c8312f", "#2f5fb5", "#1d1d22"].map((c) => new Color(c));
 const WHITE = new Color("#f4f4f2");
+const SCHOOL_TOPS = [new Color("#2f4a6d"), new Color("#2f4a6d"), new Color("#f4f1ea")]; // okul forması
 const DRIVER_TOP = new Color("#3b5a7a"), FIRE_TOP = new Color("#b8231f"), MEDIC_TOP = new Color("#e9eef2"), COP_TOP = new Color("#f28c28");
 const DOG_COLORS = ["#8a5a32", "#2b2622", "#e8dcc4", "#c9954f", "#6b6b6b"].map((c) => new Color(c));
 const HUB = [0, 0];
@@ -179,7 +180,7 @@ export class People {
     this.homeSlot = residents.map((r, i) => (this.hasCar[i] && traffic ? traffic.takeSlot(...this.homes[i].door, -1, 1e9, 220) : null));
     this.homeSlot.forEach((slot, i) => { if (slot == null) this.hasCar[i] = false; });
     this._buildPools();
-    this.crowd = new Crowd(this.n + 160);
+    this.crowd = new Crowd(this.n + 320); // sakinler + şoförler, pazarcılar, öğrenciler
     this.group = this.crowd.group;
     this._at = {};
     this._tmp = {};
@@ -1586,6 +1587,40 @@ export class People {
       for (const v of this.traffic.active.values()) {
         const st = seats[v.kind];
         if (st && !(v.phase === "wait")) addDriver(v, st[0], st[1], st[2], v.kind === "bus" ? DRIVER_TOP : v.kind === "itfaiye" ? FIRE_TOP : v.kind === "ambulans" ? MEDIC_TOP : COP_TOP);
+      }
+    }
+    // Öğrenciler (sakin değil): hafta içi 08:40-15:20 arası teneffüslerde (her saatin son 10 dakikası
+    // ve öğle arası) okul bahçesinde koşar, top oynar, sohbet eder; ders saatinde içeridedirler.
+    const wd = (this.day + 3) % 7;
+    const recess = wd < 5 && minute >= 520 && minute < 920 && (minute % 60 >= 50 || (minute >= 720 && minute < 760));
+    if (recess) {
+      const v = (this._kidPose ??= {});
+      for (const [si, sch] of (this.world.schools ?? []).entries()) {
+        const W = sch.x1 - sch.x0 - 3, D = sch.z1 - sch.z0 - 3, cx = (sch.x0 + sch.x1) / 2, cz = (sch.z0 + sch.z1) / 2;
+        for (let k = 0; k < 28; k++) {
+          const seed = si * 97 + k, ph = seed * 1.37;
+          resetPose(v);
+          v.height = 1.18 + (seed % 7) * 0.04; v.t = time;
+          const kind = seed % 4;
+          if (kind < 2) {
+            // Kovalamaca: bahçede kapalı bir eğri boyunca koşar.
+            const u = time * (0.18 + (seed % 5) * 0.02) + ph;
+            const nx = cx + Math.sin(u) * (W / 2 - 1) * (0.5 + 0.5 * Math.sin(ph)), nz = cz + Math.sin(u * 2 + ph) * (D / 2 - 1) * 0.8;
+            const dx = Math.cos(u) * (W / 2 - 1) * (0.5 + 0.5 * Math.sin(ph)), dz = 2 * Math.cos(u * 2 + ph) * (D / 2 - 1) * 0.8;
+            v.x = nx; v.z = nz; v.heading = Math.atan2(dx, dz);
+            v.y = this.world.groundY(nx, nz);
+            walkPose(v, time * 9 + ph, 1);
+          } else {
+            // Halka olup sohbet.
+            const g = Math.floor(k / 4), a = (k % 4) * (Math.PI / 2) + g;
+            const gx = cx + ((g % 3) - 1) * W * 0.3, gz = cz + (g % 2 ? 1 : -1) * D * 0.28;
+            v.x = gx + Math.cos(a) * 0.7; v.z = gz + Math.sin(a) * 0.7; v.y = this.world.groundY(v.x, v.z);
+            v.heading = Math.atan2(gx - v.x, gz - v.z);
+            idleGesture(v, time, ph, true);
+          }
+          Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: SCHOOL_TOPS[seed % 3], bottom: P.BOTTOMS[1], sleeves: true, skirt: seed % 2 === 1 && seed % 3 === 0, beard: false, glasses: seed % 9 === 0 });
+          crowd.add(-1, v);
+        }
       }
     }
     // Pazarcılar (sakin değil): pazar saatlerinde her tezgâhın arkasında; seslenir, malını düzeltir.

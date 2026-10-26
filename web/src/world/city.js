@@ -406,7 +406,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     B.signs.add(local(b, 0, h - 1.6, b.d / 2 + 0.12), b.rot, s.set(2.6, 0.8, 0.12), st.sign);
     B.signs.add(local(b, 0, h - 2.5, b.d / 2 + 0.12), b.rot, s.set(0.8, 2.6, 0.12), st.sign);
   }
-  if (b.kind === "belediye" || b.kind === "okul") {
+  if (b.kind === "belediye") { // okulun bayrağı bahçede (okul_bahce)
     // Bayrak direği ve bayrak.
     B.rails.add(local(b, b.w / 2 - 2, 0, b.d / 2 + 4), b.rot, s.set(0.12, 10, 0.12));
     B.signs.add(local(b, b.w / 2 - 2 + 1.2, 8.4, b.d / 2 + 4), b.rot, s.set(2.4, 1.6, 0.04), "#d8233a");
@@ -693,6 +693,34 @@ function buildFeatures(world) {
         add(new THREE.BoxGeometry(0.15, 1.6, 1.6), std("#2f6fb5"), f.x, y0 + 4.5, f.z, Math.PI / 2);
         add(new THREE.BoxGeometry(0.17, 1.0, 0.25), white, f.x, y0 + 4.5, f.z, Math.PI / 2, false);
         add(new THREE.BoxGeometry(0.17, 0.25, 0.8), white, f.x, y0 + 4.5, f.z, Math.PI / 2, false);
+        break;
+      }
+      case "okul_bahce": {
+        // Okul bahçesi: alçak duvar ve parmaklık, kapı direkleri, bayrak direği ve bayrak, mini kaleler,
+        // seksek ve top sahası çizgileri, çınar gölgesinde banklar.
+        const { x0, x1, z0, z1, gateX } = f;
+        const y0 = FLAT_Y + 0.12, wallM = std("#e9e1d2"), rail = metal;
+        const wall = (ax, az, bx, bz) => {
+          const L = Math.hypot(bx - ax, bz - az), h = Math.atan2(bx - ax, bz - az);
+          add(new THREE.BoxGeometry(0.3, 0.7, L), wallM, (ax + bx) / 2, y0 + 0.35, (az + bz) / 2, h);
+          add(new THREE.BoxGeometry(0.06, 0.06, L), rail, (ax + bx) / 2, y0 + 1.5, (az + bz) / 2, h, false);
+          for (let u = 0; u <= L; u += 0.25) add(new THREE.BoxGeometry(0.03, 0.8, 0.03), rail, ax + ((bx - ax) * u) / L, y0 + 1.1, az + ((bz - az) * u) / L, 0, false);
+        };
+        wall(x0, z0, x0, z1); wall(x1, z0, x1, z1); wall(x0, z1, gateX - 2, z1); wall(gateX + 2, z1, x1, z1);
+        for (const gx of [gateX - 2, gateX + 2]) add(new THREE.BoxGeometry(0.5, 2.0, 0.5), std("#b5563f"), gx, y0 + 1.0, z1);
+        // Bayrak.
+        add(new THREE.CylinderGeometry(0.06, 0.08, 9, 8), rail, x0 + 2, y0 + 4.5, z0 + 1.5);
+        add(new THREE.BoxGeometry(0.03, 1.2, 1.8), std("#d8233a"), x0 + 2, y0 + 8.3, z0 + 1.5 + 0.95, 0, false);
+        // Saha çizgileri ve mini kaleler (doğu-batı), seksek.
+        const line = std("#f4f1ea", { roughness: 0.9 });
+        const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W = x1 - x0 - 3, D = z1 - z0 - 6;
+        for (const [x, z, w, d] of [[cx, cz - D / 2, W, 0.08], [cx, cz + D / 2, W, 0.08], [cx - W / 2, cz, 0.08, D], [cx + W / 2, cz, 0.08, D], [cx, cz, 0.08, D]]) add(new THREE.BoxGeometry(w, 0.02, d), line, x, y0 + 0.01, z, 0, false);
+        for (const s of [-1, 1]) {
+          const gx = cx + s * (W / 2 - 0.2);
+          for (const dz of [-1.1, 1.1]) add(new THREE.BoxGeometry(0.06, 1.1, 0.06), white, gx, y0 + 0.55, cz + dz, 0, false);
+          add(new THREE.BoxGeometry(0.06, 0.06, 2.3), white, gx, y0 + 1.1, cz, 0, false);
+        }
+        for (let k = 0; k < 6; k++) add(new THREE.BoxGeometry(0.7, 0.02, 0.7), std(["#e8c22e", "#5a8fd8", "#e86a5a"][k % 3], { roughness: 0.9 }), x1 - 3, y0 + 0.012, z0 + 2 + k * 0.75, 0, false);
         break;
       }
       case "hastane_on": {

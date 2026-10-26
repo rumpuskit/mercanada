@@ -54,8 +54,8 @@ const STYLES = {
 const CENTER_ORDER = [
   ["belediye", 0], ["kahvehane", 0], ["kafe", 0], ["muze", 0], ["firin", 0], ["kafe", 1], ["market", 0],
   ["kutuphane", 0], ["kafe", 2], ["plaza", 0], ["firin", 1], ["otel", 0], ["kafe", 3], ["market", 1],
-  ["okul", 0], ["plaza", 1], ["atolye", 0], ["kafe", 4], ["market", 2], ["firin", 2], ["otel", 1], ["atolye", 1],
-  ["kafe", 5], ["plaza", 2], ["market", 3], ["okul", 1], ["atolye", 2], ["atolye", 3],
+  ["plaza", 1], ["atolye", 0], ["kafe", 4], ["market", 2], ["firin", 2], ["otel", 1], ["atolye", 1],
+  ["kafe", 5], ["plaza", 2], ["market", 3], ["atolye", 2], ["atolye", 3],
 ];
 
 // Konut cephe renkleri: Ege ve Marmara ada evleri.
@@ -327,6 +327,20 @@ export class World {
         case "oyun": for (const o of playgroundItems(f)) this.addObstacleRect(o.x, o.z, o.w, o.d, o.rot); break;
         case "pota": this.addObstacleCircle(f.x, f.z, 0.5); break;
         case "vinc": this.addObstacleRect(f.x, f.z, 1.8, 1.8); break;
+        case "okul_bahce": {
+          // Bahçe duvarı (güneyde 4 m'lik kapı açıklığı); bayrak direği.
+          const { x0, x1, z0, z1, gateX } = f;
+          this.addObstacleRect(x0, (z0 + z1) / 2, 0.4, z1 - z0);
+          this.addObstacleRect(x1, (z0 + z1) / 2, 0.4, z1 - z0);
+          this.addObstacleRect((x0 + gateX - 2) / 2, z1, gateX - 2 - x0, 0.4);
+          this.addObstacleRect((gateX + 2 + x1) / 2, z1, x1 - gateX - 2, 0.4);
+          this.addObstacleCircle(x0 + 2, z0 + 1.5, 0.3);
+          break;
+        }
+        case "hastane_on":
+          for (const dz of [-5.5, 5.5]) this.addObstacleCircle(f.x + 6.5, f.z + dz, 0.35);
+          for (const [dx, dz] of [[2, -11], [2, 11], [16, -12.5], [16, 12.5]]) this.addObstacleCircle(f.x + dx, f.z + dz, 0.8);
+          break;
       }
     }
   }
@@ -1119,6 +1133,8 @@ export class World {
     const plan = style.mosqueWest
       ? { "-1": ["cami", "park", "cay", "oyun"], "1": ["cay", "basket", "park", "oyun"] }
       : { "-1": ["oyun", "cay", "park", "basket"], "1": ["park", "cami", "cay", "oyun"] };
+    // Mahalle okulu: doğu şeridinde, bahçeli (okul sayısı kadar mahallede).
+    if (m < cat().isyerleri.okul.length) plan["1"][2] = "okul";
     for (const side of [-1, 1]) {
       const x = stripX(side);
       plan[String(side)].forEach((kind, r) => {
@@ -1137,6 +1153,19 @@ export class World {
             const [sx2, sz2] = toWorld(cw / 2 + 4.5, cd / 2 + 1.5); // avluda, son cemaat yerinin yanında
             this.features.push({ type: "sadirvan", x: sx2, z: sz2 });
             this.plazas.push({ x0: x - 12.5, z0: cz - g.h / 2 + 0.5, x1: x + 12.5, z1: cz + g.h / 2 - 0.5, kind: "avlu" });
+            break;
+          }
+          case "okul": {
+            // Bina şeridin kuzeyinde, cephesi güneydeki bahçeye bakar; bahçe duvarlı, kapısı güneydeki sokağa.
+            const bz = cz - g.h / 2 + 6.5;
+            const b = this.addBuilding({ kind: "okul", x, z: bz, rot: 0, w: 24, d: 11, floors: 3, roofType: "hip", wall: "#f2d9a6", roof: "#b5563f", workplace: true, style: STYLES.okul, address: `${mahalleName(m).replace(" Mahallesi", "")} İlkokulu, ${mahalleName(m)}` });
+            const yard = { x0: x - 12.5, x1: x + 12.5, z0: bz + 5.5 + 0.5, z1: cz + g.h / 2 - 0.5 };
+            this.plazas.push({ ...yard, kind: "avlu" });
+            this.features.push({ type: "okul_bahce", x, ...yard, gateX: x });
+            const door = [x, bz + 5.5 - 0.35];
+            const gate = [x, yard.z1 + 1];
+            this._addWorkplace("okul", m, { door, path: [door, gate, HUB], anchor: door, spread: 2, building: b });
+            (this.schools ??= []).push({ ...yard, x, building: b });
             break;
           }
           case "cay": {
