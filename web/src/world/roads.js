@@ -510,7 +510,11 @@ export function buildGrounds(world) {
       materials.push(f.material);
     } else if (p.kind === "pazar") slab(w, d, cx, cz, T.slabs(), 5, 0.1);
     else if (p.kind === "avlu") slab(w, d, cx, cz, T.slabs(), 5, 0.12);
-    else if (p.kind === "oyun") slab(w, d, cx, cz, T.paving(), 3, 0.06, new THREE.Color(p.color ?? "#d6b48a").lerp(new THREE.Color("#d9d2c6"), 0.45));
+    else if (p.kind === "oyun") {
+      // Kauçuk güvenlik zemini (granüllü), çevresinde taş bordür.
+      slab(w + 1, d + 1, cx, cz, T.paving(), 2.4, 0.05);
+      slab(w, d, cx, cz, T.rubber(), 2, 0.07, new THREE.Color(p.color ?? "#4f8a57"));
+    }
     else if (p.kind === "basket") {
       slab(w + 2, d + 2, cx, cz, T.paving(), 2.4, 0.06);
       const f = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: T.court(), roughness: 0.8 }));

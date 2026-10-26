@@ -1157,7 +1157,7 @@ export class World {
           }
           case "oyun": {
             const seedP = m * 7 + r * 3 + (side > 0 ? 1 : 0);
-            this.plazas.push({ x0: x - 11, z0: cz - g.h / 2 + 2, x1: x + 11, z1: cz + g.h / 2 - 2, kind: "oyun", color: ["#c86a5a", "#6f9a5a", "#5a7fa8", "#d8b46a", "#9a7ab8"][seedP % 5] });
+            this.plazas.push({ x0: x - 11, z0: cz - g.h / 2 + 2, x1: x + 11, z1: cz + g.h / 2 - 2, kind: "oyun", color: ["#4f8a57", "#b8523f", "#4f78a8", "#7a8f3f", "#3e8a86"][seedP % 5] });
             this.features.push({ type: "oyun", x, z: cz, seed: seedP, w: 20, d: g.h - 6 });
             for (const dz of [-1, 1]) this.addBench(x + side * -10, cz + dz * 6, side < 0 ? Math.PI / 2 : -Math.PI / 2, place);
             anchors.push([x + side * -8, cz]);
@@ -1230,17 +1230,21 @@ export class World {
 export function playgroundItems(f) {
   const h = (n) => ((Math.imul((f.seed + 1) * 2654435761 + n * 40503, 2246822519) >>> 0) % 10000) / 10000;
   const pool = ["kule", "salincak", "tahterevalli", "yayli", "kum", "kubbe", "atlikarinca", "tirmanma"];
-  // Karıştır ve 4-5 alet seç.
+  // Karıştır; alanın büyüklüğüne göre (iki sütun × 7 m'lik sıralar) en çok 8 alet yerleştir.
   const order = pool.map((k, i) => [h(i + 1), k]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
-  const n = 4 + (h(20) < 0.5 ? 1 : 0);
   const SIZES = { kule: [5, 4], salincak: [4.5, 2.6], tahterevalli: [3.6, 1.2], yayli: [3, 1.4], kum: [3.4, 3.4], kubbe: [3.6, 3.6], atlikarinca: [3.2, 3.2], tirmanma: [4.4, 1.6] };
-  const cells = [[-5.5, -3.2], [5.5, -3.2], [-5.5, 3.4], [5.5, 3.4], [0, 0]];
+  const depth = f.d ?? 12, width = f.w ?? 18;
+  const rows = Math.max(2, Math.floor((depth - 2) / 7));
+  const colX = width >= 16 ? [-width / 4 - 0.5, width / 4 + 0.5] : [-3, 3];
+  const cells = [];
+  for (let r = 0; r < rows; r++) for (const cx of colX) cells.push([cx, -((rows - 1) * 7) / 2 + r * 7]);
+  const n = Math.min(order.length, cells.length);
   const flip = h(21) < 0.5 ? -1 : 1;
   return order.slice(0, n).map((kind, i) => {
     const [cx, cz] = cells[i];
     const [w, d] = SIZES[kind];
     const rot = Math.floor(h(30 + i) * 4) * (Math.PI / 2) + (h(40 + i) - 0.5) * 0.3;
-    return { kind, x: f.x + cx * flip + (h(50 + i) - 0.5) * 1.2, z: f.z + cz * Math.min(1, f.d / 16) + (h(60 + i) - 0.5) * 0.8, w, d, rot, c: Math.floor(h(70 + i) * 5) };
+    return { kind, x: f.x + cx * flip + (h(50 + i) - 0.5) * 1.2, z: f.z + cz + (h(60 + i) - 0.5) * 0.8, w, d, rot, c: Math.floor(h(70 + i) * 5) };
   });
 }
 

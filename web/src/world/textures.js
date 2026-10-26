@@ -244,6 +244,16 @@ export function plaster() {
   }));
 }
 
+/** Kauçuk güvenlik zemini: ince granüller (gri tonlu; renkle çarpılır). */
+export function rubber() {
+  return (cache.rubber ??= canvasTexture(128, (ctx, sz) => {
+    ctx.fillStyle = "#d8d8d8";
+    ctx.fillRect(0, 0, sz, sz);
+    const rand = rng("kaucuk");
+    speckle(ctx, sz, rand, 9000, ["rgba(0,0,0,0.16)", "rgba(255,255,255,0.22)", "rgba(0,0,0,0.08)"], 1.6);
+  }));
+}
+
 /** Oluklu sac: dikey nervürler (gri tonlu; duvar rengiyle çarpılır). */
 export function sheet() {
   return (cache.sheet ??= canvasTexture(128, (ctx, sz) => {
