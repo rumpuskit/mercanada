@@ -292,6 +292,17 @@ def day_plan(r: dict, day: int) -> list:
             _add(plan, _end(plan) + duration, _activity_of(outing), outing)
             _travel(plan, commute, outing, PLACE_HOME)
         _night_out(plan, s, day, commute, sleep)
+    elif works_on(r, day) and shift_of(r) == "gece":
+        # Gece vardiyası (22:00-06:00): günün başında işte, sabah eve döner, kahvaltı edip öğleden sonraya
+        # kadar uyur, akşam evde vakit geçirip 22:00'de yeniden işe gider.
+        _add(plan, 360 + roll(s, "gec_cikis", day) % 16, "is", PLACE_WORK)
+        _travel(plan, commute, PLACE_WORK, PLACE_HOME)
+        _add(plan, _end(plan) + 45, "ev", PLACE_HOME)
+        _add(plan, 870 + roll(s, "uyan", day) % 60, "uyku", PLACE_HOME)
+        _add(plan, 1320 - commute - roll(s, "erken_varis", day) % 20, "ev", PLACE_HOME)
+        _travel(plan, commute, PLACE_HOME, PLACE_WORK)
+        _add(plan, 1440, "is", PLACE_WORK)
+        return plan
     elif works_on(r, day):
         vardiya = shift_of(r)
         shift = catalog()["vardiyalar"][vardiya]

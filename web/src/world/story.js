@@ -70,8 +70,10 @@ export class Stories {
     if (sim.pet(r, day)) add("Hayvansever");
     const plan = p.plans?.[i];
     if (plan) {
-      const wake = plan[0]?.son ?? 420;
+      // Erkenci: sabah erken uyanan (gece vardiyasından dönenler sayılmaz).
+      const wake = plan[0]?.ne === "uyku" ? plan[0].son : 420;
       if (wake < 390) add("Erkenci");
+      if (plan[0]?.ne === "is") add("Gece kuşu");
       const sleep = plan.findLast((s) => s.ne === "uyku")?.bas ?? 1380;
       if (sleep > 1400) add("Gece kuşu");
     }

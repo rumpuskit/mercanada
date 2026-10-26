@@ -1384,7 +1384,9 @@ export class People {
       }
       case "walk": {
         const d = this._walkState(i, leg, minute, time, p, c);
-        p.dog = trip.mode === "yaya";
+        // Köpek yalnızca gezmeye çıkarken yanında; işe (ya da vapura) köpekle gidilmez.
+        const seg = this.plans[i][k];
+        p.dog = trip.mode === "yaya" && seg?.nereden !== "is" && seg?.nereye !== "is";
         if (leg === trip.legs.find((l) => l.kind === "walk") && trip.doorA && d < 2.5) this.openDoors.add(trip.doorA);
         if (leg === trip.legs.findLast((l) => l.kind === "walk") && trip.doorB && leg.L - d < 2.5) this.openDoors.add(trip.doorB);
         return true;

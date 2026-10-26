@@ -303,6 +303,17 @@ export function dayPlan(r, day) {
       travel(plan, commute, outing, PLACE_HOME);
     }
     nightOut(plan, s, day, commute, sleep);
+  } else if (worksOn(r, day) && shiftOf(r) === "gece") {
+    // Gece vardiyası (22:00-06:00): günün başında işte, sabah eve döner, kahvaltı edip öğleden sonraya
+    // kadar uyur, akşam evde vakit geçirip 22:00'de yeniden işe gider.
+    add(plan, 360 + (roll(s, "gec_cikis", day) % 16), "is", PLACE_WORK);
+    travel(plan, commute, PLACE_WORK, PLACE_HOME);
+    add(plan, end(plan) + 45, "ev", PLACE_HOME);
+    add(plan, 870 + (roll(s, "uyan", day) % 60), "uyku", PLACE_HOME);
+    add(plan, 1320 - commute - (roll(s, "erken_varis", day) % 20), "ev", PLACE_HOME);
+    travel(plan, commute, PLACE_HOME, PLACE_WORK);
+    add(plan, 1440, "is", PLACE_WORK);
+    return plan;
   } else if (worksOn(r, day)) {
     const j = job(r);
     const vardiya = shiftOf(r);

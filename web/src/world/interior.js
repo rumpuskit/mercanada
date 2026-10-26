@@ -625,7 +625,7 @@ export class Dollhouse {
     if (!["kafe", "kahvehane", "firin", "bufe"].includes(kind)) return;
     // Doluluk: sabah kahvaltısı, öğle ve akşam üstü tepeleri; kapalı saatlerde boş.
     const h = minute / 60;
-    if (h < 7 || h >= 23) return;
+    if (h < 7 || h >= 22) return; // çalışanlarla birlikte kapanır
     const busy = 0.25 + 0.45 * Math.exp(-((h - 9) ** 2) / 2) + 0.4 * Math.exp(-((h - 13) ** 2) / 1.5) + 0.5 * Math.exp(-((h - 18.5) ** 2) / 3);
     const slot = Math.floor(minute / 25); // müşteriler 25 dakikada bir değişir
     this.guests.forEach((g, n) => {
