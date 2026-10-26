@@ -72,7 +72,7 @@ function along(pts, lens, d, out) {
 
 // --- duruşlar ---
 
-function resetPose(p) {
+export function resetPose(p) {
   p.lie = 0; p.drop = 0; p.lean = 0; p.twist = 0; p.headYaw = 0; p.headPitch = 0;
   p.hipL = 0; p.hipR = 0; p.kneeL = 0; p.kneeR = 0;
   p.shL = 0; p.shR = 0; p.abL = 0; p.abR = 0; p.elL = 0.12; p.elR = 0.12;
@@ -80,7 +80,7 @@ function resetPose(p) {
 }
 
 /** Yürüyüş: φ adım evresi; koşu için run = 1. */
-function walkPose(p, phi, run = 0) {
+export function walkPose(p, phi, run = 0) {
   const s = Math.sin(phi), c = Math.cos(phi);
   const hipA = run ? 0.62 : 0.42, kneeA = run ? 1.25 : 0.7;
   p.hipL = hipA * s; p.hipR = -hipA * s;
@@ -93,14 +93,14 @@ function walkPose(p, phi, run = 0) {
   p.y += (run ? 0.05 : 0.025) * Math.abs(Math.cos(phi));
 }
 
-function sitPose(p, top, k) {
+export function sitPose(p, top, k) {
   p.y = top + 0.06 - 0.92 * k;
   p.hipL = p.hipR = 1.5; p.kneeL = p.kneeR = 1.45;
   p.shL = p.shR = 0.35; p.elL = p.elR = 0.9; p.abL = p.abR = -0.02;
   p.lean = -0.05;
 }
 
-function idleGesture(p, t, phase, talk) {
+export function idleGesture(p, t, phase, talk) {
   // Ağırlığını değiştirir, arada konuşurken elleriyle anlatır.
   p.twist = 0.05 * Math.sin(t * 0.4 + phase);
   p.headYaw = 0.25 * Math.sin(t * 0.3 + phase * 2);
@@ -144,6 +144,10 @@ export class People {
     // Oturaklar yere göre.
     this.seatsByPlace = {};
     for (const s of world.seats) (this.seatsByPlace[s.place] ??= []).push(s);
+
+    this.slotToIndex = new Map(residents.map((r, i) => [r.slot, i]));
+    this.homeActs = new Array(this.n);
+    this.dollhouse = null; // ev içi görünümü açıksa o kattaki sakinler içeride çizilir
 
     this.crowd = new Crowd(this.n);
     this.group = this.crowd.group;
@@ -521,9 +525,22 @@ export class People {
       const seg = activityAt(plan, minute);
       this.activities[i] = seg;
       this.athome[i] = seg.ne === "ev" ? 1 : 0;
-      if (seg.ne === "uyku" || seg.ne === "ev") { this.visible[i] = 0; continue; }
-
       const c = this.colors[i];
+      if (seg.ne === "uyku" || seg.ne === "ev") {
+        this.homeActs[i] = null;
+        p.height = c.height; p.t = time; p.sleeves = c.sleeves; p.shorts = false; p.dog = false;
+        if (this.dollhouse?.contains(i) && this.dollhouse.pose(i, seg, minute, time, p)) {
+          this.homeActs[i] = p.activity;
+          this.visible[i] = 1;
+          this.positions[i * 3] = p.x; this.positions[i * 3 + 1] = p.y; this.positions[i * 3 + 2] = p.z;
+          p.style = c.style; p.skin = c.skin; p.hairColor = c.hairColor; p.top = c.top; p.bottom = c.bottom;
+          crowd.add(i, p);
+          continue;
+        }
+        this.visible[i] = 0;
+        continue;
+      }
+
       resetPose(p);
       p.height = c.height; p.t = time; p.sleeves = c.sleeves; p.shorts = false; p.dog = false;
       const k = c.height / 1.75;

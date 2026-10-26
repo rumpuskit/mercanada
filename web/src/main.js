@@ -6,10 +6,11 @@ import { World } from "./world/layout.js";
 import { buildTerrain, buildWater } from "./world/terrain.js";
 import { buildGrounds, buildRoads } from "./world/roads.js";
 import { buildCity } from "./world/city.js";
-import { buildClouds, buildTrees, driftClouds } from "./world/nature.js";
+import { buildClouds, buildTrees, driftClouds, fadeTrees } from "./world/nature.js";
 import { buildLabels, scaleLabels } from "./world/labels.js";
 import { People } from "./world/people.js";
 import { createSky } from "./world/sky.js";
+import { Dollhouse } from "./world/interior.js";
 import * as P from "./world/palette.js";
 import { createUI } from "./ui.js";
 import "./style.css";
@@ -59,12 +60,15 @@ const world = new World(population);
 const roads = buildRoads(world);
 scene.add(buildWater(), buildTerrain(world), roads, buildGrounds(world));
 const city = buildCity(world);
-scene.add(city.group, buildTrees(world));
+const trees = buildTrees(world);
+scene.add(city.group, trees);
 const clouds = buildClouds(world);
 const labels = buildLabels(world);
 scene.add(clouds, labels);
 const people = new People(world, residents);
 scene.add(people.group);
+const dollhouse = new Dollhouse(world, city, people, scene);
+people.dollhouse = dollhouse;
 const sky = createSky(scene);
 sky.sun.shadow.mapSize.set(2048, 2048);
 
@@ -98,9 +102,9 @@ function setSpeed(next) {
 
 // --- kamera uçuşu ---
 let flight = null;
-function flyTo(x, y, z, distance = 120) {
-  const dir = camera.position.clone().sub(controls.target).normalize();
-  if (dir.y < 0.45) dir.setY(0.45).normalize();
+function flyTo(x, y, z, distance = 120, direction = null) {
+  const dir = direction ? direction.clone().normalize() : camera.position.clone().sub(controls.target).normalize();
+  if (!direction && dir.y < 0.45) dir.setY(0.45).normalize();
   flight = {
     t: 0,
     fromT: controls.target.clone(), toT: new THREE.Vector3(x, y, z),
@@ -108,7 +112,7 @@ function flyTo(x, y, z, distance = 120) {
   };
 }
 
-const ui = createUI({ residents, people, world, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()) });
+const ui = createUI({ residents, people, world, dollhouse, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 
 // Bir sakine dokununca kartını aç.
 const raycaster = new THREE.Raycaster();
@@ -119,7 +123,9 @@ canvas.addEventListener("pointerup", (e) => {
   const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const index = people.pick(raycaster);
-  if (index != null) ui.select(index, false);
+  if (index != null) return ui.select(index, false);
+  const building = city.pickBuilding(raycaster);
+  if (building?.daireler) ui.openBuilding(building);
 });
 
 addEventListener("resize", () => {
@@ -175,7 +181,7 @@ function tick() {
   }
   controls.target.x = THREE.MathUtils.clamp(controls.target.x, bounds.x0 - 200, bounds.x1 + 200);
   controls.target.z = THREE.MathUtils.clamp(controls.target.z, bounds.z0 - 200, bounds.z1 + 300);
-  controls.target.y = flight ? controls.target.y : THREE.MathUtils.lerp(controls.target.y, Math.max(0, world.height(controls.target.x, controls.target.z)), 0.1);
+  controls.target.y = flight || dollhouse.isOpen() ? controls.target.y : THREE.MathUtils.lerp(controls.target.y, Math.max(0, world.height(controls.target.x, controls.target.z)), 0.1);
   controls.update();
 
   const light = sky.update(minute, controls.target);
@@ -188,8 +194,14 @@ function tick() {
     sc.updateProjectionMatrix();
   }
   if (frame % 6 === 0) updateWindows(minute, light);
+  dollhouse.update(1 - light, real);
   if (frame % 15 === 0) ui.tick(unix, minute, day);
   driftClouds(clouds, dt);
+  fadeTrees(trees, dist);
+  // Telefonda kart ekranın altını kapatır; görüntüyü yukarı kaydır.
+  const cardOpen = !document.getElementById("card").hidden;
+  if (cardOpen && innerWidth < 900) camera.setViewOffset(innerWidth, innerHeight, 0, innerHeight * 0.2, innerWidth, innerHeight);
+  else if (camera.view?.enabled) camera.clearViewOffset();
   scaleLabels(labels, camera);
 
   const sel = ui.selected();

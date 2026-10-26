@@ -125,6 +125,50 @@ body {
   border-radius: 999px;
 }
 
+#floorbar {
+  position: fixed;
+  right: 12px;
+  top: calc(max(12px, env(safe-area-inset-top)) + 84px);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+  font-weight: 800;
+  font-size: 14px;
+}
+
+#floorbar[hidden] {
+  display: none;
+}
+
+#floorbar button {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 800 14px "Nunito", system-ui, sans-serif;
+  padding: 7px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+#floorbar #floor-exit {
+  background: var(--accent);
+  color: white;
+}
+
+#card dd.link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(224, 96, 122, 0.5);
+  text-underline-offset: 2px;
+}
+
 #search {
   position: fixed;
   left: 50%;
@@ -244,7 +288,25 @@ body {
   pointer-events: none;
 }
 
+@media (min-width: 900px) {
+  #card {
+    left: 12px;
+    transform: none;
+    top: calc(max(12px, env(safe-area-inset-top)) + 96px);
+    bottom: auto;
+    width: 380px;
+    max-height: calc(100vh - 200px);
+    overflow: auto;
+  }
+}
+
 @media (max-width: 520px) {
+  #card {
+    padding: 10px 12px 8px;
+  }
+  #card dl {
+    font-size: 12.5px;
+  }
   #preview {
     top: auto;
     right: auto;

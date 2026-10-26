@@ -85,6 +85,8 @@ export function buildTrees(world) {
   }
 
   const group = new THREE.Group();
+  const crowns = [];
+  group.userData.crowns = crowns;
   const bark = new THREE.MeshStandardMaterial({ color: "#7d6150", roughness: 1 });
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const color = new THREE.Color();
@@ -93,7 +95,9 @@ export function buildTrees(world) {
     if (!list.length) continue;
     const [rt, rb] = kind.trunk;
     const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(rt, rb, 1, 6).translate(0, 0.5, 0), bark, list.length);
-    const crown = new THREE.InstancedMesh(kind.crown(), new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: name !== "servi" }), list.length);
+    const crownMat = new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: name !== "servi", transparent: true, opacity: 1 });
+    crowns.push(crownMat);
+    const crown = new THREE.InstancedMesh(kind.crown(), crownMat, list.length);
     list.forEach((t, i) => {
       const h = kind.h[0] + t.r * (kind.h[1] - kind.h[0]);
       q.setFromAxisAngle(up, t.t * 6.283);
@@ -132,5 +136,14 @@ export function driftClouds(clouds, dt) {
   for (const c of clouds.children) {
     c.position.x += c.userData.speed * dt;
     if (c.position.x > b) c.position.x = a;
+  }
+}
+
+/** Yakına inildiğinde ağaç tepeleri saydamlaşır; altındaki insanlar görünsün. */
+export function fadeTrees(trees, distance) {
+  const o = Math.min(1, Math.max(0.28, (distance - 25) / 70));
+  for (const m of trees.userData.crowns) {
+    m.opacity = o;
+    m.depthWrite = o > 0.99;
   }
 }

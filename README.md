@@ -13,7 +13,13 @@ data/catalog.json          meslekler, iş yerleri, hobiler, isim listeleri (web 
 web/                       tarayıcı istemcisi (Three.js + Vite), telefonda ve Instagram içinde açılır
   src/sim.js               deterministik simülasyon: hash, saat, adres, sakinin günü
   src/world/layout.js      adanın yerleşimi: nüfustan hücreler, mahalleler, çarşı, kıyı, yollar
-  src/world/*.js           arazi, binalar, ağaçlar, sakinler, gökyüzü, levhalar
+  src/world/roads.js       asfalt, Arnavut kaldırımı, kaldırım, yaya geçidi, sokak lambaları
+  src/world/city.js        apartmanlar, dükkânlar, kent eşyası (InstancedMesh)
+  src/world/human.js       eklemli insan figürü, eşyalar, köpekler
+  src/world/people.js      sokaktaki hayat: yürüyüş, oturma, sohbet, hobiler, iş
+  src/world/life.js        evdeki hayat: uyku, yemek, televizyon...
+  src/world/interior.js    ev içi (bebek evi) görünümü: seçilen kat kesilir, daireler eşyalı
+  src/world/*.js           arazi, ağaçlar, gökyüzü, levhalar, dokular
   src/ui.js                saat, hız, "Kendini bul" araması ve sakin kartı
   tests/parity_vectors.mjs parite testi için JS çıktısı
 server/
@@ -30,7 +36,7 @@ server/
 cd web && npm install && npm run dev
 
 # Adres çubuğu seçenekleri: ?nufus=12000 (örnek nüfus), ?saat=21:30 (sabit saat, hiz ile),
-# ?hiz=60 (zaman hızı), ?bul=sakin_0042 (sakini bulup göster)
+# ?hiz=60 (zaman hızı), ?bul=sakin_0042 (sakini bulup göster), ?bak=x,z,uzaklık (kamera)
 
 # Parite ve plan testleri (Node gerekir)
 cd server && python3 -m unittest -v

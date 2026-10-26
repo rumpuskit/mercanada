@@ -1,5 +1,6 @@
-// Ekrandaki paneller: saat ve nüfus, zaman hızı, "Kendini bul" araması ve sakin kartı.
+// Ekrandaki paneller: saat ve nüfus, zaman hızı, "Kendini bul" araması, sakin kartı ve ev içi görünümü.
 import * as sim from "./sim.js";
+import { HOME_LABELS, homeActivity } from "./world/life.js";
 
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const PLACE_NAMES = {
@@ -10,9 +11,10 @@ const PLACE_NAMES = {
 const fmt = new Intl.NumberFormat("tr-TR");
 const $ = (id) => document.getElementById(id);
 
-export function createUI({ residents, people, world, setSpeed, flyTo, speed, today }) {
+export function createUI({ residents, people, world, dollhouse, setSpeed, flyTo, speed, today, minute }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
   let selected = null;
+  let mode = null; // "sakin" | "bina"
 
   for (const btn of document.querySelectorAll("#speed button")) {
     btn.classList.toggle("on", Number(btn.dataset.speed) === speed);
@@ -32,18 +34,29 @@ export function createUI({ residents, people, world, setSpeed, flyTo, speed, tod
     const seg = people.activities[i];
     if (!seg) return "";
     switch (seg.ne) {
-      case "uyku": return "Uyuyor";
-      case "ev": return "Evde";
+      case "uyku":
+      case "ev": {
+        const act = homeActivity(residents[i].seed, seg, minute(), today(), people.hobbies[i].id);
+        return (seg.ne === "ev" ? "Evde · " : "") + HOME_LABELS[act];
+      }
       case "is": return `İşte · ${people.works[i].loc.name}`;
       case "yol": return `Yolda → ${placeLabel(i, seg.nereye)}`;
       case "hobi": return `${people.hobbies[i].ad} · ${placeLabel(i, seg.yer)}`;
-      case "meydan": return "Meydanda, arkadaşlarıyla";
+      case "meydan": return "Çarşıda, arkadaşlarıyla";
       default: return seg.ne;
     }
   }
 
-  function renderCard() {
-    if (selected == null) return;
+  function facts(rows) {
+    $("card-facts").replaceChildren(...rows.flatMap(([k, v, onClick]) => {
+      const dt = document.createElement("dt"); dt.textContent = k;
+      const dd = document.createElement("dd"); dd.textContent = v;
+      if (onClick) { dd.classList.add("link"); dd.addEventListener("click", onClick); }
+      return [dt, dd];
+    }));
+  }
+
+  function renderPerson() {
     const r = residents[selected];
     const day = today();
     const t = sim.tenure(r, day);
@@ -51,27 +64,92 @@ export function createUI({ residents, people, world, setSpeed, flyTo, speed, tod
     $("card-handle").textContent = "@" + r.handle;
     $("card-title").textContent = `${sim.title(r, day)} · ${people.works[selected].loc.name}`;
     $("card-now").textContent = nowText(selected);
-    const facts = [
+    facts([
       ["Adres", sim.addressText(r.slot)],
       ["Hobi", people.hobbies[selected].ad],
       ["Evcil", pet || "Henüz yok"],
       ["Adada", t === 0 ? "Bugün geldi" : `${fmt.format(t)} gündür`],
-    ];
-    $("card-facts").replaceChildren(...facts.flatMap(([k, v]) => {
-      const dt = document.createElement("dt"); dt.textContent = k;
-      const dd = document.createElement("dd"); dd.textContent = v;
-      return [dt, dd];
-    }));
+    ]);
   }
 
+  function renderBuilding() {
+    const b = dollhouse.building;
+    const p = sim.addressParts(b.slot0);
+    $("card-handle").textContent = `${sim.sokakName(p.mahalle, p.sokak)} No ${p.bina * 2 + 1}`;
+    $("card-title").textContent = `${sim.mahalleName(p.mahalle)} · ${b.floors} katlı apartman`;
+    $("card-now").textContent = `${dollhouse.floor + 1}. kat`;
+    const rows = [];
+    for (let c = 0; c < b.perFloor; c++) {
+      const k = dollhouse.floor * b.perFloor + c;
+      if (k >= b.daireler) continue;
+      const i = people.slotToIndex.get(b.slot0 + k);
+      if (i == null) rows.push([`Daire ${k + 1}`, "Boş, yeni sakinini bekliyor"]);
+      else rows.push([`Daire ${k + 1}`, `@${residents[i].handle} · ${nowText(i)}`, () => select(i)]);
+    }
+    facts(rows);
+  }
+
+  function render() {
+    $("floorbar").hidden = !dollhouse.isOpen();
+    if (dollhouse.isOpen()) $("floor-label").textContent = `${dollhouse.floor + 1}. kat`;
+    if (mode === "sakin" && selected != null) renderPerson();
+    else if (mode === "bina" && dollhouse.isOpen()) renderBuilding();
+  }
+
+  function showCard() {
+    $("card").hidden = false;
+    render();
+  }
+
+  function flyToFloor() {
+    const { target, front } = dollhouse.focus();
+    const dir = front.clone().multiplyScalar(0.72).setY(0.7).normalize();
+    flyTo(target.x, target.y, target.z, innerWidth < innerHeight ? 34 : 19, dir);
+  }
+
+  function homeOf(i) {
+    const slot = residents[i].slot;
+    return world.buildings.find((b) => b.daireler && slot >= b.slot0 && slot < b.slot0 + b.daireler);
+  }
+
+  /** Sakini seçer; evdeyse evinin içini açar. */
   function select(i, fly = true) {
     selected = i;
-    $("card").hidden = false;
-    renderCard();
-    if (fly) {
-      const [x, z] = people.focusPoint(i);
-      flyTo(x, world.groundY(x, z), z, innerWidth < innerHeight ? 55 : 32);
+    mode = "sakin";
+    const seg = people.activities[i];
+    const atHome = seg && (seg.ne === "ev" || seg.ne === "uyku");
+    const home = homeOf(i);
+    if (atHome && home) {
+      const floor = Math.floor((residents[i].slot - home.slot0) / home.perFloor);
+      if (dollhouse.building !== home || dollhouse.floor !== floor) dollhouse.open(home, floor);
+      if (fly) flyToFloor();
+    } else {
+      dollhouse.close();
+      if (fly) {
+        const [x, z] = people.focusPoint(i);
+        flyTo(x, world.groundY(x, z), z, innerWidth < innerHeight ? 30 : 18);
+      }
     }
+    showCard();
+  }
+
+  /** Bir apartmana dokununca: içini aç. */
+  function openBuilding(b) {
+    if (!b?.daireler) return;
+    selected = null;
+    mode = "bina";
+    dollhouse.open(b, dollhouse.building === b ? dollhouse.floor : 0);
+    flyToFloor();
+    showCard();
+  }
+
+  function changeFloor(delta) {
+    if (!dollhouse.isOpen()) return;
+    dollhouse.setFloor(dollhouse.floor + delta);
+    mode = "bina";
+    selected = null;
+    flyToFloor();
+    showCard();
   }
 
   function find(text) {
@@ -80,7 +158,10 @@ export function createUI({ residents, people, world, setSpeed, flyTo, speed, tod
     const i = byHandle.get(handle);
     if (i == null) {
       selected = null;
+      mode = null;
+      dollhouse.close();
       $("card").hidden = false;
+      $("floorbar").hidden = true;
       $("card-handle").textContent = "@" + handle;
       $("card-title").textContent = "Bu kullanıcı adı henüz adada değil.";
       $("card-now").textContent = "Mercanada'yı takip et; ertesi sabah ilk vapurla gelirsin.";
@@ -90,24 +171,34 @@ export function createUI({ residents, people, world, setSpeed, flyTo, speed, tod
     select(i);
   }
 
+  function close() {
+    selected = null;
+    mode = null;
+    dollhouse.close();
+    $("card").hidden = true;
+    $("floorbar").hidden = true;
+  }
+
   $("search").addEventListener("submit", (e) => {
     e.preventDefault();
     find($("search-input").value);
     $("search-input").blur();
   });
-  $("card-close").addEventListener("click", () => {
-    selected = null;
-    $("card").hidden = true;
-  });
+  $("card-close").addEventListener("click", close);
+  $("floor-up").addEventListener("click", () => changeFloor(1));
+  $("floor-down").addEventListener("click", () => changeFloor(-1));
+  $("floor-exit").addEventListener("click", close);
 
   return {
     select,
     find,
-    selected: () => selected,
-    tick(unix, minute, day) {
-      $("clock").textContent = `${sim.formatMinute(minute)} · ${DAYS[sim.weekday(day)]}`;
+    openBuilding,
+    close,
+    selected: () => (mode === "sakin" ? selected : null),
+    tick(unix, minuteNow, day) {
+      $("clock").textContent = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}`;
       $("stats").textContent = `${fmt.format(residents.length)} sakin · ${fmt.format(people.visibleCount)} dışarıda · ${world.mahalleler} mahalle`;
-      renderCard();
+      if (!$("card").hidden) render();
     },
   };
 }

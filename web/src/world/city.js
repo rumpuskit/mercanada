@@ -14,7 +14,7 @@ function std(color, extra = {}) {
 }
 
 /** Bina yerel koordinatından dünyaya: lx sağa, ly yukarı, lz öne (cephe +z). */
-function local(b, lx, ly, lz) {
+export function local(b, lx, ly, lz) {
   const c = Math.cos(b.rot), sn = Math.sin(b.rot);
   return v.set(b.x + lx * c + lz * sn, FLAT_Y + ly, b.z - lx * sn + lz * c);
 }
@@ -26,7 +26,7 @@ class Batch {
 
   add(pos, rot, scale, color) {
     q.setFromAxisAngle(UP, rot);
-    this.items.push({ m: new THREE.Matrix4().compose(pos.clone(), q.clone(), scale.clone()), color: color != null ? new THREE.Color(color) : null });
+    this.items.push({ m: new THREE.Matrix4().compose(pos.clone(), q.clone(), scale.clone()), color: color != null ? new THREE.Color(color) : null, owner: Batch.owner });
     return this.items.length - 1;
   }
 
@@ -39,6 +39,7 @@ class Batch {
     });
     mesh.castShadow = this.shadow;
     mesh.receiveShadow = true;
+    this.mesh = mesh;
     return mesh;
   }
 }
@@ -74,36 +75,51 @@ function gableRoof() {
 
 const HIP_RATIOS = [1, 1.4, 1.8, 2.4];
 
-export function buildCity(world) {
-  const group = new THREE.Group();
+/** Bina parçalarının toplandığı InstancedMesh kümeleri. */
+export function makeKit() {
   const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-  const B = {
-    walls: new Batch(box, std(0xffffff, { roughness: 0.92 })),
-    plinth: new Batch(box, std("#8d877e")),
-    trims: new Batch(box, std(0xffffff, { roughness: 0.7 }), { shadow: false }),
-    hips: HIP_RATIOS.map((r) => new Batch(hipRoof(r), std(0xffffff, { roughness: 0.75, flatShading: true }))),
-    gable: new Batch(gableRoof(), std(0xffffff, { roughness: 0.75, flatShading: true })),
-    parapet: new Batch(box, std("#e7e2d9")),
-    frames: new Batch(box, std("#f7f5f0", { roughness: 0.6 }), { shadow: false }),
-    doors: new Batch(box, std("#6b4a35", { roughness: 0.6 }), { shadow: false }),
-    slabs: new Batch(box, std("#e9e5dd")),
-    rails: new Batch(box, std("#4a4f57", { roughness: 0.4, metalness: 0.5 }), { shadow: false }),
-    awnings: new Batch(box, std(0xffffff, { roughness: 0.9 })),
-    signs: new Batch(box, std(0xffffff, { roughness: 0.6 }), { shadow: false }),
-    tanks: new Batch(new THREE.CylinderGeometry(0.5, 0.5, 1, 10).rotateZ(Math.PI / 2).translate(0, 0.5, 0), std("#d9dde2", { metalness: 0.4, roughness: 0.4 })),
-    solar: new Batch(box, std("#24324f", { roughness: 0.3, metalness: 0.3 }), { shadow: false }),
-    chimneys: new Batch(box, std("#a29a90")),
+  return {
+    B: {
+      walls: new Batch(box, std(0xffffff, { roughness: 0.92 })),
+      plinth: new Batch(box, std("#8d877e")),
+      trims: new Batch(box, std(0xffffff, { roughness: 0.7 }), { shadow: false }),
+      hips: HIP_RATIOS.map((r) => new Batch(hipRoof(r), std(0xffffff, { roughness: 0.75, flatShading: true }))),
+      gable: new Batch(gableRoof(), std(0xffffff, { roughness: 0.75, flatShading: true })),
+      parapet: new Batch(box, std("#e7e2d9")),
+      frames: new Batch(box, std("#f7f5f0", { roughness: 0.6 }), { shadow: false }),
+      doors: new Batch(box, std("#6b4a35", { roughness: 0.6 }), { shadow: false }),
+      slabs: new Batch(box, std("#e9e5dd")),
+      rails: new Batch(box, std("#4a4f57", { roughness: 0.4, metalness: 0.5 }), { shadow: false }),
+      awnings: new Batch(box, std(0xffffff, { roughness: 0.9 })),
+      signs: new Batch(box, std(0xffffff, { roughness: 0.6 }), { shadow: false }),
+      tanks: new Batch(new THREE.CylinderGeometry(0.5, 0.5, 1, 10).rotateZ(Math.PI / 2).translate(0, 0.5, 0), std("#d9dde2", { metalness: 0.4, roughness: 0.4 })),
+      solar: new Batch(box, std("#24324f", { roughness: 0.3, metalness: 0.3 }), { shadow: false }),
+      chimneys: new Batch(box, std("#a29a90")),
+    },
+    glass: new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), { shadow: false }),
+    windowOwners: [], // cam -> {slot} (daire) veya {workplace, seed}
   };
-  const glassGeo = new THREE.PlaneGeometry(1, 1);
-  const glassMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
-  const glass = new Batch(glassGeo, glassMat, { shadow: false });
-  const windowOwners = []; // cam -> {slot} (daire) veya {workplace, seed}
+}
 
+function kitBatches(K) {
+  return [...Object.values(K.B).flatMap((x) => (Array.isArray(x) ? x : [x])), K.glass];
+}
+
+/** Kümeyi InstancedMesh'lere çevirir. */
+export function buildKit(K) {
+  const group = new THREE.Group();
+  for (const batch of kitBatches(K)) group.add(batch.build());
+  return group;
+}
+
+/** Bir binayı kümeye ekler. maxFloors verilirse yalnızca alttaki o kadar kat çizilir (kesit görünümü). */
+export function drawBuilding(K, b, maxFloors = Infinity) {
+  const { B, glass, windowOwners } = K;
   const addGlass = (b, lx, ly, lz, w, h, back, owner) => {
     glass.add(local(b, lx, ly, lz), b.rot + (back ? Math.PI : 0), s.set(w, h, 1), P.WINDOW_DAY);
     windowOwners.push(owner);
   };
-  /** Pencere: çerçeve + cam (+ istenirse denizlik). side: 1 ön, -1 arka. */
+  /** Pencere: çerçeve + cam + denizlik. side: 1 ön, -1 arka. */
   const addWindow = (b, lx, ly, side, w, h, owner) => {
     const z = side * (b.d / 2);
     B.frames.add(local(b, lx, ly - 0.08, z), b.rot, s.set(w + 0.24, h + 0.24, 0.16));
@@ -111,134 +127,166 @@ export function buildCity(world) {
     B.trims.add(local(b, lx, ly - 0.16, z + side * 0.1), b.rot, s.set(w + 0.5, 0.1, 0.28), "#f2efe8");
   };
 
-  for (const b of world.buildings) {
-    const h = b.floors * FLOOR_H;
-    const st = b.style ?? {};
-    B.walls.add(local(b, 0, 0, 0), b.rot, s.set(b.w, h, b.d), b.wall);
-    B.plinth.add(local(b, 0, 0, 0), b.rot, s.set(b.w + 0.12, 0.6, b.d + 0.12));
-    // Kat silmeleri.
-    for (let f = 1; f < b.floors; f++) B.trims.add(local(b, 0, f * FLOOR_H - 0.1, 0), b.rot, s.set(b.w + 0.14, 0.2, b.d + 0.14), "#f6f3ee");
-    // Çatı.
-    if (b.roofType === "hip") {
-      const r = b.w / b.d;
-      const k = HIP_RATIOS.reduce((best, x, i) => (Math.abs(x - r) < Math.abs(HIP_RATIOS[best] - r) ? i : best), 0);
-      B.hips[k].add(local(b, 0, h, 0), b.rot, s.set(b.w + 1, b.d * 0.3, b.d + 1), b.roof);
-      if (b.kind === "konut") B.chimneys.add(local(b, b.w * 0.25, h + b.d * 0.12, -b.d * 0.15), b.rot, s.set(0.6, b.d * 0.22, 0.6));
-    } else if (b.roofType === "gable") {
-      B.gable.add(local(b, 0, h, 0), b.rot + Math.PI / 2, s.set(b.d + 0.8, Math.min(5, b.w * 0.35), b.w + 0.8), b.roof);
-    } else {
-      B.walls.add(local(b, 0, h, 0), b.rot, s.set(b.w + 0.3, 0.12, b.d + 0.3), "#d6d0c6");
-      for (const [lx, lz, w, d] of [[0, b.d / 2, b.w + 0.3, 0.3], [0, -b.d / 2, b.w + 0.3, 0.3], [b.w / 2, 0, 0.3, b.d], [-b.w / 2, 0, 0.3, b.d]]) {
-        B.parapet.add(local(b, lx, h, lz), b.rot, s.set(w, 0.9, d));
+  const floors = Math.min(b.floors, maxFloors);
+  const full = floors === b.floors;
+  const h = floors * FLOOR_H;
+  if (floors <= 0) return;
+  const st = b.style ?? {};
+  B.walls.add(local(b, 0, 0, 0), b.rot, s.set(b.w, h, b.d), b.wall);
+  B.plinth.add(local(b, 0, 0, 0), b.rot, s.set(b.w + 0.12, 0.6, b.d + 0.12));
+  // Kat silmeleri.
+  for (let f = 1; f < floors; f++) B.trims.add(local(b, 0, f * FLOOR_H - 0.1, 0), b.rot, s.set(b.w + 0.14, 0.2, b.d + 0.14), "#f6f3ee");
+  // Çatı.
+  if (!full) {
+    // Kesit görünümü: çatı yok, üst kat döşemesi.
+    B.walls.add(local(b, 0, h, 0), b.rot, s.set(b.w + 0.1, 0.12, b.d + 0.1), "#d6d0c6");
+  } else if (b.roofType === "hip") {
+    const r = b.w / b.d;
+    const k = HIP_RATIOS.reduce((best, x, i) => (Math.abs(x - r) < Math.abs(HIP_RATIOS[best] - r) ? i : best), 0);
+    B.hips[k].add(local(b, 0, h, 0), b.rot, s.set(b.w + 1, b.d * 0.3, b.d + 1), b.roof);
+    if (b.kind === "konut") B.chimneys.add(local(b, b.w * 0.25, h + b.d * 0.12, -b.d * 0.15), b.rot, s.set(0.6, b.d * 0.22, 0.6));
+  } else if (b.roofType === "gable") {
+    B.gable.add(local(b, 0, h, 0), b.rot + Math.PI / 2, s.set(b.d + 0.8, Math.min(5, b.w * 0.35), b.w + 0.8), b.roof);
+  } else {
+    B.walls.add(local(b, 0, h, 0), b.rot, s.set(b.w + 0.3, 0.12, b.d + 0.3), "#d6d0c6");
+    for (const [lx, lz, w, d] of [[0, b.d / 2, b.w + 0.3, 0.3], [0, -b.d / 2, b.w + 0.3, 0.3], [b.w / 2, 0, 0.3, b.d], [-b.w / 2, 0, 0.3, b.d]]) {
+      B.parapet.add(local(b, lx, h, lz), b.rot, s.set(w, 0.9, d));
+    }
+    if (b.kind === "konut" || b.kind === "otel") {
+      // Çatıda güneş enerjili su ısıtıcıları.
+      const n = Math.max(1, Math.floor(b.w / 6));
+      for (let i = 0; i < n; i++) {
+        const lx = -b.w / 2 + 3 + i * 5.5;
+        B.solar.add(local(b, lx, h + 0.5, -1), b.rot, s.set(1.9, 0.08, 2.2));
+        B.tanks.add(local(b, lx, h + 1.1, -2.6), b.rot, s.set(2, 0.6, 0.6));
       }
-      if (b.kind === "konut" || b.kind === "otel") {
-        // Çatıda güneş enerjili su ısıtıcıları.
-        const n = Math.max(1, Math.floor(b.w / 6));
-        for (let i = 0; i < n; i++) {
-          const lx = -b.w / 2 + 3 + i * 5.5;
-          B.solar.add(local(b, lx, h + 0.5, -1), b.rot, s.set(1.9, 0.08, 2.2));
-          B.tanks.add(local(b, lx, h + 1.1, -2.6), b.rot, s.set(2, 0.6, 0.6));
-        }
-      }
-    }
-
-    if (b.kind === "konut") {
-      // Apartman: kat başına perFloor daire; her dairenin önde balkonlu (ya da düz) penceresi, arkada penceresi.
-      const bay = b.w / b.perFloor;
-      for (let k = 0; k < b.daireler; k++) {
-        const floor = Math.floor(k / b.perFloor), col = k % b.perFloor;
-        const lx = -b.w / 2 + (col + 0.5) * bay;
-        const ly = floor * FLOOR_H;
-        const owner = { slot: b.slot0 + k };
-        const doorClash = floor === 0 && Math.abs(lx) < 1.8;
-        const fx = doorClash ? lx + (lx >= 0 ? 1.4 : -1.4) : lx;
-        if (b.balconies && floor > 0) {
-          addWindow(b, fx - 0.7, ly + 0.25, 1, 1.0, 2.15, owner);
-          addWindow(b, fx + 0.9, ly + 0.95, 1, 1.0, 1.35, owner);
-          B.slabs.add(local(b, fx, ly - 0.05, b.d / 2 + 0.6), b.rot, s.set(3.6, 0.16, 1.2));
-          B.rails.add(local(b, fx, ly + 0.95, b.d / 2 + 1.17), b.rot, s.set(3.6, 0.05, 0.05));
-          B.rails.add(local(b, fx, ly + 0.45, b.d / 2 + 1.17), b.rot, s.set(3.6, 0.03, 0.03));
-          for (const e of [-1.78, 1.78]) B.rails.add(local(b, fx + e, ly + 0.1, b.d / 2 + 0.6), b.rot, s.set(0.04, 0.9, 1.15));
-        } else {
-          addWindow(b, fx, ly + 0.95, 1, 1.3, 1.4, owner);
-        }
-        addWindow(b, lx, ly + 0.95, -1, 1.2, 1.35, owner);
-      }
-      // Yan cephelerde merdiven pencereleri.
-      for (let f = 0; f < b.floors; f++) {
-        for (const side of [-1, 1]) {
-          const fake = { ...b, rot: b.rot + (side * Math.PI) / 2, w: b.d, d: b.w };
-          addWindow(fake, 0, f * FLOOR_H + 1.0, 1, 0.8, 1.1, { workplace: "merdiven", seed: f });
-        }
-      }
-      // Giriş: kapı, saçak, basamak.
-      B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.3, 2.3, 0.1));
-      B.slabs.add(local(b, 0, 2.6, b.d / 2 + 0.6), b.rot, s.set(2.2, 0.12, 1.2));
-      B.slabs.add(local(b, 0, 0, b.d / 2 + 0.7), b.rot, s.set(2.2, 0.15, 1.4));
-      continue;
-    }
-
-    // İş yerleri ve diğer binalar.
-    const perFloor = Math.max(2, Math.round(b.w / 3.4));
-    const bay = b.w / perFloor;
-    const owner = (k) => ({ workplace: b.kind, seed: k });
-    if (st.shop) {
-      // Zemin kat dükkân vitrini, tente ve tabela.
-      addGlass(b, 0, 0.45 + 1.3, b.d / 2 + 0.06, b.w - 2.4, 2.6, false, { workplace: b.kind, seed: 0, shop: true });
-      B.frames.add(local(b, 0, 0.35, b.d / 2), b.rot, s.set(b.w - 2.1, 2.9, 0.1));
-      B.awnings.add(local(b, 0, 3.0, b.d / 2 + 0.9), b.rot, s.set(b.w - 1.6, 0.12, 1.9), st.awning);
-      B.awnings.add(local(b, 0, 2.75, b.d / 2 + 1.85), b.rot, s.set(b.w - 1.6, 0.35, 0.06), st.awning);
-      B.signs.add(local(b, 0, 3.25, b.d / 2 + 0.1), b.rot, s.set(Math.min(b.w - 2, 7), 0.7, 0.12), st.awning);
-    } else if (!st.glass) {
-      B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(b.w > 20 ? 2.6 : 1.6, 2.5, 0.1));
-      B.slabs.add(local(b, 0, 2.9, b.d / 2 + 0.8), b.rot, s.set(b.w > 20 ? 4 : 2.4, 0.15, 1.6));
-    }
-    for (let f = 0; f < b.floors; f++) {
-      if (f === 0 && st.shop) continue;
-      for (let c = 0; c < perFloor; c++) {
-        const lx = -b.w / 2 + (c + 0.5) * bay;
-        if (f === 0 && Math.abs(lx) < 2.2) continue;
-        if (st.glass) {
-          addGlass(b, lx, f * FLOOR_H + 1.6, b.d / 2 + 0.05, bay - 0.25, FLOOR_H - 0.5, false, owner(f * perFloor + c));
-          addGlass(b, lx, f * FLOOR_H + 1.6, -b.d / 2 - 0.05, bay - 0.25, FLOOR_H - 0.5, true, owner(f * perFloor + c + 1));
-        } else {
-          addWindow(b, lx, f * FLOOR_H + 0.95, 1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c));
-          addWindow(b, lx, f * FLOOR_H + 0.95, -1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c + 7));
-        }
-        if (st.balconies && f > 0) {
-          B.slabs.add(local(b, lx, f * FLOOR_H - 0.05, b.d / 2 + 0.6), b.rot, s.set(bay - 0.6, 0.15, 1.2));
-          B.rails.add(local(b, lx, f * FLOOR_H + 0.95, b.d / 2 + 1.17), b.rot, s.set(bay - 0.6, 0.05, 0.05));
-        }
-      }
-    }
-    if (st.glass) for (let f = 1; f <= b.floors; f++) B.trims.add(local(b, 0, f * FLOOR_H - 0.25, 0), b.rot, s.set(b.w + 0.1, 0.25, b.d + 0.1), "#e8edf2");
-    if (st.tower) {
-      B.walls.add(local(b, 0, h, -2), b.rot, s.set(5, 11, 5), b.wall);
-      B.hips[0].add(local(b, 0, h + 11, -2), b.rot, s.set(6, 4, 6), b.roof);
-      B.frames.add(local(b, 0, h + 7.5, 0.55), b.rot, s.set(2.8, 2.8, 0.15));
-      B.rails.add(local(b, 0, h + 7.5, 0.65), b.rot, s.set(0.08, 1.1, 0.05));
-    }
-    if (st.columns) for (let i = 0; i < 6; i++) B.trims.add(local(b, -b.w / 2 + 2 + i * ((b.w - 4) / 5), 0.6, b.d / 2 + 1.5), b.rot, s.set(0.8, h - 0.6, 0.8), "#f4f1ea");
-    if (st.columns) B.slabs.add(local(b, 0, h - 0.4, b.d / 2 + 1.5), b.rot, s.set(b.w, 0.6, 3));
-    if (st.sign) {
-      B.signs.add(local(b, 0, h - 1.6, b.d / 2 + 0.12), b.rot, s.set(2.6, 0.8, 0.12), st.sign);
-      B.signs.add(local(b, 0, h - 2.5, b.d / 2 + 0.12), b.rot, s.set(0.8, 2.6, 0.12), st.sign);
-    }
-    if (b.kind === "belediye" || b.kind === "okul") {
-      // Bayrak direği ve bayrak.
-      B.rails.add(local(b, b.w / 2 - 2, 0, b.d / 2 + 4), b.rot, s.set(0.12, 10, 0.12));
-      B.signs.add(local(b, b.w / 2 - 2 + 1.2, 8.4, b.d / 2 + 4), b.rot, s.set(2.4, 1.6, 0.04), "#d8233a");
     }
   }
 
-  const meshes = [
-    ...Object.entries(B).flatMap(([, x]) => (Array.isArray(x) ? x : [x])).map((x) => x.build()),
-  ];
-  const windows = glass.build();
-  for (const m of meshes) group.add(m);
-  group.add(windows);
+  if (b.kind === "konut") {
+    // Apartman: kat başına perFloor daire; her dairenin önde balkonlu (ya da düz) penceresi, arkada penceresi.
+    const bay = b.w / b.perFloor;
+    for (let k = 0; k < b.daireler; k++) {
+      const floor = Math.floor(k / b.perFloor), col = k % b.perFloor;
+      if (floor >= floors) continue;
+      const lx = -b.w / 2 + (col + 0.5) * bay;
+      const ly = floor * FLOOR_H;
+      const owner = { slot: b.slot0 + k };
+      const doorClash = floor === 0 && Math.abs(lx) < 1.8;
+      const fx = doorClash ? lx + (lx >= 0 ? 1.4 : -1.4) : lx;
+      if (b.balconies && floor > 0) {
+        addWindow(b, fx - 0.7, ly + 0.25, 1, 1.0, 2.15, owner);
+        addWindow(b, fx + 0.9, ly + 0.95, 1, 1.0, 1.35, owner);
+        B.slabs.add(local(b, fx, ly - 0.05, b.d / 2 + 0.6), b.rot, s.set(3.6, 0.16, 1.2));
+        B.rails.add(local(b, fx, ly + 0.95, b.d / 2 + 1.17), b.rot, s.set(3.6, 0.05, 0.05));
+        B.rails.add(local(b, fx, ly + 0.45, b.d / 2 + 1.17), b.rot, s.set(3.6, 0.03, 0.03));
+        for (const e of [-1.78, 1.78]) B.rails.add(local(b, fx + e, ly + 0.1, b.d / 2 + 0.6), b.rot, s.set(0.04, 0.9, 1.15));
+      } else {
+        addWindow(b, fx, ly + 0.95, 1, 1.3, 1.4, owner);
+      }
+      addWindow(b, lx, ly + 0.95, -1, 1.2, 1.35, owner);
+    }
+    // Yan cephelerde merdiven pencereleri.
+    for (let f = 0; f < floors; f++) {
+      for (const side of [-1, 1]) {
+        const fake = { ...b, rot: b.rot + (side * Math.PI) / 2, w: b.d, d: b.w };
+        addWindow(fake, 0, f * FLOOR_H + 1.0, 1, 0.8, 1.1, { workplace: "merdiven", seed: f });
+      }
+    }
+    // Giriş: kapı, saçak, basamak.
+    B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.3, 2.3, 0.1));
+    B.slabs.add(local(b, 0, 2.6, b.d / 2 + 0.6), b.rot, s.set(2.2, 0.12, 1.2));
+    B.slabs.add(local(b, 0, 0, b.d / 2 + 0.7), b.rot, s.set(2.2, 0.15, 1.4));
+    return;
+  }
+
+  // İş yerleri ve diğer binalar.
+  const perFloor = Math.max(2, Math.round(b.w / 3.4));
+  const bay = b.w / perFloor;
+  const owner = (k) => ({ workplace: b.kind, seed: k });
+  if (st.shop) {
+    // Zemin kat dükkân vitrini, tente ve tabela.
+    addGlass(b, 0, 0.45 + 1.3, b.d / 2 + 0.06, b.w - 2.4, 2.6, false, { workplace: b.kind, seed: 0, shop: true });
+    B.frames.add(local(b, 0, 0.35, b.d / 2), b.rot, s.set(b.w - 2.1, 2.9, 0.1));
+    B.awnings.add(local(b, 0, 3.0, b.d / 2 + 0.9), b.rot, s.set(b.w - 1.6, 0.12, 1.9), st.awning);
+    B.awnings.add(local(b, 0, 2.75, b.d / 2 + 1.85), b.rot, s.set(b.w - 1.6, 0.35, 0.06), st.awning);
+    B.signs.add(local(b, 0, 3.25, b.d / 2 + 0.1), b.rot, s.set(Math.min(b.w - 2, 7), 0.7, 0.12), st.awning);
+  } else if (!st.glass) {
+    B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(b.w > 20 ? 2.6 : 1.6, 2.5, 0.1));
+    B.slabs.add(local(b, 0, 2.9, b.d / 2 + 0.8), b.rot, s.set(b.w > 20 ? 4 : 2.4, 0.15, 1.6));
+  }
+  for (let f = 0; f < floors; f++) {
+    if (f === 0 && st.shop) continue;
+    for (let c = 0; c < perFloor; c++) {
+      const lx = -b.w / 2 + (c + 0.5) * bay;
+      if (f === 0 && Math.abs(lx) < 2.2) continue;
+      if (st.glass) {
+        addGlass(b, lx, f * FLOOR_H + 1.6, b.d / 2 + 0.05, bay - 0.25, FLOOR_H - 0.5, false, owner(f * perFloor + c));
+        addGlass(b, lx, f * FLOOR_H + 1.6, -b.d / 2 - 0.05, bay - 0.25, FLOOR_H - 0.5, true, owner(f * perFloor + c + 1));
+      } else {
+        addWindow(b, lx, f * FLOOR_H + 0.95, 1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c));
+        addWindow(b, lx, f * FLOOR_H + 0.95, -1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c + 7));
+      }
+      if (st.balconies && f > 0) {
+        B.slabs.add(local(b, lx, f * FLOOR_H - 0.05, b.d / 2 + 0.6), b.rot, s.set(bay - 0.6, 0.15, 1.2));
+        B.rails.add(local(b, lx, f * FLOOR_H + 0.95, b.d / 2 + 1.17), b.rot, s.set(bay - 0.6, 0.05, 0.05));
+      }
+    }
+  }
+  if (st.glass) for (let f = 1; f <= floors; f++) B.trims.add(local(b, 0, f * FLOOR_H - 0.25, 0), b.rot, s.set(b.w + 0.1, 0.25, b.d + 0.1), "#e8edf2");
+  if (!full) return;
+  if (st.tower) {
+    B.walls.add(local(b, 0, h, -2), b.rot, s.set(5, 11, 5), b.wall);
+    B.hips[0].add(local(b, 0, h + 11, -2), b.rot, s.set(6, 4, 6), b.roof);
+    B.frames.add(local(b, 0, h + 7.5, 0.55), b.rot, s.set(2.8, 2.8, 0.15));
+    B.rails.add(local(b, 0, h + 7.5, 0.65), b.rot, s.set(0.08, 1.1, 0.05));
+  }
+  if (st.columns) for (let i = 0; i < 6; i++) B.trims.add(local(b, -b.w / 2 + 2 + i * ((b.w - 4) / 5), 0.6, b.d / 2 + 1.5), b.rot, s.set(0.8, h - 0.6, 0.8), "#f4f1ea");
+  if (st.columns) B.slabs.add(local(b, 0, h - 0.4, b.d / 2 + 1.5), b.rot, s.set(b.w, 0.6, 3));
+  if (st.sign) {
+    B.signs.add(local(b, 0, h - 1.6, b.d / 2 + 0.12), b.rot, s.set(2.6, 0.8, 0.12), st.sign);
+    B.signs.add(local(b, 0, h - 2.5, b.d / 2 + 0.12), b.rot, s.set(0.8, 2.6, 0.12), st.sign);
+  }
+  if (b.kind === "belediye" || b.kind === "okul") {
+    // Bayrak direği ve bayrak.
+    B.rails.add(local(b, b.w / 2 - 2, 0, b.d / 2 + 4), b.rot, s.set(0.12, 10, 0.12));
+    B.signs.add(local(b, b.w / 2 - 2 + 1.2, 8.4, b.d / 2 + 4), b.rot, s.set(2.4, 1.6, 0.04), "#d8233a");
+  }
+}
+
+export function buildCity(world) {
+  const K = makeKit();
+  for (const b of world.buildings) {
+    Batch.owner = b;
+    drawBuilding(K, b);
+  }
+  Batch.owner = null;
+  const group = buildKit(K);
   group.add(buildFeatures(world));
-  return { group, windows, windowOwners };
+  const batches = kitBatches(K);
+  const hidden = new THREE.Matrix4().makeScale(0, 0, 0);
+  return {
+    group,
+    windows: K.glass.mesh,
+    windowOwners: K.windowOwners,
+    /** Bir binayı gizler ya da geri getirir (ev içi görünümü için). */
+    setHidden(b, on) {
+      for (const batch of batches) {
+        let touched = false;
+        batch.items.forEach((it, i) => {
+          if (it.owner !== b) return;
+          batch.mesh.setMatrixAt(i, on ? hidden : it.m);
+          touched = true;
+        });
+        if (touched) batch.mesh.instanceMatrix.needsUpdate = true;
+      }
+    },
+    /** Işın hangi binaya çarpıyor? */
+    pickBuilding(raycaster) {
+      const hit = raycaster.intersectObject(K.B.walls.mesh)[0];
+      return hit?.instanceId != null ? K.B.walls.items[hit.instanceId].owner : null;
+    },
+  };
 }
 
 // --- kent eşyası ve özel yapılar ---
