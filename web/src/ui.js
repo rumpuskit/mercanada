@@ -4,8 +4,13 @@ import { HOME_LABELS, homeActivity } from "./world/life.js";
 
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const PLACE_NAMES = {
-  meydan: "Meydan", iskele: "İskele", park: "Park", sahil_yolu: "Sahil yolu", plaj: "Plaj",
-  tepe: "Tepe", fener: "Fener", kahvehane: "Kahvehane",
+  meydan: "Çarşı meydanı", iskele: "Balık iskelesi", park: "Park", sahil_yolu: "Sahil yolu", plaj: "Plaj",
+  tepe: "Tepe", fener: "Fener", kahvehane: "Kahvehane", pazar: "Pazar", saha: "Futbol sahası",
+};
+// Buluşma yerinde ne yapıyor (yer anahtarına göre).
+const OUT_LABELS = {
+  meydan: "Çarşı meydanında, arkadaşlarıyla", park: "Parkta geziniyor", sahil_yolu: "Sahil yolunda yürüyüşte",
+  kahvehane: "Kahvehanede", pazar: "Pazarda alışverişte", saha: "Futbol sahasında",
 };
 
 const fmt = new Intl.NumberFormat("tr-TR");
@@ -37,7 +42,15 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   function placeLabel(i, yer) {
     if (yer === "ev") return "Ev";
     if (yer === "is") return people.works[i].loc.name;
+    if (yer.startsWith("mahalle:")) return "Mahallesinin çay bahçesi";
     return PLACE_NAMES[yer.replace("hobi:", "")] ?? yer;
+  }
+
+  /** Yolculuğun gerçek varış yeri: "meydan" planı saate göre farklı yerlere dağılır. */
+  function destOf(i, seg) {
+    if (seg.nereye !== "meydan") return seg.nereye;
+    const k = people.plans[i].findIndex((q) => q.bas === seg.son);
+    return k >= 0 ? people._placeOf(i, k) ?? "meydan" : "meydan";
   }
 
   function nowText(i) {
@@ -46,15 +59,24 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     switch (seg.ne) {
       case "uyku":
       case "ev": {
-        const act = homeActivity(residents[i].seed, seg, minute(), today(), people.hobbies[i].id);
+        const act = homeActivity(residents[i].seed, seg, minute(), today(), people.hobbies[i].id, people.homeWork?.[i]);
         return (seg.ne === "ev" ? "Evde · " : "") + HOME_LABELS[act];
       }
-      case "is": return `İşte · ${people.works[i].loc.name}`;
-      case "yol": return `Yolda → ${placeLabel(i, seg.nereye)}`;
+      case "is": {
+        const j = people.works[i].job;
+        if (j === "ogrenci") return "Anakarada, üniversitede";
+        if (j === "anakara") return "Anakarada, işte";
+        return `İşte · ${people.works[i].loc.name}`;
+      }
+      case "yol": {
+        const d = destOf(i, seg);
+        if (d === "is" && people.works[i].wp.kind === "anakara") return seg.nereden === "ev" ? "Vapura yetişmeye gidiyor" : "Vapurdan indi, eve dönüyor";
+        return `Yolda → ${placeLabel(i, d)}`;
+      }
       case "hobi": return `${people.hobbies[i].ad} · ${placeLabel(i, seg.yer)}`;
       case "meydan": {
-        const pl = people.currentPlace[i];
-        return pl && pl !== "meydan" ? `Mahallesinin çay bahçesinde, komşularıyla` : "Çarşıda, arkadaşlarıyla";
+        const pl = people.currentPlace[i] ?? "meydan";
+        return pl.startsWith("mahalle:") ? "Mahallesinin çay bahçesinde, komşularıyla" : OUT_LABELS[pl] ?? "Çarşıda, arkadaşlarıyla";
       }
       default: return seg.ne;
     }
@@ -85,7 +107,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     if (tab === "bugun") {
       const homeLabel = (k) => {
         const seg = people.plans[selected][k];
-        const act = homeActivity(r.seed, seg, seg.bas + 1, day, people.hobbies[selected].id);
+        const act = homeActivity(r.seed, seg, seg.bas + 1, day, people.hobbies[selected].id, people.homeWork?.[selected]);
         return "Evde · " + HOME_LABELS[act].toLocaleLowerCase("tr");
       };
       const placeName = (yer) => placeLabel(selected, yer);
@@ -128,13 +150,17 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     if (!b.daireler) {
       $("card-handle").textContent = dollhouse.workName ?? "Dükkân";
       $("card-title").textContent = `${b.address ?? ""} · ${dollhouse.floor + 1}. kat`;
+      // Yalnızca şu an bu katta çalışanlar (izinli, yolda ya da evde olanlar listelenmez).
       const rows = [];
+      let total = 0;
       for (const [i] of dollhouse.workSpots) {
-        const seg = people.activities[i];
-        rows.push([sim.title(residents[i], today()), `@${residents[i].handle} · ${seg?.ne === "is" ? "işte" : nowText(i).toLocaleLowerCase("tr")}`, () => select(i)]);
+        total++;
+        if (people.activities[i]?.ne !== "is") continue;
+        rows.push([sim.title(residents[i], today()), `@${residents[i].handle}`, () => select(i)]);
       }
-      $("card-now").textContent = rows.length ? `${rows.length} kişi burada çalışıyor` : "Bu katta çalışan yok";
+      $("card-now").textContent = rows.length ? `Şu an ${rows.length} kişi çalışıyor (bu katın kadrosu ${total})` : total ? `Şu an kimse çalışmıyor (kadro ${total})` : "Bu katta çalışan yok";
       facts(rows.slice(0, 12));
+      if (rows.length > 12) facts([...rows.slice(0, 12), ["", `ve ${rows.length - 12} kişi daha`]]);
       return;
     }
     const p = sim.addressParts(b.slot0);

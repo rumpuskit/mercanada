@@ -836,6 +836,11 @@ export class World {
     this.piers.push({ x0: -5, x1: 5, z0: lz - 4, z1: lz + 76, top: 1.53 });
     this.features.push({ type: "vapur", x: 13, z: lz + 40 });
     this.addBuilding({ kind: "liman", x: -24, z: lz - 21, rot: 0, w: 16, d: 9, floors: 2, roofType: "hip", wall: "#f6f1e9", roof: "#8c4b3a", address: "Vapur İskelesi, Liman" });
+    // Anakarada çalışan ve okuyanlar: vapur iskelesinin ucunda vapura biner (gün boyu adada görünmez).
+    const ferryDoor = [3.5, lz + 36];
+    this._addWorkplace("anakara", 0, { door: ferryDoor, path: [ferryDoor, [0, lz - 6], [0, avZ0], HUB], anchor: ferryDoor, spread: 2, queue: { x0: -4, x1: 4, z: lz + 34.5 } });
+    // Evden çalışanlar ve emekliler: iş yerleri evleridir (adreste mahalle görünür).
+    this._addWorkplace("ev", 0, { door: null, path: [HUB], anchor: HUB, spread: 0, home: true });
     this.labels.push({ text: "Vapur İskelesi", x: 0, z: lz + 20, h: 22 });
     this._layoutPort(toHub);
 
@@ -1158,7 +1163,7 @@ export class World {
           case "okul": {
             // Bina şeridin kuzeyinde, cephesi güneydeki bahçeye bakar; bahçe duvarlı, kapısı güneydeki sokağa.
             const bz = cz - g.h / 2 + 6.5;
-            const b = this.addBuilding({ kind: "okul", x, z: bz, rot: 0, w: 24, d: 11, floors: 3, roofType: "hip", wall: "#f2d9a6", roof: "#b5563f", workplace: true, style: STYLES.okul, address: `${mahalleName(m).replace(" Mahallesi", "")} İlkokulu, ${mahalleName(m)}` });
+            const b = this.addBuilding({ kind: "okul", x, z: bz, rot: 0, w: 24, d: 11, floors: 3, roofType: "hip", wall: "#f2d9a6", roof: "#b5563f", workplace: true, style: STYLES.okul, address: `${cat().isyerleri.okul[m]}, ${mahalleName(m)}` });
             const yard = { x0: x - 12.5, x1: x + 12.5, z0: bz + 5.5 + 0.5, z1: cz + g.h / 2 - 0.5 };
             this.plazas.push({ ...yard, kind: "avlu" });
             this.features.push({ type: "okul_bahce", x, ...yard, gateX: x });

@@ -20,14 +20,27 @@ export function buildWorkInterior(b, f, add, spot) {
     add(w, 1.0, 0.7, x, 0.06, z, color);
     add(w + 0.05, 0.05, 0.75, x, 1.06, z, top);
   };
+  const guests = []; // müşteri/öğrenci oturma yerleri (çalışanlara verilmez)
+  const chair = (cx, cz, face, color = "#8a6a52") => {
+    // Dört ayaklı, arkalıklı sandalye; face: oturanın baktığı yön (yerel).
+    const bx = cx - Math.sin(face) * 0.19, bz = cz - Math.cos(face) * 0.19;
+    add(0.42, 0.05, 0.42, cx, 0.45, cz, color, face);
+    add(0.42, 0.45, 0.04, bx, 0.5, bz, color, face);
+    for (const [dx, dz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) {
+      const rx = dx * Math.cos(face) + dz * Math.sin(face), rz = -dx * Math.sin(face) + dz * Math.cos(face);
+      add(0.03, 0.44, 0.03, cx + rx, 0.01, cz + rz, "#3c4148", 0, { shadow: false });
+    }
+    guests.push(spot(cx, cz, face, "guest"));
+  };
   const table = (x, z, chairs = 2, round = true) => {
     if (round) add(0.8, 0.05, 0.8, x, 0.74, z, "#f4f1ea");
     else add(1.2, 0.05, 0.8, x, 0.74, z, "#a07a58");
     add(0.07, 0.72, 0.07, x, 0.02, z, "#3c4148");
+    add(0.4, 0.03, 0.4, x, 0.02, z, "#3c4148", 0, { shadow: false });
     for (let c = 0; c < chairs; c++) {
       const a = (c / chairs) * Math.PI * 2;
       const cx = x + Math.cos(a) * 0.7, cz = z + Math.sin(a) * 0.7;
-      add(0.4, 0.05, 0.4, cx, 0.45, cz, "#8a6a52");
+      chair(cx, cz, Math.atan2(x - cx, z - cz));
     }
   };
   const shelf = (x, z, w, rot = 0, goods = true) => {
@@ -101,7 +114,12 @@ export function buildWorkInterior(b, f, add, spot) {
       // Sınıf: tahta, öğretmen masası, sıralar.
       add(Math.min(6, b.w - 4), 1.2, 0.05, 0, 1.0, -hd + 0.25, "#2f4a3a");
       add(1.4, 0.75, 0.7, -2.5, 0.06, -hd + 1.6, "#a07a58");
-      for (let r = 0; r < 3; r++) for (let c = 0; c < Math.floor((b.w - 3) / 1.6); c++) add(1.1, 0.7, 0.5, -hw + 1.8 + c * 1.6, 0.06, -hd + 3.6 + r * 1.6, "#c9a27a");
+      for (let r = 0; r < 3; r++) for (let c = 0; c < Math.floor((b.w - 3) / 1.6); c++) {
+        const x = -hw + 1.8 + c * 1.6, z = -hd + 3.6 + r * 1.6;
+        add(1.1, 0.05, 0.5, x, 0.68, z, "#c9a27a");
+        for (const dx of [-0.5, 0.5]) add(0.05, 0.66, 0.45, x + dx, 0.02, z, "#3c4148", 0, { shadow: false });
+        for (const dx of [-0.27, 0.27]) chair(x + dx, z + 0.55, Math.PI, "#5a7fa8");
+      }
       S(0.5, -hd + 1.2, 0, "board");
       S(-hw + 3, hd - 1.5, Math.PI, "walk");
       break;
@@ -155,6 +173,7 @@ export function buildWorkInterior(b, f, add, spot) {
       S(-hw + 2, -0.45, Math.PI, "desk");
     }
   }
+  spots.guests = guests;
   return spots;
 }
 

@@ -211,6 +211,7 @@ export function look(r) {
 }
 
 export function worksOn(r, day) {
+  if (job(r).calismaz) return false; // emekli
   const wd = weekday(day);
   let works;
   if (!job(r).hafta_sonu) works = wd < 5;
@@ -273,7 +274,30 @@ export function dayPlan(r, day) {
   const plan = [];
 
   let sleep = 1350 + (roll(s, "uyku", day) % 80);
-  if (worksOn(r, day)) {
+  if (worksOn(r, day) && job(r).yer === "ev") {
+    // Evden çalışan: sabah evde masasında; çoğu öğle arasında kısa bir çıkış yapar; akşam işçiler gibi.
+    const j = job(r);
+    const shift = catalog.vardiyalar[j.vardiya];
+    add(plan, shift.bas - 40 - (roll(s, "uyan", day) % 40), "uyku", PLACE_HOME);
+    const lunch = 720 + (roll(s, "ogle_saat", day) % 45);
+    if (roll(s, "ogle", day) % 100 < 45) {
+      add(plan, lunch - commute, "ev", PLACE_HOME);
+      travel(plan, commute, PLACE_HOME, "meydan");
+      add(plan, end(plan) + 30 + (roll(s, "ogle_sure", day) % 30), "meydan", "meydan");
+      travel(plan, commute, "meydan", PLACE_HOME);
+    }
+    const leave = shift.son + (roll(s, "gec_cikis", day) % 31);
+    const outing = eveningPlace(s, day, hobbyPlace);
+    const duration = 60 + (roll(s, "sure", day) % 120);
+    const latest = outing.startsWith("hobi:") ? OUTING_LATEST_HOBBY : OUTING_LATEST_MEYDAN;
+    if (outing !== "" && leave + commute <= latest && leave + 2 * commute + duration <= sleep - 10) {
+      add(plan, leave, "ev", PLACE_HOME);
+      travel(plan, commute, PLACE_HOME, outing);
+      add(plan, end(plan) + duration, activityOf(outing), outing);
+      travel(plan, commute, outing, PLACE_HOME);
+    }
+    nightOut(plan, s, day, commute, sleep);
+  } else if (worksOn(r, day)) {
     const j = job(r);
     const shift = catalog.vardiyalar[j.vardiya];
     if (j.vardiya === "erken") sleep = 1290 + (roll(s, "uyku", day) % 60);

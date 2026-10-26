@@ -9,10 +9,11 @@
 //    Erken kalırsa yolda kısa molalar verir. Kapıdan girerken kapı açılır.
 //  - Yürüyenler birbirine çok yaklaşırsa yana çekilir; durağan insanların ve engellerin içinden geçilmez.
 import { Color } from "three";
-import { activityAt, dayPlan, hobby, job, look, pet, roll, workplace } from "../sim.js";
+import { activityAt, dayPlan, hobby, job, look, pet, roll, workplace, worksOn } from "../sim.js";
 import { Crowd } from "./human.js";
 import { PedNav } from "./nav.js";
 import { pedWait } from "./signals.js";
+import { nextArrival, nextDeparture } from "./ferry.js";
 import { craneSeat, forkliftSeat, portMotion, shipWalkY, stackerSeat } from "./port.js";
 import { pointAt } from "./traffic.js";
 import * as P from "./palette.js";
@@ -467,6 +468,8 @@ export class People {
     if (day === this.day) return;
     this.day = day;
     this.plans = this.residents.map((r) => dayPlan(r, day));
+    // Evden çalışanlar bugün mesaide mi (ev etkinliği "çalışma" olur).
+    this.homeWork = this.residents.map((r, i) => this.works[i].job === "uzaktan" && worksOn(r, day));
     this.dogs = this.residents.map((r) => pet(r, day) === "Köpek");
     this.travelCache.fill(null);
     this.tripStore = this.residents.map(() => new Map());
@@ -590,6 +593,12 @@ export class People {
   _trip(i, seg, k) {
     const store = this.tripStore[i];
     if (store.has(k)) return store.get(k);
+    // Anakaradan dönenler vapur iskeleye yanaştığında iner: yolculuk o an başlar.
+    const ferry = this.works[i].wp.kind === "anakara";
+    if (ferry && seg.nereden === "is") {
+      const arr = nextArrival(seg.bas);
+      if (arr < seg.son - 4) seg = { ...seg, bas: arr };
+    }
     const A = this._endpoint(i, k - 1, true), B = this._endpoint(i, k + 1, false);
     const dist = Math.hypot(B[0] - A[0], B[1] - A[1]);
     const s = this.residents[i].seed;
@@ -603,6 +612,7 @@ export class People {
     }
     trip ??= this._walkTrip(i, seg, k, A, B);
     trip.seg = k;
+    trip.toFerry = ferry && seg.nereye === "is";
     trip.fromWork = seg.nereden === "is";
     trip.doorA = seg.nereden === "ev" ? this.homes[i].building : seg.nereden === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
     trip.doorB = seg.nereye === "ev" ? this.homes[i].building : seg.nereye === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
@@ -610,7 +620,8 @@ export class People {
     trip.hideAtB = !!trip.doorB || seg.nereye === "ev";
     // Başta ve sonda kalan süre: önceki yerde oyalanır / vardığı yerde beklemeye başlar.
     const first = trip.legs[0], last = trip.legs[trip.legs.length - 1];
-    if (first.t0 > seg.bas + 0.01) trip.legs.unshift({ kind: "before", t0: seg.bas, t1: first.t0 });
+    const segBas = this.plans[i][k].bas; // vapur için kaydırılmış olabilir: önceki yerde bekleme gerçek başlangıçtan
+    if (first.t0 > segBas + 0.01) trip.legs.unshift({ kind: "before", t0: segBas, t1: first.t0 });
     if (last.t1 < seg.son - 0.01) trip.legs.push({ kind: "after", t0: last.t1, t1: seg.son });
     store.set(k, trip);
     return trip;
@@ -1339,6 +1350,23 @@ export class People {
         return this._placeState(i, k - 1, minute, time, p, { end: leg.t1 });
       }
       case "after": {
+        // Vapura gidenler: iskelede sıraya girer, kalkışta biner (sonra görünmez).
+        if (trip.toFerry) {
+          if (minute >= nextDeparture(leg.t0)) return false;
+          const q = this.works[i].loc.queue, slot = this.residents[i].seed % 300;
+          const qx = q.x0 + (slot % 12) * ((q.x1 - q.x0) / 11), qz = q.z - Math.floor(slot / 12) * 0.75;
+          const u = Math.min(1, (minute - leg.t0) * 20);
+          const last = trip.legs.findLast((l) => l.kind === "walk");
+          const ex = last ? last.pts[last.pts.length - 1] : [qx, qz];
+          p.x = ex[0] + (qx - ex[0]) * u; p.z = ex[1] + (qz - ex[1]) * u; p.y = this.world.groundY(p.x, p.z);
+          p.heading = 0;
+          if (u < 1) walkPose(p, u * 6);
+          else {
+            idleGesture(p, time, i, (this.residents[i].seed >> 3) % 3 === 0);
+            if (this.residents[i].seed % 3 === 0) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
+          }
+          return true;
+        }
         if (trip.hideAtB) return false;
         const next = this.plans[i][k + 1];
         if (!next || next.ne === "ev" || next.ne === "uyku") return false;
@@ -1589,6 +1617,7 @@ export class People {
         if (st && !(v.phase === "wait")) addDriver(v, st[0], st[1], st[2], v.kind === "bus" ? DRIVER_TOP : v.kind === "itfaiye" ? FIRE_TOP : v.kind === "ambulans" ? MEDIC_TOP : COP_TOP);
       }
     }
+    this.dollhouse?.addExtras?.(crowd, minute, time, this.day); // iç mekân müşterileri ve öğrenciler
     // Öğrenciler (sakin değil): hafta içi 08:40-15:20 arası teneffüslerde (her saatin son 10 dakikası
     // ve öğle arası) okul bahçesinde koşar, top oynar, sohbet eder; ders saatinde içeridedirler.
     const wd = (this.day + 3) % 7;

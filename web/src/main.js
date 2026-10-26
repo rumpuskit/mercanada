@@ -345,6 +345,7 @@ function tick() {
   water.userData.tick(real);
   city.tick(real);
   harbor.userData.tick(real);
+  harbor.userData.setMinute(minute);
   fadeTrees(trees, dist);
   // Telefonda kart ekranın altını kapatır; görüntüyü yukarı kaydır.
   const cardOpen = !document.getElementById("card").hidden;

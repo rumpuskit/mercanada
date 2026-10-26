@@ -199,6 +199,8 @@ def look(r: dict) -> dict:
 
 
 def works_on(r: dict, day: int) -> bool:
+    if job(r).get("calismaz"):
+        return False  # emekli
     wd = weekday(day)
     if not job(r)["hafta_sonu"]:
         works = wd < 5
@@ -263,7 +265,28 @@ def day_plan(r: dict, day: int) -> list:
     plan: list = []
 
     sleep = 1350 + roll(s, "uyku", day) % 80
-    if works_on(r, day):
+    if works_on(r, day) and job(r)["yer"] == "ev":
+        # Evden çalışan: sabah evde masasında; çoğu öğle arasında kısa bir çıkış yapar; akşam işçiler gibi.
+        shift = catalog()["vardiyalar"][job(r)["vardiya"]]
+        start, end = int(shift["bas"]), int(shift["son"])
+        _add(plan, start - 40 - roll(s, "uyan", day) % 40, "uyku", PLACE_HOME)
+        lunch = 720 + roll(s, "ogle_saat", day) % 45
+        if roll(s, "ogle", day) % 100 < 45:
+            _add(plan, lunch - commute, "ev", PLACE_HOME)
+            _travel(plan, commute, PLACE_HOME, "meydan")
+            _add(plan, _end(plan) + 30 + roll(s, "ogle_sure", day) % 30, "meydan", "meydan")
+            _travel(plan, commute, "meydan", PLACE_HOME)
+        leave = end + roll(s, "gec_cikis", day) % 31
+        outing = _evening_place(s, day, hobby_place)
+        duration = 60 + roll(s, "sure", day) % 120
+        latest = OUTING_LATEST_HOBBY if outing.startswith("hobi:") else OUTING_LATEST_MEYDAN
+        if outing and leave + commute <= latest and leave + 2 * commute + duration <= sleep - 10:
+            _add(plan, leave, "ev", PLACE_HOME)
+            _travel(plan, commute, PLACE_HOME, outing)
+            _add(plan, _end(plan) + duration, _activity_of(outing), outing)
+            _travel(plan, commute, outing, PLACE_HOME)
+        _night_out(plan, s, day, commute, sleep)
+    elif works_on(r, day):
         shift = catalog()["vardiyalar"][job(r)["vardiya"]]
         start, end = int(shift["bas"]), int(shift["son"])
         if job(r)["vardiya"] == "erken":

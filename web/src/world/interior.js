@@ -13,6 +13,10 @@ import { FLAT_Y, FLOOR_H, unitLayout } from "./layout.js";
 import { homeActivity } from "./life.js";
 import { idleGesture, resetPose, sitPose, walkPose } from "./people.js";
 import { buildWorkInterior, workPose } from "./workinterior.js";
+import * as P from "./palette.js";
+import { Color } from "three";
+
+const SCHOOL_TOP = [new Color("#2f4a6d"), new Color("#f4f1ea")];
 
 const WALL_H = 2.9;
 const CUT = 1.05; // iç duvarlar bu yüksekliğe kadar kesilir (içerisi görünsün)
@@ -83,6 +87,7 @@ export class Dollhouse {
     this.group = null;
     this.units.clear();
     this.workSpots.clear();
+    this.guests = [];
     this.tvs = [];
     this.lights = [];
     this.pets = [];
@@ -440,6 +445,7 @@ export class Dollhouse {
       case "kahvalti": case "aksam_yemegi": return s.chair;
       case "yemek_yapma": return s.stove;
       case "kitap": case "telefon": return (seed % 3 === 0 && s.desk) || s.sofa;
+      case "calisma": return s.desk ?? s.chair2 ?? s.chair;
       case "temizlik": return null;
       default: return seed % 2 ? s.sofa : s.sofa2 ?? s.sofa;
     }
@@ -452,7 +458,8 @@ export class Dollhouse {
     const r = this.people.residents[i];
     const day = this.people.day;
     const hob = this.people.hobbies[i].id;
-    const act = homeActivity(r.seed, seg, minute, day, hob);
+    const hw = !!this.people.homeWork?.[i];
+    const act = homeActivity(r.seed, seg, minute, day, hob, hw);
     const k = p.height / 1.75;
     const ph = (r.seed % 1000) / 159;
     resetPose(p);
@@ -461,7 +468,7 @@ export class Dollhouse {
     // Etkinliğin başladığı an ve önceki etkinlik (eve yeni geldiyse kapı).
     let start = minute, prevAct = null;
     for (let m = minute - 0.25; m >= Math.max(seg.bas, minute - 30); m -= 0.25) {
-      const a = homeActivity(r.seed, seg, m, day, hob);
+      const a = homeActivity(r.seed, seg, m, day, hob, hw);
       if (a !== act) { prevAct = a; break; }
       start = m;
     }
@@ -542,7 +549,7 @@ export class Dollhouse {
         if (act === "telefon") { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
         else if (act === "kitap") { p.shL = p.shR = 0.7; p.elL = p.elR = 1.5; p.headPitch = 0.45; p.props = ["kitap"]; }
         else if (act === "dinlenme") { p.shL = p.shR = 0.2; p.elL = p.elR = 0.6; p.headPitch = -0.15; }
-        else if (atDesk) { p.shL = p.shR = 0.75; p.elL = p.elR = 1.35 + 0.08 * Math.sin(time * 9); }
+        else if (atDesk || act === "calisma") { p.shL = p.shR = 0.75; p.elL = p.elR = 1.35 + 0.08 * Math.sin(time * 9); p.lean = 0.15; p.headPitch = 0.25 + 0.1 * Math.sin(time * 0.2); }
       }
     }
     if (u.spots.bed?.duvet) u.spots.bed.duvet.scale.y = act === "uyku" ? 3 : 1;
@@ -557,6 +564,7 @@ export class Dollhouse {
     const add = this._adder(b, y0);
     this._shell(b, add);
     const spots = buildWorkInterior(b, f, add, (lx, lz, heading, type) => ({ p: local(b, lx, 0, lz).clone(), heading: b.rot + heading, type, y: FLAT_Y + y0 + 0.06 }));
+    this.guests = spots.guests ?? [];
     for (const lx of [-b.w / 4, b.w / 4]) {
       const lamp = new THREE.PointLight("#fff1d8", 0, 12, 1.4);
       lamp.position.copy(local(b, lx, y0 + 2.6, 0));
@@ -582,6 +590,57 @@ export class Dollhouse {
       this.workSpots.set(i, { ...sp, p: q });
     });
     this.workName = Object.values(this.world.workplaces).flat().find((w) => w?.building === b)?.name ?? null;
+  }
+
+  /**
+   * Sakin olmayan iç mekân kalabalığı: kafe, kahvehane ve fırında müşteriler (saate göre doluluk),
+   * okulda ders saatinde sıralarda öğrenciler. Kimlikleri yok; yalnızca o kat açıkken çizilir.
+   */
+  addExtras(crowd, minute, time, day) {
+    if (!this.building || !this.guests?.length) return;
+    const kind = this.building.kind;
+    const v = (this._extra ??= {});
+    const dress = (seed, adult = true) => Object.assign(v, {
+      style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length],
+      top: adult ? P.CLOTHES[(seed * 7) % P.CLOTHES.length] : SCHOOL_TOP[seed % 2], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length],
+      sleeves: seed % 3 !== 0, skirt: seed % 2 === 1 && seed % 4 === 1, beard: adult && seed % 5 === 0, glasses: seed % 6 === 0,
+    });
+    const k = 1.75;
+    if (kind === "okul") {
+      const wd = (day + 3) % 7;
+      const lesson = wd < 5 && minute >= 520 && minute < 920 && !(minute % 60 >= 50 || (minute >= 720 && minute < 760));
+      if (!lesson) return;
+      this.guests.forEach((g, n) => {
+        resetPose(v); v.height = 1.2 + (n % 6) * 0.035; v.t = time;
+        v.x = g.p.x; v.z = g.p.z; v.heading = g.heading;
+        sitPose(v, g.y + 0.44, v.height / k);
+        v.lean = 0.15; v.shL = v.shR = 0.6; v.elL = v.elR = 1.4;
+        if ((n * 7 + Math.floor(time / 9)) % 23 === 0) { v.shR = 2.7; v.elR = 0.1; } // parmak kaldıran
+        dress(n * 13 + 5, false);
+        crowd.add(-1, v);
+      });
+      return;
+    }
+    if (!["kafe", "kahvehane", "firin", "bufe"].includes(kind)) return;
+    // Doluluk: sabah kahvaltısı, öğle ve akşam üstü tepeleri; kapalı saatlerde boş.
+    const h = minute / 60;
+    if (h < 7 || h >= 23) return;
+    const busy = 0.25 + 0.45 * Math.exp(-((h - 9) ** 2) / 2) + 0.4 * Math.exp(-((h - 13) ** 2) / 1.5) + 0.5 * Math.exp(-((h - 18.5) ** 2) / 3);
+    const slot = Math.floor(minute / 25); // müşteriler 25 dakikada bir değişir
+    this.guests.forEach((g, n) => {
+      const seed = roll(n * 131 + this.building.x * 7, "musteri", slot);
+      if ((seed % 100) / 100 > busy) return;
+      resetPose(v); v.height = 1.6 + (seed % 7) * 0.04; v.t = time;
+      v.x = g.p.x; v.z = g.p.z; v.heading = g.heading;
+      sitPose(v, g.y + 0.44, v.height / k);
+      const ph = seed % 10;
+      const sip = Math.max(0, Math.sin(time * 0.35 + ph)) ** 10;
+      idleGesture(v, time, ph, sip < 0.1 && seed % 2 === 0);
+      v.shR = Math.max(v.shR, 0.5 + 0.9 * sip); v.elR = Math.max(v.elR, 1.2 + 1.0 * sip); v.lean = 0.12;
+      if (kind === "kahvehane" && seed % 3 === 0) { v.shL = v.shR = 0.7; v.elL = v.elR = 1.3; v.lean = 0.3; v.headPitch = 0.45; } // tavla/okey
+      dress(seed);
+      crowd.add(-1, v);
+    });
   }
 
   /** İşteki sakinin duruşu. */

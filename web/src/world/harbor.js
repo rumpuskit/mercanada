@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { buildPort } from "./port.js";
+import { ferryOut } from "./ferry.js";
 
 export function colored(geo, color) {
   const g = geo.index ? geo.toNonIndexed() : geo;
@@ -395,6 +396,7 @@ export function buildFishingCove(world) {
 
 export function buildHarbor(world) {
   const group = new THREE.Group();
+  let ferryObj = null, ferryPlank = null;
   const floating = [];
   for (const f of world.features) {
     if (f.type === "iskele") group.add(pier(f, 1.53));
@@ -403,11 +405,13 @@ export function buildHarbor(world) {
       m.position.set(f.x, 0.2, f.z);
       group.add(m);
       floating.push({ obj: m, base: 0.2, amp: 0.06, roll: 0.006, ph: 0.3 });
+      ferryObj = { obj: m, x: f.x, z: f.z };
       // İskele köprüsü (vapurdan iskeleye).
       const plank = new THREE.Mesh(merged([box(2.2, 0.12, 4.2, 0, 0, 0, "#9aa1a8"), box(0.05, 0.9, 4.2, -1.08, 0.45, 0, "#2f3540"), box(0.05, 0.9, 4.2, 1.08, 0.45, 0, "#2f3540")]), METAL);
       plank.position.set(f.x - 7.2, 1.7, f.z - 4);
       plank.rotation.y = Math.PI / 2;
       group.add(plank);
+      ferryPlank = plank;
     } else if (f.type === "tekne") {
       const len = f.len ?? 8;
       const m = boat(len, Math.round(Math.abs(f.x * 7 + f.z * 3)));
@@ -423,6 +427,17 @@ export function buildHarbor(world) {
   if (world.tersane) group.add(buildShipyard(world));
   if (world.koy) group.add(buildFishingCove(world));
   group.userData.setNight = (n) => port?.userData.setNight(n);
+  // Vapur seferleri: kalkışta açığa doğru döner ve uzaklaşır, yenisi aynı yoldan yanaşır.
+  group.userData.setMinute = (m) => {
+    if (!ferryObj) return;
+    const u = ferryOut(m);
+    const o = ferryObj.obj;
+    o.visible = u < 0.98;
+    if (ferryPlank) ferryPlank.visible = u < 0.02; // vapur yokken iskele köprüsü kaldırılmış
+    o.position.x = ferryObj.x + 26 * u * u;
+    o.position.z = ferryObj.z + 160 * u;
+    o.rotation.y = -0.5 * Math.sin(Math.PI * Math.min(1, u * 1.6)) * (u < 1 ? 1 : 0);
+  };
   group.userData.tick = (t) => {
     port?.userData.tick(globalThis.__portT ?? t); // __portT: denetimde belirli bir anı görmek için
     for (const b of floating) {

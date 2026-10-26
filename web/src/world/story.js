@@ -21,6 +21,8 @@ const JOB_TRAIT = {
   asci: "Gurme", firinci: "Erkenci", balikci: "Erkenci", cankurtaran: "Cesur", rehber: "Sohbet sever",
   fener_bekcisi: "Yalnızlığı sever", bahcivan: "Doğa sever", zeytinci: "Toprağa bağlı", kutuphaneci: "Kitap kurdu",
   seramikci: "Elleri hünerli", marangoz: "Elleri hünerli", ressam: "Sanatçı ruhlu", muhasebeci: "Titiz", memur: "Düzenli",
+  liman_iscisi: "Çalışkan", gemi_ustasi: "Usta işi sever", kasiyer: "Dakik", resepsiyonist: "Nazik",
+  anakara: "Vapur müdavimi", ogrenci: "Hevesli", uzaktan: "Bağımsız", emekli: "Hayat tecrübeli",
 };
 const EXTRA_TRAITS = ["Esprili", "Sosyal kelebek", "Sakin", "Nostaljik", "Meraklı", "Dakik", "Hayalperest", "Cömert", "Çay tiryakisi", "Kahve tiryakisi"];
 
@@ -49,6 +51,8 @@ export class Stories {
     // İş arkadaşları: aynı iş yeri.
     this.workmates = new Map();
     res.forEach((r, i) => {
+      // Evde olanların (emekli, evden çalışan) ve anakaraya gidenlerin ortak iş yeri yok.
+      if (["ev", "anakara"].includes(people.works[i].wp.kind)) return;
       const key = people.works[i].wp.kind + ":" + people.works[i].wp.index;
       if (!this.workmates.has(key)) this.workmates.set(key, []);
       this.workmates.get(key).push(i);
@@ -109,10 +113,11 @@ export class Stories {
     const today = p.day;
     const events = [];
     events.push({ day: r.arrived_day, text: "Sabahın ilk vapuruyla adaya geldi, " + sim.addressText(r.slot).split(",").slice(0, 2).join(",") + " adresine yerleşti." });
-    events.push({ day: r.arrived_day + 1, text: `İşe başladı: ${p.works[i].loc.name}.` });
-    // Terfiler: kıdem eşikleri.
     const job = sim.job(r);
-    for (let day = r.arrived_day + 1; day <= today; day++) {
+    const startText = { emekli: "Emekliliğinin tadını adada çıkarmaya başladı.", uzaktan: "Evinin bir köşesini çalışma odası yaptı; işini adadan sürdürüyor.", anakara: "Her sabah vapurla anakaradaki işine gidip gelmeye başladı.", ogrenci: "Üniversiteye her sabah vapurla gidip gelmeye başladı." }[job.id] ?? `İşe başladı: ${p.works[i].loc.name}.`;
+    events.push({ day: r.arrived_day + 1, text: startText });
+    // Terfiler: kıdem eşikleri (emeklilerde yok).
+    for (let day = r.arrived_day + 1; !job.calismaz && day <= today; day++) {
       const before = sim.rank(r, day - 1), now = sim.rank(r, day);
       if (now > before) events.push({ day, text: `Terfi etti: artık ${job.kademeler[Math.min(now, job.kademeler.length - 1)]}.` });
     }

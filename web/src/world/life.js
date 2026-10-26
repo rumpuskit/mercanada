@@ -13,11 +13,14 @@ export const HOME_LABELS = {
   telefon: "Telefonda geziniyor",
   dinlenme: "Kanepede dinleniyor",
   temizlik: "Ev topluyor",
+  calisma: "Evden çalışıyor",
 };
 
 /** seg: simülasyon parçası (ne: "ev" | "uyku"), minute: günün dakikası. */
-export function homeActivity(seed, seg, minute, day, hobbyId) {
+export function homeActivity(seed, seg, minute, day, hobbyId, homeWork = false) {
   if (seg.ne === "uyku") return "uyku";
+  // Evden çalışan: mesai saatinde (öğle arası dışında) masasında; işe başlamadan önce kısa hazırlık.
+  if (homeWork && minute >= 540 && minute < 1080 && minute - seg.bas >= 15) return "calisma";
   const since = minute - seg.bas;
   const left = seg.son - minute;
   const r = (tag) => roll(seed, tag, day) % 100;
