@@ -7,6 +7,7 @@ import { buildKit, drawBuilding, local, makeKit } from "./city.js";
 import { FLAT_Y, FLOOR_H } from "./layout.js";
 import { homeActivity } from "./life.js";
 import { idleGesture, resetPose, sitPose } from "./people.js";
+import { buildWorkInterior, workPose } from "./workinterior.js";
 
 const WALL_H = 2.9;
 const LOW_WALL = 0.95; // kameraya bakan duvarlar bu yüksekliğe kadar kesilir
@@ -25,6 +26,7 @@ export class Dollhouse {
     this.floor = 0;
     this.group = null;
     this.spots = new Map(); // sakin indeksi -> dairedeki yerler
+    this.workSpots = new Map(); // sakin indeksi -> iş yerindeki çalışma noktası
     this.tvs = [];
     this.lights = [];
   }
@@ -45,7 +47,8 @@ export class Dollhouse {
       drawBuilding(K, b, this.floor);
       this.group.add(buildKit(K));
     }
-    this._buildFloor(b, this.floor);
+    if (b.daireler) this._buildFloor(b, this.floor);
+    else this._buildWork(b, this.floor);
     this.scene.add(this.group);
   }
 
@@ -63,6 +66,7 @@ export class Dollhouse {
     this.building = null;
     this.group = null;
     this.spots.clear();
+    this.workSpots.clear();
     this.tvs = [];
     this.lights = [];
   }
@@ -155,6 +159,45 @@ export class Dollhouse {
       const tv = add(0.06, 0.72, 1.25, x1 - 0.32, 0.75, sz, null, 0, { material: screenMat, shadow: false });
       add(0.3, 0.7, 0.3, x1 - 0.35, 0.06, hd - 0.5, "#6a8f5a"); // saksı bitkisi
 
+      // Banyo: mutfakla yemek alanı arasında, sağ köşede (kesik duvarlı); klozet, lavabo, ayna, duş.
+      const bx0 = x1 - 1.9, bz0 = -1.3, bz1 = 0.35;
+      add(0.1, 1.0, bz1 - bz0, bx0, 0.06, (bz0 + bz1) / 2, paint);
+      add(1.9, 1.0, 0.1, bx0 + 0.95, 0.06, bz1, paint);
+      add(1.8, 0.03, bz1 - bz0 - 0.1, bx0 + 0.95, 0.065, (bz0 + bz1) / 2, "#dfe6ea", 0, { shadow: false });
+      add(0.4, 0.42, 0.55, x1 - 0.35, 0.06, bz0 + 0.45, "#f6f6f4");
+      add(0.4, 0.35, 0.18, x1 - 0.35, 0.48, bz0 + 0.2, "#f6f6f4");
+      add(0.5, 0.82, 0.4, bx0 + 0.45, 0.06, bz0 + 0.3, "#f6f6f4");
+      add(0.5, 0.6, 0.03, bx0 + 0.45, 1.3, bz0 + 0.12, "#cfe3ee", 0, { shadow: false, mat: { roughness: 0.05, metalness: 0.6 } });
+      add(0.9, 0.06, 0.8, bx0 + 0.6, 0.06, bz1 - 0.5, "#e9eef0");
+      add(0.02, 1.8, 0.8, bx0 + 1.05, 0.12, bz1 - 0.5, "#cfe3ee", 0, { shadow: false, mat: { roughness: 0.05, transparent: true, opacity: 0.4 } });
+
+      // Üst mutfak dolapları, perde, kitaplık, ayaklı lamba, tablo.
+      add(2.4, 0.6, 0.35, x0 + 1.45, 1.6, -2 + 0.25, "#ebe6dd");
+      for (const dx of [-0.75, 0.75]) add(0.6, 1.45, 0.05, cx + dx, 0.75, -hd + 0.22, pick(["#c9b8a6", "#9fb3c8", "#d8c7a0", "#b9a3b8"], "perde"));
+      add(0.32, 1.9, 1.0, x0 + 0.2, 0.06, hd - 0.6, "#7a5a44");
+      for (let sh = 0; sh < 4; sh++) {
+        add(0.26, 0.04, 0.95, x0 + 0.22, 0.12 + sh * 0.45, hd - 0.6, "#6b4a35");
+        add(0.2, 0.32, 0.85, x0 + 0.24, 0.18 + sh * 0.45, hd - 0.6, ["#b8423c", "#2f4a6d", "#d9a441", "#3e8a86"][(sh + roll(key, "kitap")) % 4]);
+      }
+      add(0.04, 1.5, 0.04, x0 + 0.4, 0.06, sz - 1.45, "#3c4148");
+      add(0.35, 0.3, 0.35, x0 + 0.4, 1.5, sz - 1.45, "#f3e3c0", 0, { mat: { emissive: "#ffd9a0", emissiveIntensity: 0.2 } });
+      add(0.03, 0.6, 0.9, x0 + 0.1, 1.45, sz, pick(["#d98ca0", "#6f8fb5", "#e0b060", "#7aa37a"], "tablo"));
+
+      // Mesleğe göre köşe: masa başı çalışanlara bilgisayarlı masa, ressama şövale.
+      const jobId = i => (i != null ? this.people.works[i].job : "");
+      const occ = this.people.slotToIndex.get(slot);
+      const jj = jobId(occ);
+      if (["yazilimci", "tasarimci", "mimar", "muhasebeci", "avukat"].includes(jj)) {
+        add(1.2, 0.05, 0.6, x0 + 1.6, 0.74, hd - 0.55, "#a07a58");
+        add(0.06, 0.72, 0.06, x0 + 1.1, 0.02, hd - 0.55, "#6b4a35");
+        add(0.06, 0.72, 0.06, x0 + 2.1, 0.02, hd - 0.55, "#6b4a35");
+        add(0.6, 0.38, 0.03, x0 + 1.6, 0.95, hd - 0.75, null, 0, { material: new THREE.MeshBasicMaterial({ color: "#6fa0d8", toneMapped: false }), shadow: false });
+      } else if (["ressam", "seramikci"].includes(jj)) {
+        add(0.05, 1.6, 0.05, x0 + 1.6, 0.06, hd - 0.7, "#8a6a4a");
+        add(0.7, 0.55, 0.03, x0 + 1.6, 1.15, hd - 0.68, "#f4efe4");
+        add(0.5, 0.35, 0.035, x0 + 1.6, 1.25, hd - 0.66, "#e08a5a");
+      }
+
       // Evcil hayvan.
       const i = this.people.slotToIndex.get(slot);
       const r = i != null ? this.people.residents[i] : null;
@@ -194,9 +237,79 @@ export class Dollhouse {
     }
   }
 
-  /** Bu sakin açık kattaki dairesinde mi? */
+  /** İş yeri katı: kabuk, türüne göre döşeme ve o katta çalışanların noktaları. */
+  _buildWork(b, f) {
+    const g = this.group;
+    const y0 = f * FLOOR_H;
+    const add = (w, h, d, lx, ly, lz, color, rot = 0, opts = {}) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), opts.material ?? std(color, opts.mat));
+      mesh.position.copy(local(b, lx, y0 + ly + h / 2, lz));
+      mesh.rotation.y = b.rot + rot;
+      mesh.castShadow = opts.shadow ?? true;
+      mesh.receiveShadow = true;
+      g.add(mesh);
+      return mesh;
+    };
+    const hd = b.d / 2;
+    add(b.w + 0.3, 0.25, b.d + 0.3, 0, -0.25, 0, "#d6d0c6");
+    add(b.w + 0.3, WALL_H, 0.25, 0, 0, -hd, b.wall);
+    add(0.25, WALL_H, b.d + 0.3, -b.w / 2, 0, 0, b.wall);
+    add(0.25, WALL_H, b.d + 0.3, b.w / 2, 0, 0, b.wall);
+    add(b.w + 0.3, LOW_WALL, 0.25, 0, 0, hd, b.wall);
+    const spots = buildWorkInterior(b, f, add, (lx, lz, heading, type) => ({ p: local(b, lx, 0, lz).clone(), heading: b.rot + heading, type, y: FLAT_Y + y0 + 0.06 }));
+    for (const lx of [-b.w / 4, b.w / 4]) {
+      const lamp = new THREE.PointLight("#fff1d8", 0, 12, 1.4);
+      lamp.position.copy(local(b, lx, y0 + 2.6, 0));
+      g.add(lamp);
+      this.lights.push({ lamp, work: true });
+    }
+    // Bu iş yerinde çalışanlar: katlara dağılır, kattaki noktalara sırayla yerleşir.
+    const people = this.people;
+    const here = [];
+    for (let i = 0; i < people.n; i++) {
+      if (people.works[i].loc?.building !== b) continue;
+      if (roll(people.residents[i].seed, "kat") % b.floors !== f) continue;
+      here.push(i);
+    }
+    // Aynı noktaya düşenler yan yana dizilir (üst üste binmesinler).
+    here.forEach((i, n) => {
+      if (!spots.length) return;
+      const sp = spots[n % spots.length];
+      const lane = Math.floor(n / spots.length);
+      if (!lane) return this.workSpots.set(i, sp);
+      const off = (lane % 2 ? 1 : -1) * Math.ceil(lane / 2) * 1.3;
+      const p = sp.p.clone().add({ x: Math.cos(sp.heading) * off, y: 0, z: -Math.sin(sp.heading) * off });
+      this.workSpots.set(i, { ...sp, p });
+    });
+    this.workName = Object.values(this.world.workplaces).flat().find((w) => w?.building === b)?.name ?? null;
+  }
+
+  /** Bu sakin açık katta mı (evinde ya da işinde)? */
   contains(i) {
-    return this.spots.has(i);
+    return this.spots.has(i) || this.workSpots.has(i);
+  }
+
+  /** İşteki sakinin duruşu. */
+  workPoseFor(i, seg, time, p) {
+    const sp = this.workSpots.get(i);
+    if (!sp || seg.ne !== "is") return false;
+    resetPose(p);
+    const r = this.people.residents[i];
+    const ph = (r.seed % 1000) / 159;
+    const k = p.height / 1.75;
+    p.x = sp.p.x; p.z = sp.p.z; p.y = sp.y; p.heading = sp.heading;
+    if (sp.type === "waiter" || sp.type === "walk") {
+      // Masalar arasında gidip gelir.
+      const u = Math.sin(time * 0.25 + ph);
+      p.x += Math.cos(sp.heading) * u * 2.5; p.z -= Math.sin(sp.heading) * u * 2.5;
+      p.heading = sp.heading + (Math.cos(time * 0.25 + ph) > 0 ? Math.PI / 2 : -Math.PI / 2);
+      const phi = time * 3.2;
+      p.hipL = 0.35 * Math.sin(phi); p.hipR = -p.hipL; p.kneeL = 0.3 * Math.max(0, Math.cos(phi)); p.kneeR = 0.3 * Math.max(0, -Math.cos(phi));
+      if (sp.type === "waiter") { p.shR = 1.2; p.elR = 1.4; }
+      return true;
+    }
+    workPose(sp.type, p, time, ph, sitPose, idleGesture, k);
+    return true;
   }
 
   /** Evdeki sakinin duruşu. Evde değilse false. */
@@ -277,6 +390,7 @@ export class Dollhouse {
     if (!this.building) return;
     const { people } = this;
     for (const l of this.lights) {
+      if (l.work) { l.lamp.intensity = 8 + 18 * night; continue; }
       const i = people.slotToIndex.get(l.slot);
       const awake = i != null && people.athome[i] === 1;
       l.lamp.intensity = awake ? 4 + 26 * night : 0;

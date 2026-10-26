@@ -957,7 +957,17 @@ export class People {
         }
         atWork = trip.fromWork;
       } else {
-        if (seg.ne === "is" && !this.works[i].loc.outdoor) { this.visible[i] = 0; continue; }
+        if (seg.ne === "is" && !this.works[i].loc.outdoor) {
+          // İçeride çalışıyor: iş yerinin içi açıksa masasında/tezgâhında görünür.
+          if (this.dollhouse?.contains(i) && this.dollhouse.workPoseFor(i, seg, time, p)) {
+            p.indoor = true;
+            p.atWork = false;
+            shown.push(i);
+            continue;
+          }
+          this.visible[i] = 0;
+          continue;
+        }
         if (!this._placeState(i, k, minute, time, p)) { this.visible[i] = 0; continue; }
         atWork = seg.ne === "is";
         p.phase = time * 2;

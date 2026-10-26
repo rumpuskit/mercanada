@@ -121,6 +121,18 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
     $("card-tabs").hidden = true;
     $("card-traits").replaceChildren();
     const b = dollhouse.building;
+    if (!b.daireler) {
+      $("card-handle").textContent = dollhouse.workName ?? "Dükkân";
+      $("card-title").textContent = `${b.floors} katlı · ${dollhouse.floor + 1}. kat`;
+      const rows = [];
+      for (const [i] of dollhouse.workSpots) {
+        const seg = people.activities[i];
+        rows.push([sim.title(residents[i], today()), `@${residents[i].handle} · ${seg?.ne === "is" ? "işte" : nowText(i).toLocaleLowerCase("tr")}`, () => select(i)]);
+      }
+      $("card-now").textContent = rows.length ? `${rows.length} kişi burada çalışıyor` : "Bu katta çalışan yok";
+      facts(rows.slice(0, 12));
+      return;
+    }
     const p = sim.addressParts(b.slot0);
     $("card-handle").textContent = `${sim.sokakName(p.mahalle, p.sokak)} No ${p.bina * 2 + 1}`;
     $("card-title").textContent = `${sim.mahalleName(p.mahalle)} · ${b.floors} katlı apartman`;
@@ -151,7 +163,8 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
   function flyToFloor() {
     const { target, front } = dollhouse.focus();
     const dir = front.clone().multiplyScalar(0.72).setY(0.7).normalize();
-    flyTo(target.x, target.y, target.z, innerWidth < innerHeight ? 34 : 19, dir);
+    const size = Math.max(dollhouse.building.w, dollhouse.building.d);
+    flyTo(target.x, target.y, target.z, Math.max(innerWidth < innerHeight ? 34 : 19, size * (innerWidth < innerHeight ? 2.0 : 1.15)), dir);
   }
 
   function homeOf(i) {
@@ -166,7 +179,12 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
     const seg = people.activities[i];
     const atHome = seg && (seg.ne === "ev" || seg.ne === "uyku");
     const home = homeOf(i);
-    if (atHome && home) {
+    const workB = seg?.ne === "is" && !people.works[i].loc.outdoor ? people.works[i].loc.building : null;
+    if (workB && !["liman", "tersane"].includes(workB.kind)) {
+      const floor = sim.roll(residents[i].seed, "kat") % workB.floors;
+      if (dollhouse.building !== workB || dollhouse.floor !== floor) dollhouse.open(workB, floor);
+      if (fly) flyToFloor();
+    } else if (atHome && home) {
       const floor = Math.floor((residents[i].slot - home.slot0) / home.perFloor);
       if (dollhouse.building !== home || dollhouse.floor !== floor) dollhouse.open(home, floor);
       if (fly) flyToFloor();
@@ -182,7 +200,7 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
 
   /** Bir apartmana dokununca: içini aç. */
   function openBuilding(b) {
-    if (!b?.daireler) return;
+    if (!b || ["kulube", "ahir", "liman", "tersane", "cami"].includes(b.kind)) return;
     selected = null;
     mode = "bina";
     dollhouse.open(b, dollhouse.building === b ? dollhouse.floor : 0);

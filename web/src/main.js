@@ -169,7 +169,7 @@ canvas.addEventListener("pointerup", (e) => {
   const index = people.pick(raycaster);
   if (index != null) return ui.select(index, false);
   const building = city.pickBuilding(raycaster);
-  if (building?.daireler) ui.openBuilding(building);
+  if (building) ui.openBuilding(building);
 });
 
 addEventListener("resize", () => {
