@@ -48,6 +48,19 @@
 
     <div id="preview">Önizleme · örnek sakinler</div>
 
+    <div id="navbtns">
+      <button id="compass" aria-label="Kuzeye çevir"><span id="compass-needle">▲</span></button>
+      <button id="zoom-in" aria-label="Yakınlaştır">+</button>
+      <button id="zoom-out" aria-label="Uzaklaştır">−</button>
+    </div>
+
+    <div id="minimap">
+      <button id="minimap-toggle" aria-label="Harita">🗺</button>
+      <canvas id="minimap-canvas"></canvas>
+    </div>
+
+    <nav id="places" aria-label="Yerler"></nav>
+
     <form id="search" autocomplete="off">
       <input id="search-input" type="search" inputmode="search" enterkeyhint="search" spellcheck="false" placeholder="@kullanıcıadı ile kendini bul" aria-label="Kullanıcı adı" />
       <button type="submit">Bul</button>

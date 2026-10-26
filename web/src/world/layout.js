@@ -171,6 +171,7 @@ export class World {
 
     this._roadHCache = new Map();
     this._groundCache = new Map();
+    this.cols = new Map(); // x -> [[z0, z1]...]
     this.rows = new Map(); // z -> [[x0, x1]...]: hücre sınırlarındaki doğu-batı caddeleri, birleştirilerek çizilir
 
     this._layoutCenter();
@@ -294,6 +295,12 @@ export class World {
     }
   }
 
+  /** Kuzey-güney yönündeki sınır caddeleri (aynı hatta olanlar birleştirilir). */
+  addCol(x, z0, z1) {
+    if (!this.cols.has(x)) this.cols.set(x, []);
+    this.cols.get(x).push([Math.min(z0, z1), Math.max(z0, z1)]);
+  }
+
   /** Aynı hat üzerindeki cadde parçalarını birleştirir (üst üste binen yollar olmasın). */
   addRow(z, x0, x1) {
     if (!this.rows.has(z)) this.rows.set(z, []);
@@ -301,6 +308,15 @@ export class World {
   }
 
   _emitRows() {
+    for (const [x, list] of this.cols) {
+      list.sort((a, b) => a[0] - b[0]);
+      let [a, b] = list[0];
+      for (const [c, d] of list.slice(1)) {
+        if (c <= b + 1) b = Math.max(b, d);
+        else { this.addRoad([[x, a], [x, b]], "cadde"); [a, b] = [c, d]; }
+      }
+      this.addRoad([[x, a], [x, b]], "cadde");
+    }
     for (const [z, list] of this.rows) {
       list.sort((a, b) => a[0] - b[0]);
       let [a, b] = list[0];
@@ -582,16 +598,27 @@ export class World {
     this.labels.push({ text: "Çarşı", x: 0, z: 0, h: 45 });
   }
 
-  /** Sahil bulvarının z'si: kıyıdan 36 m içeride, yumuşatılmış. */
+  /** Sahil bulvarının z'si: kıyıdan 36 m içeride; geniş pencerede iki kez yumuşatılmış, eğimi sınırlı. */
   avenueZ(x) {
-    this._avz ??= new Map();
-    const key = Math.round(x / 10);
-    if (!this._avz.has(key)) {
-      let sum = 0;
-      for (let k = -2; k <= 2; k++) sum += this.coastPoint(key * 10 + k * 15, 60, 0, 1)[1];
-      this._avz.set(key, sum / 5 - 36);
+    if (!this._avProfile) {
+      const xs = [];
+      for (let x = -CELL_W; x <= CELL_W; x += 10) xs.push(x);
+      let zs = xs.map((x) => this.coastPoint(x, 60, 0, 1)[1] - 36);
+      for (let pass = 0; pass < 3; pass++) {
+        zs = zs.map((_, i) => {
+          let sum = 0, n = 0;
+          for (let k = -5; k <= 5; k++) { const j = i + k; if (j >= 0 && j < zs.length) { sum += zs[j]; n++; } }
+          return sum / n;
+        });
+      }
+      for (let i = 1; i < zs.length; i++) zs[i] = Math.max(zs[i - 1] - 3, Math.min(zs[i - 1] + 3, zs[i]));
+      // Kıyıya hiçbir yerde 26 m'den fazla yaklaşmasın.
+      zs = zs.map((z, i) => Math.min(z, this.coastPoint(xs[i], 60, 0, 1)[1] - 26));
+      this._avProfile = { x0: xs[0], zs };
     }
-    return this._avz.get(key);
+    const { x0, zs } = this._avProfile;
+    const f = (x - x0) / 10, i = Math.max(0, Math.min(zs.length - 2, Math.floor(f))), u = Math.max(0, Math.min(1, f - i));
+    return zs[i] + (zs[i + 1] - zs[i]) * u;
   }
 
   /** Sahil bulvarı boyunca x0'dan x1'e giden noktalar. */
@@ -604,16 +631,17 @@ export class World {
 
   /** Çevre yolu: kuzeyde hücre sınırı, doğu ve batıda hücre kenarları, güneyde kıyıyı izleyen sahil bulvarı. */
   _layoutRing() {
-    const halfW = CELL_W / 2, halfD = CELL_D / 2, r = 24;
-    const pts = [[-halfW, -halfD]];
-    const zW = this.avenueZ(-halfW), zE = this.avenueZ(halfW);
-    // Batı kenarı aşağı, köşe yayı, sahil boyunca doğuya, köşe yayı, doğu kenarı yukarı.
-    pts.push([-halfW, zW - r]);
-    for (let k = 1; k < 6; k++) { const a = (k / 6) * (Math.PI / 2); pts.push([-halfW + r - Math.cos(a) * r, zW - r + Math.sin(a) * r]); }
-    for (let x = -halfW + r + 10; x <= halfW - r - 10; x += 10) pts.push([x, this.avenueZ(x)]);
-    for (let k = 1; k < 6; k++) { const a = (k / 6) * (Math.PI / 2); pts.push([halfW - r + Math.sin(a) * r, zE - Math.cos(a) * r + r - r]); }
-    pts.push([halfW, zE - r]);
-    pts.push([halfW, -halfD]);
+    const halfW = CELL_W / 2, halfD = CELL_D / 2, r = 26;
+    const zW = this.avenueZ(-halfW + r), zE = this.avenueZ(halfW - r);
+    const pts = [[-halfW, -halfD], [-halfW, zW - r]];
+    // Batı köşesi: batıdan güneye dönen çeyrek yay.
+    for (let k = 1; k < 8; k++) { const a = Math.PI - (k / 8) * (Math.PI / 2); pts.push([-halfW + r + Math.cos(a) * r, zW - r + Math.sin(a) * r]); }
+    pts.push([-halfW + r, zW]);
+    for (let x = -halfW + r + 12; x <= halfW - r - 12; x += 12) pts.push([x, this.avenueZ(x)]);
+    pts.push([halfW - r, zE]);
+    // Doğu köşesi: güneyden doğuya, sonra yukarı.
+    for (let k = 1; k < 8; k++) { const a = Math.PI / 2 - (k / 8) * (Math.PI / 2); pts.push([halfW - r + Math.cos(a) * r, zE - r + Math.sin(a) * r]); }
+    pts.push([halfW, zE - r], [halfW, -halfD]);
     this.addRoad(pts, "cadde");
   }
 
@@ -764,6 +792,12 @@ export class World {
     // Mahalle girişinden merkeze: hücre sınırındaki doğu-batı caddesi, oradan x = 0 hattındaki
     // mahalle caddeleriyle çevre yoluna (bu hücreler her zaman daha önce kurulur).
     if (ox !== 0) this.addRow(entryZ, ox, 0);
+    // Çevre caddeleri: mahallenin dört kenarı; sokaklar bunlara bağlanır, komşu mahalleler paylaşır.
+    const halfW = CELL_W / 2;
+    this.addRow(oz - halfD, ox - halfW, ox + halfW);
+    this.addRow(oz + halfD, ox - halfW, ox + halfW);
+    this.addCol(ox - halfW, oz - halfD, oz + halfD);
+    this.addCol(ox + halfW, oz - halfD, oz + halfD);
 
     const rows = cap("sokak_per_mahalle") / SOKAK_COLS.length;
     for (let r = 0; r < rows; r++) {

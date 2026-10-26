@@ -14,6 +14,8 @@ import { Dollhouse } from "./world/interior.js";
 import { createLampLight } from "./world/lighting.js";
 import * as P from "./world/palette.js";
 import { createUI } from "./ui.js";
+import { createMapUI } from "./mapui.js";
+import { NameTags } from "./world/nametags.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -129,7 +131,9 @@ function flyTo(x, y, z, distance = 120, direction = null) {
   };
 }
 
+const nameTags = new NameTags(scene);
 const ui = createUI({ residents, people, world, dollhouse, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+const mapUI = createMapUI({ world, camera, controls, flyTo });
 
 // Bir sakine dokununca kartını aç.
 const raycaster = new THREE.Raycaster();
@@ -234,6 +238,8 @@ function tick() {
   }
 
   tryFollow();
+  nameTags.update(camera, controls.target, people, residents, ui.selected());
+  mapUI.update(real);
   renderer.render(scene, camera);
   if (frame === 1) {
     document.getElementById("loading").classList.add("done");

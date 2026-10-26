@@ -169,6 +169,132 @@ body {
   text-underline-offset: 2px;
 }
 
+#places {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 58px);
+  width: min(560px, calc(100vw - 24px));
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px;
+}
+
+#places::-webkit-scrollbar {
+  display: none;
+}
+
+#places button {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--ink);
+  font: 700 13px "Nunito", system-ui, sans-serif;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(30, 50, 80, 0.12);
+}
+
+#card:not([hidden]) ~ #places {
+  display: none;
+}
+
+#navbtns {
+  position: fixed;
+  right: 12px;
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 70px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#navbtns button {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--ink);
+  font: 800 20px "Nunito", system-ui, sans-serif;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+#compass-needle {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 16px;
+  transition: transform 0.1s linear;
+}
+
+#minimap {
+  position: fixed;
+  right: 62px;
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 70px);
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  background: var(--glass);
+}
+
+#minimap canvas {
+  display: block;
+  width: 240px;
+  height: 150px;
+  cursor: crosshair;
+}
+
+#minimap-toggle {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  #minimap {
+    right: 12px;
+    top: calc(max(12px, env(safe-area-inset-top)) + 46px);
+    bottom: auto;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+  }
+  #minimap-toggle {
+    display: block;
+    margin-left: auto;
+    width: 40px;
+    height: 34px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--glass);
+    font-size: 17px;
+    cursor: pointer;
+  }
+  #minimap canvas {
+    display: none;
+    width: min(320px, calc(100vw - 24px));
+    height: 200px;
+    border-radius: 14px;
+    margin-top: 6px;
+    box-shadow: var(--shadow);
+  }
+  #minimap.open canvas {
+    display: block;
+  }
+  #preview {
+    display: none;
+  }
+  #navbtns {
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 104px);
+  }
+}
+
 #search {
   position: fixed;
   left: 50%;
