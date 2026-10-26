@@ -233,7 +233,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   function renderPlace() {
     $("card-tabs").hidden = true;
     $("card-traits").replaceChildren();
-    const names = { cami: "Cami", liman: "Vapur iskelesi", tersane: "Tersane", kulube: "Balıkçı kulübesi", ahir: "Çiftlik", itfaiye: "İtfaiye istasyonu", garaj: "Belediye garajı", bufe: "Büfe" };
+    const names = { cami: "Cami", liman: "Vapur iskelesi", ambar: "Liman ambarı", tersane: "Tersane", kulube: "Balıkçı kulübesi", ahir: "Çiftlik", itfaiye: "İtfaiye istasyonu", garaj: "Belediye garajı", bufe: "Büfe" };
     const wp = Object.values(world.workplaces).flat().find((w) => w?.building === place);
     $("card-handle").textContent = wp?.name ?? names[place.kind] ?? "Bina";
     $("card-title").textContent = place.address ?? "";
@@ -297,7 +297,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   /** Bir apartmana dokununca: içini aç. */
   function openBuilding(b) {
     if (!b) return;
-    if (["kulube", "ahir", "liman", "tersane", "cami", "itfaiye", "garaj"].includes(b.kind)) {
+    if (["kulube", "ahir", "liman", "tersane", "ambar", "cami", "itfaiye", "garaj"].includes(b.kind)) {
       selected = null; mode = "yer"; place = b;
       dollhouse.close();
       showCard();

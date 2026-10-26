@@ -72,21 +72,40 @@ export class NameTags {
       if (d < 70 * 70) near.push([d, i]);
     }
     near.sort((a, b) => a[0] - b[0]);
-    if (selected != null && selected !== hide && people.visible[selected] && !near.slice(0, MAX_TAGS).some(([, i]) => i === selected)) near.unshift([0, selected]);
+    if (selected != null && selected !== hide && people.visible[selected]) {
+      const j = near.findIndex(([, i]) => i === selected);
+      const item = j >= 0 ? near.splice(j, 1)[0] : [0, selected];
+      near.unshift(item);
+    }
     const fade = Math.min(1, (SHOW_WITHIN - camDist) / 12);
-    near.slice(0, MAX_TAGS).forEach(([d2, i], k) => {
-      const s = this.sprites[k];
+    // Ekranda çakışan etiketlerden yalnızca öndeki (yakındaki) gösterilir; seçili sakininki her zaman.
+    const H = innerHeight, W = innerWidth;
+    const k1 = (0.022 / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2))) * H; // etiket yüksekliği (px)
+    const placed = [];
+    const v = this._v ??= new THREE.Vector3();
+    let k = 0;
+    for (const [d2, i] of near) {
+      if (k >= MAX_TAGS) break;
       const { tex, aspect } = this._texture(residents[i].handle, i === selected);
+      const d = Math.sqrt(d2);
+      const h = Math.max(0.28, d * 0.022);
+      const y = P[i * 3 + 1] + people.colors[i].height + 0.35 + h * 0.5;
+      v.set(P[i * 3], y, P[i * 3 + 2]).project(camera);
+      if (v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) continue;
+      const sx = (v.x * 0.5 + 0.5) * W, sy = (-v.y * 0.5 + 0.5) * H;
+      const ph = Math.max(k1, (0.28 / Math.max(d, 0.1)) * (k1 / 0.022)), pw = ph * aspect;
+      const r = [sx - pw / 2 - 3, sy - ph / 2 - 2, sx + pw / 2 + 3, sy + ph / 2 + 2];
+      if (i !== selected && placed.some((q) => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) continue;
+      placed.push(r);
+      const s = this.sprites[k++];
       if (s.material.map !== tex) {
         s.material.map = tex;
         s.material.needsUpdate = true;
       }
       s.material.opacity = fade;
-      const d = Math.sqrt(d2);
-      const h = Math.max(0.28, d * 0.022);
       s.scale.set(h * aspect, h, 1);
-      s.position.set(P[i * 3], P[i * 3 + 1] + people.colors[i].height + 0.35 + h * 0.5, P[i * 3 + 2]);
+      s.position.set(P[i * 3], y, P[i * 3 + 2]);
       s.visible = true;
-    });
+    }
   }
 }

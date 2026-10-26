@@ -113,6 +113,7 @@ export function makeKit() {
   return {
     B: {
       walls: new Batch(box, worldTextured(std(0xffffff, { roughness: 0.92 }), T.plaster(), 6)),
+      sheet: new Batch(box, worldTextured(std(0xffffff, { roughness: 0.6, metalness: 0.25 }), T.sheet(), 1.6)),
       plinth: new Batch(box, worldTextured(std("#b4ada3"), T.stoneBase(), 2.4)),
       trims: new Batch(box, std(0xffffff, { roughness: 0.7 }), { shadow: false }),
       hips: HIP_RATIOS.map((r) => new Batch(hipRoof(r), worldTextured(std(0xffffff, { roughness: 0.75, flatShading: true }), T.tiles(), 1.6))),
@@ -168,8 +169,8 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   const st = b.style ?? {};
   // Duvar ve taş taban zeminin 0,8 m altından başlar: arazideki küçük iniş çıkışlar binanın dibinde
   // boşluk ya da titreşen kesişme bırakmaz.
-  B.walls.add(local(b, 0, -0.8, 0), b.rot, s.set(b.w, h + 0.8, b.d), b.wall);
-  B.plinth.add(local(b, 0, -0.8, 0), b.rot, s.set(b.w + 0.12, 1.4, b.d + 0.12));
+  (b.industrial ? B.sheet : B.walls).add(local(b, 0, -0.8, 0), b.rot, s.set(b.w, h + 0.8, b.d), b.wall);
+  B.plinth.add(local(b, 0, -0.8, 0), b.rot, s.set(b.w + 0.12, b.industrial ? 1.6 : 1.4, b.d + 0.12));
   // Kat silmeleri.
   for (let f = 1; f < floors; f++) B.trims.add(local(b, 0, f * FLOOR_H - 0.1, 0), b.rot, s.set(b.w + 0.14, 0.2, b.d + 0.14), "#f6f3ee");
   // Çatı.
@@ -187,7 +188,9 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     B.hips[k].add(local(b, 0, h, 0), b.rot, s.set(b.w + 1, b.d * 0.3, b.d + 1), b.roof);
     if (b.kind === "konut") B.chimneys.add(local(b, b.w * 0.25, h + b.d * 0.12, -b.d * 0.15), b.rot, s.set(0.6, b.d * 0.22, 0.6));
   } else if (b.roofType === "gable") {
-    B.gable.add(local(b, 0, h, 0), b.rot + Math.PI / 2, s.set(b.d + 0.8, Math.min(5, b.w * 0.35), b.w + 0.8), b.roof);
+    // Endüstriyel yapılarda çatı basık (sac, düşük eğim).
+    const rh = b.industrial ? Math.min(2.6, b.d * 0.16) : Math.min(5, b.w * 0.35);
+    B.gable.add(local(b, 0, h, 0), b.rot + Math.PI / 2, s.set(b.d + 0.8, rh, b.w + 0.8), b.roof);
   } else {
     B.walls.add(local(b, 0, h, 0), b.rot, s.set(b.w + 0.3, 0.12, b.d + 0.3), "#d6d0c6");
     for (const [lx, lz, w, d] of [[0, b.d / 2, b.w + 0.3, 0.3], [0, -b.d / 2, b.w + 0.3, 0.3], [b.w / 2, 0, 0.3, b.d], [-b.w / 2, 0, 0.3, b.d]]) {
@@ -256,6 +259,42 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     return;
   }
 
+  if (b.industrial) {
+    // Endüstriyel yapı (ambar, tersane atölyesi, ahır): önde büyük sürgülü kapılar ve yanında personel
+    // kapısı; üstte boydan boya şerit pencere; yan cephelerde havalandırma panjurları. Kat pencereleri yok.
+    const tall = h >= 6;
+    const n = Math.max(1, Math.floor(b.w / 13));
+    const dw = Math.min(5.5, b.w / n - 2.5), dh = tall ? Math.min(5.2, h - 1.6) : Math.min(3.2, h - 0.6);
+    for (let k = 0; k < n; k++) {
+      const lx = -b.w / 2 + (k + 0.5) * (b.w / n);
+      B.signs.add(local(b, lx, 0.1, b.d / 2 + 0.05), b.rot, s.set(dw, dh, 0.08), st.door ?? "#5b6b7d");
+      for (let r = 1; r < Math.floor(dh / 0.45); r++) B.trims.add(local(b, lx, 0.1 + r * 0.45, b.d / 2 + 0.1), b.rot, s.set(dw, 0.04, 0.03), "#3f4a57");
+      B.rails.add(local(b, lx, 0.1 + dh, b.d / 2 + 0.12), b.rot, s.set(dw + 0.5, 0.18, 0.18));
+    }
+    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.6, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
+    B.slabs.add(local(b, b.w / 2 - 1.6, 2.6, b.d / 2 + 0.5), b.rot, s.set(1.8, 0.1, 1.0));
+    if (tall) {
+      const ly = h - 1.35;
+      for (const side of [1, -1]) {
+        const z = side * (b.d / 2);
+        const segs = Math.max(1, Math.round(b.w / 4));
+        for (let k = 0; k < segs; k++) {
+          const lx = -b.w / 2 + (k + 0.5) * (b.w / segs);
+          addGlass(b, lx, ly, z + side * 0.06, b.w / segs - 0.3, 0.8, side < 0, { workplace: b.kind, seed: k + (side < 0 ? 50 : 0) });
+        }
+        B.frames.add(local(b, 0, ly - 0.5, z), b.rot, s.set(b.w - 0.4, 1.0, 0.1));
+      }
+    }
+    for (const side of [-1, 1]) {
+      const fake = { ...b, rot: b.rot + (side * Math.PI) / 2, w: b.d, d: b.w };
+      for (let k = 0; k < 2; k++) B.trims.add(local(fake, (k - 0.5) * b.d * 0.4, h - 1.8, b.w / 2 + 0.06), fake.rot, s.set(1.2, 0.9, 0.06), "#5b636e");
+    }
+    // Dış cephede kurşun borular (yağmur oluğu) ve kapı üstü lamba.
+    for (const lx of [-b.w / 2 + 0.3, b.w / 2 - 0.3]) B.rails.add(local(b, lx, -0.2, b.d / 2 + 0.12), b.rot, s.set(0.14, h + 0.2, 0.14));
+    if (st.sign) B.signs.add(local(b, -b.w / 4, h - 2.6, b.d / 2 + 0.12), b.rot, s.set(Math.min(10, b.w * 0.4), 0.9, 0.1), st.sign);
+    return;
+  }
+
   // İş yerleri ve diğer binalar.
   const perFloor = Math.max(2, Math.round(b.w / 3.4));
   const bay = b.w / perFloor;
@@ -295,7 +334,8 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
         addGlass(b, lx, f * FLOOR_H + 1.6, b.d / 2 + 0.05, bay - 0.25, FLOOR_H - 0.5, false, owner(f * perFloor + c));
         addGlass(b, lx, f * FLOOR_H + 1.6, -b.d / 2 - 0.05, bay - 0.25, FLOOR_H - 0.5, true, owner(f * perFloor + c + 1));
       } else {
-        addWindow(b, lx, f * FLOOR_H + 0.95, 1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c));
+        // Garajlı binalarda zemin katın önü kapılarla dolu: orada pencere yok.
+        if (!(f === 0 && st.garage)) addWindow(b, lx, f * FLOOR_H + 0.95, 1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c));
         addWindow(b, lx, f * FLOOR_H + 0.95, -1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c + 7));
       }
       if (st.balconies && f > 0) {
@@ -616,11 +656,48 @@ function buildFeatures(world) {
         add(new THREE.CylinderGeometry(f.r, f.r, 0.1, 28), water, f.x, FLAT_Y + 0.38, f.z, 0, false);
         break;
       }
-      case "havuz":
-        add(new THREE.BoxGeometry(f.w + 4, 0.3, f.d + 4), std("#efe9df"), f.x, FLAT_Y + 0.15, f.z);
-        add(new THREE.BoxGeometry(f.w, 0.1, f.d), new THREE.MeshStandardMaterial({ color: "#5cc7e0", roughness: 0.05 }), f.x, FLAT_Y + 0.31, f.z, 0, false);
-        for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(0.7, 0.3, 1.9), white, f.x - f.w / 2 + 2 + i * 4.2, FLAT_Y + 0.45, f.z + f.d / 2 + 1.4);
+      case "havuz": {
+        // Açık yüzme havuzu: taş güverte, gömme havuz (mavi karo iç duvar, açık mavi taban, yarı saydam
+        // su), kenar taşı, kulvar ipleri, merdivenler; güneyde şezlong ve şemsiyeler, çit, duşlar.
+        const deckY = FLAT_Y + 0.3, tile = std("#5fa9c9", { roughness: 0.3 }), coping = std("#f4f1ea");
+        const hw = f.w / 2, hd = f.d / 2, depth = 1.6;
+        for (const [x, z, w, d] of [[0, -hd - 3, f.w + 8, 6], [0, hd + 3.5, f.w + 8, 7], [-hw - 2, 0, 4, f.d], [hw + 2, 0, 4, f.d]]) add(new THREE.BoxGeometry(w, 0.3, d), stone, f.x + x, deckY - 0.15, f.z + z);
+        add(new THREE.BoxGeometry(f.w, 0.1, f.d), std("#bfe6f2"), f.x, deckY - depth, f.z, 0, false);
+        for (const [x, z, w, d] of [[0, -hd, f.w, 0.2], [0, hd, f.w, 0.2], [-hw, 0, 0.2, f.d], [hw, 0, 0.2, f.d]]) {
+          add(new THREE.BoxGeometry(w, depth, d), tile, f.x + x, deckY - depth / 2, f.z + z, 0, false);
+          add(new THREE.BoxGeometry(w + (d > w ? 0.6 : 0.6), 0.08, d + (d > w ? 0 : 0.4)), coping, f.x + x, deckY + 0.04, f.z + z, 0, false);
+        }
+        add(new THREE.BoxGeometry(f.w - 0.2, 0.04, f.d - 0.2), new THREE.MeshStandardMaterial({ color: "#3fb6d8", roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.72 }), f.x, deckY - 0.18, f.z, 0, false);
+        for (let k = 1; k < 5; k++) add(new THREE.CylinderGeometry(0.05, 0.05, f.w - 0.4, 6).rotateZ(Math.PI / 2), std(k % 2 ? "#d8342b" : "#f4f1ea"), f.x, deckY - 0.15, f.z - hd + (k * f.d) / 5, 0, false);
+        for (const sx of [-1, 1]) {
+          const lx = f.x + sx * (hw - 1.5), lz = f.z - hd + 0.25;
+          for (const dx of [-0.3, 0.3]) add(new THREE.TorusGeometry(0.35, 0.03, 6, 10, Math.PI).rotateY(Math.PI / 2), metal, lx + dx, deckY + 0.2, lz, 0, false);
+          for (let r = 0; r < 3; r++) add(new THREE.BoxGeometry(0.6, 0.04, 0.12), metal, lx, deckY - 0.35 - r * 0.35, lz + 0.08, 0, false);
+        }
+        // Şezlonglar ve şemsiyeler (güney güvertesi).
+        for (let i = 0; i < 8; i++) {
+          const x = f.x - hw + 1.6 + i * ((f.w - 3.2) / 7), z = f.z + hd + 3.3;
+          add(new THREE.BoxGeometry(0.7, 0.12, 1.9), white, x, deckY + 0.32, z);
+          const back = add(new THREE.BoxGeometry(0.7, 0.08, 0.7), white, x, deckY + 0.5, z - 0.85, 0, false);
+          back.rotation.x = 0.7;
+          for (const [dx, dz] of [[-0.3, -0.8], [0.3, -0.8], [-0.3, 0.8], [0.3, 0.8]]) add(new THREE.BoxGeometry(0.04, 0.26, 0.04), metal, x + dx, deckY + 0.13, z + dz, 0, false);
+          if (i % 2 === 0) {
+            add(new THREE.CylinderGeometry(0.03, 0.03, 2.4, 6), metal, x + 1.1, deckY + 1.2, z - 0.4, 0, false);
+            add(new THREE.ConeGeometry(1.5, 0.45, 8), std(["#d8342b", "#2f5d8a", "#f2d36b", "#3e8a86"][(i / 2) % 4]), x + 1.1, deckY + 2.5, z - 0.4);
+          }
+        }
+        // Çit (güverte çevresi, kuzeyde giriş açıklığı) ve duşlar.
+        const fw = f.w + 8, fd = f.d + 13, fz = f.z + 0.5;
+        for (const [x, z, w, d] of [[0, fd / 2, fw, 0.05], [-fw / 2, 0, 0.05, fd], [fw / 2, 0, 0.05, fd], [-fw / 4 - 1.5, -fd / 2, fw / 2 - 3, 0.05], [fw / 4 + 1.5, -fd / 2, fw / 2 - 3, 0.05]]) {
+          add(new THREE.BoxGeometry(w, 1.1, d), new THREE.MeshStandardMaterial({ color: "#cfe3ee", transparent: true, opacity: 0.35, roughness: 0.1 }), f.x + x, deckY + 0.55, fz + z, 0, false);
+          add(new THREE.BoxGeometry(w + 0.04, 0.05, d + 0.04), metal, f.x + x, deckY + 1.12, fz + z, 0, false);
+        }
+        for (const sx of [-1, 1]) {
+          add(new THREE.CylinderGeometry(0.04, 0.04, 2.3, 6), metal, f.x + sx * (hw + 2.5), deckY + 1.15, f.z - hd - 2, 0, false);
+          add(new THREE.CylinderGeometry(0.15, 0.08, 0.1, 10), metal, f.x + sx * (hw + 2.5), deckY + 2.25, f.z - hd - 1.75, 0, false);
+        }
         break;
+      }
       case "tezgah": {
         const c = P.CLOTHES[f.c % P.CLOTHES.length];
         add(new THREE.BoxGeometry(3, 0.9, 1.6), wood, f.x, FLAT_Y + 0.5, f.z);

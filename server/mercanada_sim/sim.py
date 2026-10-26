@@ -142,6 +142,10 @@ def job(r: dict) -> dict:
     jobs = catalog()["meslekler"]
     i = _find(jobs, _override(r, "meslek"))
     if i < 0:
+        # Kadrolu işler (fener bekçisi, cankurtaran): geliş sırasına göre sabit kontenjan, nüfusla orantılı.
+        slot = int(r.get("slot", -1))
+        i = next((k for k, j in enumerate(jobs) if j.get("kadro") and slot >= 0 and slot % int(j["kadro"]["her"]) == int(j["kadro"]["sira"])), -1)
+    if i < 0:
         i = _pick_weighted(jobs, roll(r["seed"], "meslek"))
     return jobs[i]
 

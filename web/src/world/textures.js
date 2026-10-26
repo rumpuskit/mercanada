@@ -244,6 +244,24 @@ export function plaster() {
   }));
 }
 
+/** Oluklu sac: dikey nervürler (gri tonlu; duvar rengiyle çarpılır). */
+export function sheet() {
+  return (cache.sheet ??= canvasTexture(128, (ctx, sz) => {
+    ctx.fillStyle = "#e6e6e6";
+    ctx.fillRect(0, 0, sz, sz);
+    for (let x = 0; x < sz; x += 8) {
+      const g = ctx.createLinearGradient(x, 0, x + 8, 0);
+      g.addColorStop(0, "rgba(0,0,0,0.16)");
+      g.addColorStop(0.45, "rgba(255,255,255,0.28)");
+      g.addColorStop(1, "rgba(0,0,0,0.12)");
+      ctx.fillStyle = g;
+      ctx.fillRect(x, 0, 8, sz);
+    }
+    const rand = rng("sac");
+    speckle(ctx, sz, rand, 1500, ["rgba(0,0,0,0.05)", "rgba(120,80,40,0.05)"], 1.2);
+  }));
+}
+
 /** Kiremit: sıra sıra yarım yuvarlak oluklar (gri tonlu; çatı rengiyle çarpılır). */
 export function tiles() {
   return (cache.tiles ??= canvasTexture(128, (ctx, sz) => {

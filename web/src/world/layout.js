@@ -645,7 +645,7 @@ export class World {
     this.places.saha = { anchors: [[145, -84]], spread: 20, path: [[145, -CELL_D / 2]] };
     this.block(90, -120, 200, -48, 0);
     this.features.push({ type: "havuz", x: 140, z: 85, w: 25, d: 12 });
-    this.block(124, 76, 156, 94, 0);
+    this.block(140 - 12.5 - 10, 85 - 6 - 10, 140 + 12.5 + 10, 85 + 6 + 10, 0); // havuz, güvertesi ve ağaç taçları için pay
     // Otoparklar: çevre yolunun iç kenarında, çarşının iki yanında; girişleri çevre yolundan.
     this.parkingLots = [];
     for (const side of [-1, 1]) {
@@ -736,6 +736,57 @@ export class World {
     (this.workplaces[kind] ??= [])[index] = { name: names[index % names.length], outdoor: OUTDOOR_KINDS.has(kind), ...entry };
   }
 
+  /**
+   * Yük limanı: vapur iskelesinin doğusunda beton rıhtım. Kıyı şeridini ve denize uzanan önlüğü kaplayan
+   * tek parça platform; yanaşmış konteyner gemisi, rıhtım vinci, istif sahası, ambar, tır ve forklift.
+   * Çitle çevrili, kapısı bulvara açılır. Liman işçilerinin görev yerleri (posts) burada tanımlanır;
+   * araçların ve vincin hareketi port.js'teki zaman işlevlerinden gelir.
+   */
+  _layoutPort(toHub) {
+    const x0 = 40, x1 = 150, z0 = 176, z1 = 246, top = FLAT_Y + 0.3;
+    const gateX = 95;
+    const P = {
+      x0, x1, z0, z1, top, gateX,
+      ship: { x: 95, z: z1 + 7.1, len: 84, beam: 13, depth: 6.6 },
+      crane: { x: 95, legX: [86, 104], landZ: 226, seaZ: 242 },
+      transfer: [95, 234],
+      stack: { x0: 108, x1: 147, z0: 201, z1: 223 },
+      warehouse: { x: 61, z: 186, w: 38, d: 15 },
+      truck: { x: 52, z: 207, heading: 0 },
+      booth: [gateX + 6.5, z0 + 3.2],
+      benches: [[86, 196.5, Math.PI], [90, 196.5, Math.PI]],
+      masts: [[x0 + 3, z1 - 6], [x1 - 3, z1 - 6], [x1 - 3, z0 + 6], [x0 + 46, z0 + 26]],
+    };
+    // Gece rıhtımı aydınlatan direkler (ışık haritası için beyaz, geniş).
+    for (const [mx, mz] of P.masts) this.lamps.push({ x: mx, z: mz, dir: Math.atan2(95 - mx, 215 - mz), r: 40, flood: true });
+    this.port = P;
+    this.piers.push({ x0, x1, z0, z1, top });
+    this.block(x0, z0 - 2, x1, z1, 2);
+    // Ambar: rıhtımın kara tarafında, kapıları denize (güneye) bakar.
+    const wh = P.warehouse;
+    this.addBuilding({ kind: "ambar", x: wh.x, z: wh.z, rot: 0, w: wh.w, d: wh.d, floors: 2, roofType: "gable", wall: "#c9d2dc", roof: "#6f7f92", industrial: true, style: { door: "#d9822b", sign: "#1f3b5a" }, address: "Liman Ambarı, Yük Limanı" });
+    // Kapı: bulvardan kısa bir giriş yolu; işçiler de buradan girer.
+    this.addRoad([[gateX, this.avenueZ(gateX)], [gateX, z0 + 1]], "giris");
+    const door = [gateX - 4.5, z0 + 1.5];
+    // Görev yerleri: her işçi vardiyasında bunlardan birine düşer; kalanlar ambarın içinde çalışır.
+    const posts = [];
+    const post = (type, x, z, heading = 0, extra = {}) => posts.push({ post: type, x, z, heading, ...extra });
+    post("vinc", P.crane.x, P.crane.landZ);
+    post("isaretci", 101.5, 236.5, Math.PI * 1.2);
+    post("istif", 0, 0, 0, { k: 0 });
+    post("forklift", 0, 0, 0, { k: 0 });
+    for (let k = 0; k < 4; k++) post("bagci", 64 + k * 17, 0, 0, { k });
+    for (const bx of [52, 136, 70]) post("palamar", bx, z1 - 2.2, 0);
+    for (let k = 0; k < 3; k++) post("kontrol", 0, 0, 0, { k });
+    post("bekci", P.booth[0], P.booth[1], Math.PI);
+    for (let k = 0; k < 3; k++) post("ambar", 0, 0, 0, { k });
+    post("sofor", P.truck.x + 2.2, P.truck.z + 7.5, -Math.PI / 2);
+    for (const [bx, bz, h] of P.benches) for (const dx of [-0.5, 0.5]) post("mola", bx + dx, bz, h);
+    P.posts = posts;
+    this._addWorkplace("liman", 0, { door, path: [door, [gateX, this.avenueZ(gateX)], ...toHub(gateX)], anchor: [95, 215], spread: 20 });
+    this.labels.push({ text: "Yük Limanı", x: 98, z: 215, h: 24 });
+  }
+
   // --- güney kıyısı: liman, iskele, tersane, balıkçı koyu, sahil yolu ---
 
   _layoutCoast() {
@@ -743,7 +794,8 @@ export class World {
 
     // Sahil yolu: bulvarla deniz arasında, kıyıyı izleyen taş gezinti yolu.
     const promenade = [];
-    for (let x = -170; x <= 140; x += 10) promenade.push([x, coast(x)[1] - 8]);
+    // Doğuda yük limanının çitine kadar (x = 30).
+    for (let x = -170; x <= 30; x += 10) promenade.push([x, coast(x)[1] - 8]);
     this.addRoad(promenade, "sahil");
     const promAt = (x) => promenade[Math.max(0, Math.min(promenade.length - 1, Math.round((x + 170) / 10)))];
     const avZ0 = this.avenueZ(0);
@@ -756,10 +808,9 @@ export class World {
     this.features.push({ type: "iskele", x: 0, z: lz - 4, len: 80, w: 10 });
     this.piers.push({ x0: -5, x1: 5, z0: lz - 4, z1: lz + 76, top: 1.53 });
     this.features.push({ type: "vapur", x: 13, z: lz + 40 });
-    this.addBuilding({ kind: "liman", x: -24, z: lz - 21, rot: 0, w: 16, d: 9, floors: 2, roofType: "hip", wall: "#f6f1e9", roof: "#8c4b3a", workplace: true, address: "Vapur İskelesi, Liman" });
-    const limanPath = [[0, lz - 6], [0, avZ0], HUB];
-    cat().isyerleri.liman.forEach((_, i) => this._addWorkplace("liman", i, { door: [0, lz + 4], path: limanPath, anchor: [0, lz + 20 + i * 10], spread: 4 }));
-    this.labels.push({ text: "Liman", x: 0, z: lz + 20, h: 22 });
+    this.addBuilding({ kind: "liman", x: -24, z: lz - 21, rot: 0, w: 16, d: 9, floors: 2, roofType: "hip", wall: "#f6f1e9", roof: "#8c4b3a", address: "Vapur İskelesi, Liman" });
+    this.labels.push({ text: "Vapur İskelesi", x: 0, z: lz + 20, h: 22 });
+    this._layoutPort(toHub);
 
     // Balık tutma iskelesi.
     const [ix, iz] = coast(-90);
@@ -776,7 +827,7 @@ export class World {
 
     // Tersane: gezinti yolunun bittiği doğu kıyısında, deniz tarafında.
     const [tx, tz] = coast(198);
-    this.addBuilding({ kind: "tersane", x: tx, z: tz - 13, rot: 0, w: 30, d: 18, floors: 3, roofType: "gable", wall: "#c9d2dc", roof: "#6f7f92", workplace: true, industrial: true, address: "Tersane Yolu No 1, Doğu Kıyısı" });
+    this.addBuilding({ kind: "tersane", x: tx, z: tz - 13, rot: 0, w: 30, d: 18, floors: 3, roofType: "gable", wall: "#c9d2dc", roof: "#6f7f92", workplace: true, industrial: true, style: { door: "#2f5d8a", sign: "#2f5d8a" }, address: "Tersane Yolu No 1, Doğu Kıyısı" });
     this.features.push({ type: "vinc", x: tx + 21, z: tz - 3 });
     this.features.push({ type: "tekne", x: tx - 6, z: tz + 17, rot: 0.15, len: 16 });
     const tDoor = [tx, tz - 23];
@@ -857,7 +908,7 @@ export class World {
         this.plazas.push({ x0: fx0, z0: fz0, x1: fx0 + 82, z1: fz0 + 48, kind: "tarla", crop: (f + i) % 3 });
         this.block(fx0, fz0, fx0 + 82, fz0 + 48, 0);
       }
-      const barn = this.addBuilding({ kind: "ahir", x: x0 + 85, z: -14, rot: 0, w: 18, d: 12, floors: 2, roofType: "gable", wall: "#b5563f", roof: "#6d6a66", workplace: true, address: `${name}, Köy Yolu` });
+      const barn = this.addBuilding({ kind: "ahir", x: x0 + 85, z: -14, rot: 0, w: 18, d: 12, floors: 2, roofType: "gable", wall: "#b5563f", roof: "#6d6a66", workplace: true, industrial: true, style: { door: "#7a3a2a" }, address: `${name}, Köy Yolu` });
       const door = [barn.x, -7.5];
       this._addWorkplace("tarla", i, { door, path: [door, [barn.x, 0], [-halfW, 0], HUB], anchor: [x0 + 85, z0 + 51], spread: 40 });
     });

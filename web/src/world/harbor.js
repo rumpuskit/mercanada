@@ -2,8 +2,9 @@
 // Tekneler ve vapur dalgayla hafifçe sallanır.
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { buildPort } from "./port.js";
 
-function colored(geo, color) {
+export function colored(geo, color) {
   const g = geo.index ? geo.toNonIndexed() : geo;
   const c = new THREE.Color(color);
   const arr = new Float32Array(g.attributes.position.count * 3);
@@ -13,17 +14,17 @@ function colored(geo, color) {
   return g;
 }
 
-const box = (w, h, d, x, y, z, color) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y, z), color);
-const cyl = (r0, r1, h, x, y, z, color, seg = 8) => colored(new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z), color);
+export const box = (w, h, d, x, y, z, color) => colored(new THREE.BoxGeometry(w, h, d).translate(x, y, z), color);
+export const cyl = (r0, r1, h, x, y, z, color, seg = 8) => colored(new THREE.CylinderGeometry(r0, r1, h, seg).translate(x, y, z), color);
 
-function merged(parts) {
+export function merged(parts) {
   const g = mergeGeometries(parts);
   g.computeVertexNormals();
   return g;
 }
 
-const MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
-const METAL = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.5 });
+export const MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
+export const METAL = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.5 });
 
 /** Tahta iskele: x merkez, z başlangıç (kıyı), +z yönünde len metre, w genişlik, döşeme üstü top. */
 function pier(f, top) {
@@ -121,7 +122,7 @@ function ferry() {
 }
 
 /** a'dan b'ye ince çubuk (boru, halat). */
-function rod(a, b, r, color) {
+export function rod(a, b, r, color) {
   const d = new THREE.Vector3().subVectors(b, a), L = d.length();
   const g = new THREE.CylinderGeometry(r, r, L, 6).translate(0, L / 2, 0);
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
@@ -133,7 +134,7 @@ function rod(a, b, r, color) {
  * karina. Güverte, küpeşte ve iç borda aynı kesit işlevlerinden türetilir; hiçbir parça gövdeden taşmaz.
  * Su hattı y = 0'dadır (altı zehirli boya rengi). Dönen: geometri ve güverte yardımcıları.
  */
-function hull(len, beam, depth, colors) {
+export function hull(len, beam, depth, colors) {
   const N = 18, J = 7;
   const halfW = (s) => (s < 0.55 ? 0.86 + 0.14 * Math.sin((s / 0.55) * Math.PI / 2) : Math.pow(Math.cos(((s - 0.55) / 0.45) * Math.PI / 2), 0.75)) * beam / 2 + 0.015;
   const sheer = (s) => depth * (0.62 + 0.3 * s * s);
@@ -284,7 +285,11 @@ export function buildHarbor(world) {
       floating.push({ obj: m, base: 0.05, amp: 0.08 + 0.02 * (10 - Math.min(10, len)), roll: 0.04, ph: f.x * 0.13 + f.z * 0.07, rot: f.rot ?? 0 });
     }
   }
+  const port = world.port ? buildPort(world) : null;
+  if (port) group.add(port);
+  group.userData.setNight = (n) => port?.userData.setNight(n);
   group.userData.tick = (t) => {
+    port?.userData.tick(globalThis.__portT ?? t); // __portT: denetimde belirli bir anı görmek için
     for (const b of floating) {
       b.obj.position.y = b.base + Math.sin(t * 0.9 + b.ph) * b.amp;
       b.obj.rotation.z = Math.sin(t * 0.7 + b.ph * 1.7) * b.roll;

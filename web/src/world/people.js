@@ -13,6 +13,7 @@ import { activityAt, dayPlan, hobby, job, look, pet, roll, workplace } from "../
 import { Crowd } from "./human.js";
 import { PedNav } from "./nav.js";
 import { pedWait } from "./signals.js";
+import { craneSeat, forkliftSeat, portMotion, shipWalkY, stackerSeat } from "./port.js";
 import { pointAt } from "./traffic.js";
 import * as P from "./palette.js";
 
@@ -238,10 +239,11 @@ export class People {
         }
       });
     }
-    // Dışarıdaki iş yerlerinde her çalışana ayrı bir çalışma noktası.
+    // Dışarıdaki iş yerlerinde her çalışana ayrı bir çalışma noktası. Yük limanında görev yerleri sabit.
     for (const [kind, list] of Object.entries(w.workplaces)) {
       list.forEach((loc, idx) => {
         if (!loc?.outdoor) return;
+        if (kind === "liman" && w.port) { for (const q of w.port.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
         const center = loc.anchor;
         const rad = Math.max(9, (loc.spread ?? 6) * 1.6);
         const toward = (x, z) => Math.atan2(center[0] - x, center[1] - z);
@@ -736,14 +738,99 @@ export class People {
       const [ax, az] = it ? [it.x, it.z] : loc.anchor;
       switch (this.works[i].job) {
         case "liman_iscisi": {
-          // Kasaları iskelenin başından vapura taşır.
-          const pier = loc.anchor;
-          const lane = pier[0] - 3 + (s % 3) * 1.2;
-          const r = pingPong([[lane, pier[1] - 14], [lane, pier[1] + 14]], 1.0, ph * 10);
-          stand(at.x, at.z, r.heading);
-          walkPose(p, r.d / (0.72 * kk) * Math.PI);
-          if (!r.back) { p.props = ["kasa"]; p.shL = p.shR = 0.9; p.elL = p.elR = 1.1; p.abL = p.abR = 0.05; }
-          return true;
+          // Yük limanında görev yeri (post) olan çalışır; görevi olmayanlar ambarın içindedir.
+          const PT = w.port;
+          if (!PT || !it?.post) return false;
+          const M = portMotion(PT, t);
+          const seat = (q, look = 0) => {
+            p.x = q.x; p.z = q.z; p.heading = q.heading; p.y = q.y;
+            sitPose(p, q.y, kk);
+            p.shL = p.shR = 0.95; p.elL = p.elR = 0.7; p.lean = 0.1; p.headYaw = look;
+          };
+          switch (it.post) {
+            case "vinc": {
+              // Kabinde, aşağıya (kıskaca) bakarak kollarla kumanda eder.
+              seat(craneSeat(PT, M));
+              p.headPitch = 0.55; p.shR = 0.7 + 0.15 * Math.sin(t * 1.3); p.elR = 1.1;
+              return true;
+            }
+            case "istif": {
+              const q = stackerSeat(PT, M);
+              seat(q, M.stacker.y > PT.top + 4 ? 0 : 0.1 * Math.sin(t * 0.5));
+              return true;
+            }
+            case "forklift": {
+              const q = forkliftSeat(PT, M);
+              seat(q, q.rev ? 2.2 : 0);
+              return true;
+            }
+            case "isaretci": {
+              // Vinç hareket ederken kollarıyla yön gösterir; yeleği turuncu, gözü kıskaçta.
+              stand(it.x, it.z, Math.atan2(PT.crane.x - it.x, M.crane.z - it.z));
+              const busy = M.crane.y < PT.top + 17;
+              if (busy) { p.shR = 1.6 + 0.4 * Math.sin(t * 2.6); p.elR = 0.3; p.shL = 0.6; p.elL = 0.4; p.headPitch = -0.35; }
+              else idleGesture(p, t, ph, false);
+              return true;
+            }
+            case "bagci": {
+              // Geminin yan geçidinde bölmeler arasında yürür, ara ara eğilip bağları yoklar.
+              const side = it.k % 2 ? 1 : -1;
+              const lz = PT.ship.z - side * 5.5;
+              const x0 = PT.crane.x - 26 + it.k * 3, x1 = PT.crane.x + 26 - it.k * 2;
+              const r = pingPong([[x0, lz], [x1, lz]], 0.45, ph * 30);
+              const stop = Math.sin(sec * 0.08 + ph * 3) > 0.7;
+              p.x = at.x; p.z = at.z; p.heading = stop ? (side > 0 ? 0 : Math.PI) : r.heading; p.y = shipWalkY(PT, M);
+              if (stop) { p.lean = 0.6; p.shL = p.shR = 1.0; p.elL = p.elR = 0.6; p.kneeL = p.kneeR = 0.3; }
+              else walkPose(p, r.d / (0.72 * kk) * Math.PI);
+              return true;
+            }
+            case "palamar": {
+              stand(it.x, it.z, 0);
+              idleGesture(p, t, ph, (s >> 2) % 2 === 0);
+              return true;
+            }
+            case "kontrol": {
+              // İstif sahasının önünde tabletiyle konteyner numaralarını kontrol eder.
+              const z = PT.stack.z1 + 2.2 + it.k * 1.4;
+              const r = pingPong([[PT.stack.x0, z], [PT.stack.x1, z]], 0.35, ph * 40);
+              const stop = Math.sin(sec * 0.11 + ph * 5) > 0.5;
+              stand(at.x, at.z, stop ? Math.PI : r.heading);
+              if (stop) { p.shR = 0.7; p.elR = 1.8; p.shL = 0.6; p.elL = 1.6; p.headPitch = 0.4; p.props = ["telefon"]; }
+              else walkPose(p, r.d / (0.72 * kk) * Math.PI);
+              return true;
+            }
+            case "bekci": {
+              const [bx, bz] = PT.booth;
+              p.x = bx - 0.5; p.z = bz - 0.25; p.heading = Math.PI; p.y = PT.top;
+              sitPose(p, PT.top + 0.5, kk);
+              p.headYaw = 0.4 * Math.sin(t * 0.2 + ph);
+              return true;
+            }
+            case "ambar": {
+              // Ambar kapısı ile palet yığını arasında koli taşır.
+              const wz = PT.warehouse.z + PT.warehouse.d / 2 + 0.8;
+              const r = pingPong([[56 + it.k * 2, wz], [67.5, wz + 2.2 + it.k * 0.6]], 0.8, ph * 25 + it.k * 7);
+              stand(at.x, at.z, r.heading);
+              walkPose(p, r.d / (0.72 * kk) * Math.PI);
+              if (!r.back) { p.props = ["kasa"]; p.shL = p.shR = 0.9; p.elL = p.elR = 1.1; }
+              return true;
+            }
+            case "sofor": {
+              stand(it.x, it.z, it.heading);
+              idleGesture(p, t, ph, false);
+              p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"];
+              return true;
+            }
+            case "mola": {
+              p.x = it.x; p.z = it.z; p.heading = it.heading; p.y = PT.top;
+              sitPose(p, PT.top + 0.49, kk);
+              const sip = Math.max(0, Math.sin(t * 0.35 + ph)) ** 10;
+              idleGesture(p, t, ph, sip < 0.1);
+              p.shR = Math.max(p.shR, 0.5 + 0.9 * sip); p.elR = Math.max(p.elR, 1.2 + 1.0 * sip);
+              return true;
+            }
+          }
+          return false;
         }
         case "zeytinci": case "bahcivan": {
           // Tarlada sıra boyunca ağır ağır ilerleyip eğilerek toplar.

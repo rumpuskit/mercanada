@@ -156,6 +156,8 @@ function override(r, key) {
 export function job(r) {
   const jobs = catalog.meslekler;
   let i = find(jobs, override(r, "meslek"));
+  // Kadrolu işler (fener bekçisi, cankurtaran): geliş sırasına göre sabit kontenjan, nüfusla orantılı.
+  if (i < 0) i = jobs.findIndex((j) => j.kadro && (r.slot ?? -1) % j.kadro.her === j.kadro.sira);
   if (i < 0) i = pickWeighted(jobs, roll(r.seed, "meslek"));
   return jobs[i];
 }
