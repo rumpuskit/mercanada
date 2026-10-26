@@ -393,31 +393,6 @@ function buildFeatures(world) {
         add(new THREE.BoxGeometry(2.6, 0.25, 1.2), std(["#e0a33a", "#d2552f", "#7fae45", "#e8c95a"][f.c % 4]), f.x, FLAT_Y + 1.05, f.z, 0, false);
         break;
       }
-      case "iskele": {
-        add(new THREE.BoxGeometry(f.w, 0.35, f.len), wood, f.x, 1.35, f.z + f.len / 2);
-        for (let t = 3; t < f.len; t += 6) for (const dx of [-f.w / 2 + 0.3, f.w / 2 - 0.3]) add(new THREE.CylinderGeometry(0.2, 0.2, 7, 6), darkWood, f.x + dx, -2.2, f.z + t, 0, false);
-        if (f.w > 5) for (let t = 6; t < f.len; t += 12) for (const dx of [-f.w / 2 + 0.4, f.w / 2 - 0.4]) add(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 8), metal, f.x + dx, 1.8, f.z + t, 0, false);
-        break;
-      }
-      case "vapur": {
-        // Şehir hatları vapuru: 50 m, beyaz üst yapı, siyah alt gövde, sarı baca.
-        add(new THREE.BoxGeometry(11, 2.4, 50), std("#24272c"), f.x, 0.3, f.z);
-        add(new THREE.BoxGeometry(11.2, 1.8, 50.4), white, f.x, 2.4, f.z);
-        add(new THREE.BoxGeometry(10, 2.8, 38), white, f.x, 4.7, f.z);
-        add(new THREE.BoxGeometry(10.2, 0.9, 38.2), std("#3a5a7c"), f.x, 4.9, f.z, 0, false);
-        add(new THREE.BoxGeometry(8, 2.4, 16), white, f.x, 7.3, f.z);
-        add(new THREE.CylinderGeometry(1.1, 1.3, 4.5, 12), std("#e8b93a"), f.x, 10.3, f.z + 2);
-        add(new THREE.CylinderGeometry(1.15, 1.15, 0.8, 12), std("#24272c"), f.x, 12.4, f.z + 2, 0, false);
-        break;
-      }
-      case "tekne": {
-        const L = f.len ?? 8, W = L * 0.34;
-        const hull = new THREE.CylinderGeometry(W / 2, W / 2.8, L, 10, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI).scale(1, 0.55, 1);
-        add(hull, std(L > 10 ? "#2f5d8a" : "#f4f1ea"), f.x, 0.25, f.z, f.rot);
-        add(new THREE.BoxGeometry(W * 0.98, 0.12, L * 0.95), wood, f.x, 0.3, f.z, f.rot, false);
-        add(new THREE.BoxGeometry(W * 0.6, L * 0.16, L * 0.22), white, f.x, 0.3 + L * 0.08, f.z, f.rot);
-        break;
-      }
       case "vinc": {
         add(new THREE.BoxGeometry(1.4, 26, 1.4), std("#e8b93a"), f.x, FLAT_Y + 13, f.z);
         add(new THREE.BoxGeometry(22, 1.2, 1.2), std("#e8b93a"), f.x - 8, FLAT_Y + 25.5, f.z);

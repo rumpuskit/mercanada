@@ -17,6 +17,7 @@ import { createUI } from "./ui.js";
 import { createMapUI } from "./mapui.js";
 import { NameTags } from "./world/nametags.js";
 import { Traffic, Vehicles, buildStops } from "./world/traffic.js";
+import { buildHarbor } from "./world/harbor.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -75,7 +76,9 @@ const world = new World(population);
 const roads = buildRoads(world);
 const terrain = buildTerrain(world);
 const grounds = buildGrounds(world);
-scene.add(buildWater(), terrain, roads, grounds);
+const water = buildWater(world);
+const harbor = buildHarbor(world);
+scene.add(water, terrain, roads, grounds, harbor);
 const city = buildCity(world);
 const trees = buildTrees(world);
 const lampLight = createLampLight(world, world.lampSpots,
@@ -165,7 +168,7 @@ addEventListener("resize", () => {
 // --- pencereler ve lambalar ---
 const tmpColor = new THREE.Color();
 const LAMP_OFF = new THREE.Color("#cfd6de");
-function updateWindows(minute, light) {
+function updateWindows(minute, light, sunDeg) {
   const night = 1 - light;
   const { windows, windowOwners } = city;
   for (let i = 0; i < windowOwners.length; i++) {
@@ -179,9 +182,9 @@ function updateWindows(minute, light) {
   }
   windows.instanceColor.needsUpdate = true;
   // Lambalar güneş ufkun altına inince yanar.
-  const on = night > 0.35;
+  const on = sunDeg < -1.5;
   for (const m of roads.userData.lampHeads) m.color.copy(LAMP_OFF).lerp(P.WINDOW_NIGHT, on ? 1 : 0);
-  lampLight.setNight(on ? Math.min(1, (night - 0.35) / 0.4) : 0);
+  lampLight.setNight(on ? Math.min(1, (-1.5 - sunDeg) / 6 + 0.35) : 0);
 }
 
 // --- döngü ---
@@ -219,7 +222,8 @@ function tick() {
   controls.target.y = flight || dollhouse.isOpen() ? controls.target.y : THREE.MathUtils.lerp(controls.target.y, Math.max(0, world.height(controls.target.x, controls.target.z)), 0.1);
   controls.update();
 
-  const light = sky.update(minute, controls.target);
+  const skyState = sky.update(day, minute, controls.target);
+  const light = skyState.light;
   const dist = camera.position.distanceTo(controls.target);
   fitDepth(dist);
   const size = THREE.MathUtils.clamp(dist * 0.8, 25, 1400);
@@ -229,11 +233,13 @@ function tick() {
     sc.near = 1; sc.far = 2400;
     sc.updateProjectionMatrix();
   }
-  if (frame % 6 === 0) updateWindows(minute, light);
+  if (frame % 6 === 0) updateWindows(minute, light, skyState.sunDeg);
   dollhouse.update(1 - light, real);
   vehicles.end(1 - light);
-  if (frame % 15 === 0) ui.tick(unix, minute, day);
+  if (frame % 15 === 0) ui.tick(unix, minute, day, skyState.times);
   driftClouds(clouds, dt);
+  water.userData.tick(real);
+  harbor.userData.tick(real);
   fadeTrees(trees, dist);
   // Telefonda kart ekranın altını kapatır; görüntüyü yukarı kaydır.
   const cardOpen = !document.getElementById("card").hidden;

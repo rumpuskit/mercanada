@@ -195,8 +195,9 @@ export function createUI({ residents, people, world, dollhouse, setSpeed, flyTo,
     openBuilding,
     close,
     selected: () => (mode === "sakin" ? selected : null),
-    tick(unix, minuteNow, day) {
-      $("clock").textContent = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}`;
+    tick(unix, minuteNow, day, times) {
+      const sun = times?.rise != null ? ` · ☀ ${sim.formatMinute(times.rise)}–${sim.formatMinute(times.set)}` : "";
+      $("clock").textContent = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}${sun}`;
       $("stats").textContent = `${fmt.format(residents.length)} sakin · ${fmt.format(people.visibleCount)} dışarıda · ${world.mahalleler} mahalle`;
       if (!$("card").hidden) render();
     },
