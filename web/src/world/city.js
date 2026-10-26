@@ -128,7 +128,7 @@ export function makeKit() {
       tanks: new Batch(new THREE.CylinderGeometry(0.5, 0.5, 1, 10).rotateZ(Math.PI / 2).translate(0, 0.5, 0), std("#d9dde2", { metalness: 0.4, roughness: 0.4 })),
       solar: new Batch(box, std("#24324f", { roughness: 0.3, metalness: 0.3 }), { shadow: false }),
       chimneys: new Batch(box, std("#a29a90")),
-      railPanels: new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: T.railing(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.4, metalness: 0.5, color: "#3a3f47" }), { shadow: false }),
+      railPanels: new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: T.railing(), alphaTest: 0.2, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.4, metalness: 0.5, color: "#3a3f47" }), { shadow: false }),
       domes: new Batch(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), std(0xffffff, { roughness: 0.5, metalness: 0.3 })),
       // Kemer başı: yarım daire levha (pencere ve revak kemerleri); ölçek x: yarıçap, z: kalınlık.
       arches: new Batch(new THREE.CylinderGeometry(1, 1, 1, 16, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), std(0xffffff, { roughness: 0.8 }), { shadow: false }),

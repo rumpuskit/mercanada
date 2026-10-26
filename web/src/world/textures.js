@@ -326,6 +326,7 @@ export function railing() {
   ctx.fillRect(0, 58, 256, 6);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8; // eğik ve uzak bakışta parmaklıklar girişim (moire) yapmasın
   cache.railing = tex;
   return tex;
 }
