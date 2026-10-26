@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { MapControls } from "three/addons/controls/MapControls.js";
+import { MapControls2 } from "./controls.js";
 import catalog from "../../data/catalog.json";
 import * as sim from "./sim.js";
 import { World } from "./world/layout.js";
@@ -65,14 +65,8 @@ function fitDepth(dist) {
     camera.updateProjectionMatrix();
   }
 }
-const controls = new MapControls(camera, canvas);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.screenSpacePanning = false;
-controls.maxPolarAngle = 1.22;
-controls.minDistance = 6;
-controls.maxDistance = 3200;
-controls.zoomToCursor = true;
+const controls = new MapControls2(camera, canvas);
+controls.onUserMove = () => { flight = null; following = null; };
 
 const T0 = performance.now();
 const world = new World(population);
@@ -167,10 +161,13 @@ camera.position.set(260 * aspectBoost, 230 * aspectBoost, 330 * aspectBoost).add
 controls.update();
 
 // --- zaman ---
-let speed = Number(params.get("hiz")) || 1;
+// Zaman hızı yalnızca geliştirmede (vite dev ya da ?gelistir): yayında şehir gerçek saatle yaşar.
+const dev = import.meta.env.DEV || params.has("gelistir") || params.has("denetle");
+let speed = dev ? Number(params.get("hiz")) || 1 : 1;
+if (dev) document.getElementById("speed").hidden = false;
 let simBase = nowUnix();
 let realBase = performance.now() / 1000;
-const fixed = params.get("saat")?.match(/^(\d{1,2}):(\d{2})$/);
+const fixed = dev && params.get("saat")?.match(/^(\d{1,2}):(\d{2})$/);
 if (fixed) simBase = today * 86400 - sim.TZ_OFFSET + Number(fixed[1]) * 3600 + Number(fixed[2]) * 60;
 const simNow = () => simBase + (performance.now() / 1000 - realBase) * speed;
 function setSpeed(next) {
@@ -181,6 +178,7 @@ function setSpeed(next) {
 
 // --- kamera uçuşu ---
 let flight = null;
+let following = null; // takip edilen araç {key}
 function flyTo(x, y, z, distance = 120, direction = null) {
   const dir = direction ? direction.clone().normalize() : camera.position.clone().sub(controls.target).normalize();
   if (!direction && dir.y < 0.45) dir.setY(0.45).normalize();
@@ -195,7 +193,7 @@ const nameTags = new NameTags(scene);
 if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents };
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
-const ui = createUI({ residents, people, world, dollhouse, stories, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => following?.key ?? null, set: (k) => { following = k ? { key: k } : null; } }, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 const mapUI = createMapUI({ world, camera, controls, flyTo });
 
 // Bir sakine dokununca kartını aç.
@@ -208,6 +206,8 @@ canvas.addEventListener("pointerup", (e) => {
   raycaster.setFromCamera(ndc, camera);
   const index = people.pick(raycaster);
   if (index != null) return ui.select(index, false);
+  const veh = vehicles.pick(raycaster);
+  if (veh) return ui.selectVehicle(veh);
   const building = city.pickBuilding(raycaster);
   if (building) ui.openBuilding(building);
 });
@@ -290,10 +290,24 @@ function tick() {
     camera.position.lerpVectors(flight.fromC, flight.toC, k);
     if (flight.t >= 1) flight = null;
   }
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x, bounds.x0 - 200, bounds.x1 + 200);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z, bounds.z0 - 200, bounds.z1 + 300);
-  controls.target.y = flight || dollhouse.isOpen() ? controls.target.y : THREE.MathUtils.lerp(controls.target.y, Math.max(0, world.height(controls.target.x, controls.target.z)), 0.1);
-  controls.update();
+  // Takip edilen araç: hedef aracın üstünde kalır, kamera onunla birlikte kayar.
+  if (following && !flight) {
+    const fv = traffic.active.get(following.key);
+    if (fv) {
+      const fp = fv.route.position(fv.s);
+      const d = new THREE.Vector3(fp.x - controls.target.x, 0, fp.z - controls.target.z);
+      controls.target.add(d); camera.position.add(d);
+    } else following = null;
+  }
+  // Hedef adanın çevresinde kalır; yüksekliği zemini izler (kamera da birlikte kayar).
+  {
+    const t = controls.target;
+    const nx = THREE.MathUtils.clamp(t.x, bounds.x0 - 200, bounds.x1 + 200), nz = THREE.MathUtils.clamp(t.z, bounds.z0 - 200, bounds.z1 + 300);
+    const ny = flight || dollhouse.isOpen() ? t.y : THREE.MathUtils.lerp(t.y, Math.max(0, world.height(t.x, t.z)), 0.1);
+    const d = new THREE.Vector3(nx - t.x, ny - t.y, nz - t.z);
+    if (d.lengthSq() > 1e-8) { t.add(d); camera.position.add(d); }
+  }
+  controls.update(dt);
 
   const skyState = sky.update(day, minute, controls.target);
   const light = skyState.light;

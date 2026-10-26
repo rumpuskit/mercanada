@@ -11,10 +11,12 @@ const PLACE_NAMES = {
 const fmt = new Intl.NumberFormat("tr-TR");
 const $ = (id) => document.getElementById(id);
 
-export function createUI({ residents, people, world, dollhouse, stories, setSpeed, flyTo, speed, today, minute }) {
+export function createUI({ residents, people, world, dollhouse, stories, traffic, follow, setSpeed, flyTo, speed, today, minute }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
   let selected = null;
-  let mode = null; // "sakin" | "bina"
+  let mode = null; // "sakin" | "bina" | "arac" | "yer"
+  let vehicle = null; // seçili aracın kaydı
+  let place = null; // içi açılmayan bina
   let tab = "simdi";
   for (const btn of document.querySelectorAll("#card-tabs button")) {
     btn.addEventListener("click", () => {
@@ -123,7 +125,7 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
     const b = dollhouse.building;
     if (!b.daireler) {
       $("card-handle").textContent = dollhouse.workName ?? "Dükkân";
-      $("card-title").textContent = `${b.floors} katlı · ${dollhouse.floor + 1}. kat`;
+      $("card-title").textContent = `${b.address ?? ""} · ${dollhouse.floor + 1}. kat`;
       const rows = [];
       for (const [i] of dollhouse.workSpots) {
         const seg = people.activities[i];
@@ -135,7 +137,7 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
     }
     const p = sim.addressParts(b.slot0);
     $("card-handle").textContent = `${sim.sokakName(p.mahalle, p.sokak)} No ${p.bina * 2 + 1}`;
-    $("card-title").textContent = `${sim.mahalleName(p.mahalle)} · ${b.floors} katlı apartman`;
+    $("card-title").textContent = `${sim.mahalleName(p.mahalle)}, Mercanada · ${b.floors} katlı apartman`;
     $("card-now").textContent = `${dollhouse.floor + 1}. kat`;
     const rows = [];
     for (let c = 0; c < b.perFloor; c++) {
@@ -151,8 +153,71 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
   function render() {
     $("floorbar").hidden = !dollhouse.isOpen();
     if (dollhouse.isOpen()) $("floor-label").textContent = `${dollhouse.floor + 1}. kat`;
+    $("card-actions").replaceChildren();
     if (mode === "sakin" && selected != null) renderPerson();
     else if (mode === "bina" && dollhouse.isOpen()) renderBuilding();
+    else if (mode === "arac" && vehicle) renderVehicle();
+    else if (mode === "yer" && place) renderPlace();
+  }
+
+  const KIND_NAMES = { car: "Otomobil", taxi: "Taksi", bus: "Otobüs", ambulans: "Ambulans", itfaiye: "İtfaiye aracı", cop: "Çöp kamyonu" };
+
+  function action(label, onClick, primary = false) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    if (primary) b.classList.add("primary");
+    b.addEventListener("click", onClick);
+    $("card-actions").append(b);
+  }
+
+  function renderVehicle() {
+    $("card-tabs").hidden = true;
+    $("card-traits").replaceChildren();
+    const r = vehicle;
+    const live = r.key ? traffic.active.get(r.key) : null;
+    $("card-handle").textContent = KIND_NAMES[r.kind] ?? "Araç";
+    const rows = [];
+    if (r.kind === "bus") {
+      const line = traffic.lines[r.line];
+      $("card-title").textContent = `${line.name} · ${r.dep + 1}. sefer`;
+      const n = live ? people.busSeat.get(live) ?? 0 : 0;
+      $("card-now").textContent = live ? (live.v < 0.3 ? "Durakta / ışıkta bekliyor" : `${Math.round(live.v * 3.6)} km/sa`) : "";
+      rows.push(["Yolcu", `${n} kişi`], ["Durak", `${line.stops.length} durak, ${line.headway} dakikada bir`]);
+    } else if (r.kind === "car" || r.kind === "taxi") {
+      const owner = r.owner != null ? residents[r.owner] : null;
+      $("card-title").textContent = r.kind === "taxi" ? "Mercanada Taksi" : owner ? `@${owner.handle} adlı sakinin arabası` : "Otomobil";
+      $("card-now").textContent = r.parked ? "Park halinde" : live ? (live.parked ? "Park etti" : live.v < 0.3 ? "Bekliyor" : `${Math.round(live.v * 3.6)} km/sa`) : "Müşteri bekliyor";
+      if (owner) rows.push([r.kind === "taxi" ? "Yolcu" : "Sahibi", "@" + owner.handle, () => select(r.owner)]);
+    } else {
+      $("card-title").textContent = { ambulans: "Mercanada Hastanesi", itfaiye: "Mercanada İtfaiyesi", cop: "Belediye temizlik işleri" }[r.kind] ?? "";
+      $("card-now").textContent = live ? ({ out: "Göreve gidiyor", wait: "Görevde", back: "Dönüyor" }[live.phase] ?? (live.v < 0.3 ? "Konteyner boşaltıyor" : "Toplama turunda")) : "";
+    }
+    facts(rows);
+    if (live && !live.parked) {
+      const on = follow.get() === r.key;
+      action(on ? "Takibi bırak" : "Takip et", () => { follow.set(on ? null : r.key); render(); }, !on);
+    }
+  }
+
+  function renderPlace() {
+    $("card-tabs").hidden = true;
+    $("card-traits").replaceChildren();
+    const names = { cami: "Cami", liman: "Vapur iskelesi", tersane: "Tersane", kulube: "Balıkçı kulübesi", ahir: "Çiftlik", itfaiye: "İtfaiye istasyonu", garaj: "Belediye garajı", bufe: "Büfe" };
+    const wp = Object.values(world.workplaces).flat().find((w) => w?.building === place);
+    $("card-handle").textContent = wp?.name ?? names[place.kind] ?? "Bina";
+    $("card-title").textContent = place.address ?? "";
+    $("card-now").textContent = `${place.floors} katlı`;
+    facts([]);
+  }
+
+  /** Araca dokununca: kimin aracı, hızı; isterse takip. */
+  function selectVehicle(record) {
+    if (!record) return;
+    selected = null;
+    mode = "arac";
+    vehicle = record;
+    dollhouse.close();
+    showCard();
   }
 
   function showCard() {
@@ -200,7 +265,13 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
 
   /** Bir apartmana dokununca: içini aç. */
   function openBuilding(b) {
-    if (!b || ["kulube", "ahir", "liman", "tersane", "cami"].includes(b.kind)) return;
+    if (!b) return;
+    if (["kulube", "ahir", "liman", "tersane", "cami", "itfaiye", "garaj"].includes(b.kind)) {
+      selected = null; mode = "yer"; place = b;
+      dollhouse.close();
+      showCard();
+      return;
+    }
     selected = null;
     mode = "bina";
     dollhouse.open(b, dollhouse.building === b ? dollhouse.floor : 0);
@@ -241,6 +312,9 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
   function close() {
     selected = null;
     mode = null;
+    vehicle = null;
+    place = null;
+    follow.set(null);
     dollhouse.close();
     $("card").hidden = true;
     $("floorbar").hidden = true;
@@ -260,6 +334,7 @@ export function createUI({ residents, people, world, dollhouse, stories, setSpee
     select,
     find,
     openBuilding,
+    selectVehicle,
     close,
     selected: () => (mode === "sakin" ? selected : null),
     tick(unix, minuteNow, day, times) {

@@ -25,10 +25,17 @@
       <div class="line muted" id="stats"></div>
     </header>
 
-    <div id="speed" role="group" aria-label="Zaman hızı">
-      <button data-speed="1" class="on">Canlı</button>
+    <div id="speed" role="group" aria-label="Zaman hızı (geliştirme)" hidden>
+      <button data-speed="1" class="on">1×</button>
       <button data-speed="60">60×</button>
       <button data-speed="600">600×</button>
+    </div>
+
+    <div id="floorbar" hidden>
+      <button id="floor-down" aria-label="Alt kat">▼</button>
+      <span id="floor-label">1. kat</span>
+      <button id="floor-up" aria-label="Üst kat">▲</button>
+      <button id="floor-exit">Dışarı çık</button>
     </div>
 
     <section id="card" hidden>
@@ -43,16 +50,9 @@
       </div>
       <div id="card-traits"></div>
       <dl id="card-facts"></dl>
+      <div id="card-actions"></div>
     </section>
 
-    <div id="floorbar" hidden>
-      <button id="floor-down" aria-label="Alt kat">▼</button>
-      <span id="floor-label">1. kat</span>
-      <button id="floor-up" aria-label="Üst kat">▲</button>
-      <button id="floor-exit">Dışarı çık</button>
-    </div>
-
-    <div id="preview">Önizleme · örnek sakinler</div>
 
     <div id="navbtns">
       <button id="sound" aria-label="Ortam sesleri">🔇</button>
