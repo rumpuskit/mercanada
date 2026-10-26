@@ -43,7 +43,8 @@ export function buildLabels(world) {
 export function scaleLabels(labels, camera) {
   for (const s of labels.children) {
     const d = camera.position.distanceTo(s.position);
-    const h = d * 0.035;
+    // Dikey (telefon) ekranda yatay görüş dar: etiketler orantılı küçülür.
+    const h = d * 0.035 * Math.min(1, Math.max(0.55, camera.aspect));
     s.scale.set(h * s.userData.aspect, h, 1);
     s.visible = d > 120;
   }

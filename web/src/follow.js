@@ -41,7 +41,9 @@ export class Follower {
     this.pitch = 0.32;
     this.heading = null;
     const kind = this._kind();
-    this.dist = BACK[kind] ?? 4;
+    // Dikey ekranda (telefon) biraz daha geriden bakılır; kart ekranın altını kapatır.
+    this.dist = (BACK[kind] ?? 4) * (innerWidth < innerHeight ? 1.6 : 1);
+    this.pitch = innerWidth < innerHeight ? 0.42 : 0.32;
     this.controls.custom = view === "omuz" ? this._custom : null;
     this.controls.lockTarget = true;
   }

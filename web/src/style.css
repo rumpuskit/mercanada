@@ -512,8 +512,17 @@ button {
   #minimap.open canvas {
     display: block;
   }
+  /* Telefonda üst bilgi sağdaki düğme sütununa değmez; hız düğmeleri onun altında, solda. */
+  #hud {
+    max-width: calc(100vw - 24px - 54px);
+  }
+  #hud .total {
+    display: none;
+  }
   #speed {
-    top: calc(max(12px, env(safe-area-inset-top)) + 52px);
+    top: calc(max(12px, env(safe-area-inset-top)) + 96px);
+    right: auto;
+    left: max(12px, env(safe-area-inset-left));
   }
   #floorbar {
     left: 50%;

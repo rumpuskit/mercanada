@@ -380,7 +380,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         else if (seg.ne === "ev" || seg.ne === "uyku") home++;
       }
       const out = residents.length - work - home;
-      $("stats").textContent = `${fmt.format(residents.length)} sakin · ${fmt.format(work)} işte · ${fmt.format(home)} evde · ${fmt.format(out)} dışarıda`;
+      // Toplam, dar ekranda gizlenir (satır kesilmesin).
+      $("stats").innerHTML = `<span class="total">${fmt.format(residents.length)} sakin · </span>${fmt.format(work)} işte · ${fmt.format(home)} evde · ${fmt.format(out)} dışarıda`;
       if (!$("card").hidden) render();
     },
   };
