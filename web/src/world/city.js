@@ -713,13 +713,77 @@ function buildFeatures(world) {
         break;
       }
       case "fener": {
+        // Deniz feneri: sekizgen taş kaide ve kapı, kırmızı-beyaz bantlı konik gövde ve pencereleri,
+        // konsollu seyir balkonu ve korkuluğu, kayıtlı camlı fener odası (içinde mercek), bakır kubbe,
+        // havalandırma topu ve paratoner. Gece mercek yanar ve iki ışık huzmesi döner.
         const y0 = world.height(f.x, f.z);
-        add(new THREE.CylinderGeometry(4, 4.4, 1.5, 12), stone, f.x, y0 + 0.75, f.z);
-        for (let i = 0; i < 4; i++) add(new THREE.CylinderGeometry(2.4 - i * 0.22, 2.62 - i * 0.22, 4, 14), std(i % 2 ? "#c8312f" : "#f7f5f0"), f.x, y0 + 3.5 + i * 4, f.z);
-        add(new THREE.CylinderGeometry(2.2, 2.2, 0.3, 14), metal, f.x, y0 + 17.6, f.z);
-        const lamp = add(new THREE.CylinderGeometry(1.3, 1.3, 2, 12), new THREE.MeshBasicMaterial({ color: "#fff3c4", toneMapped: false }), f.x, y0 + 18.8, f.z, 0, false);
-        add(new THREE.ConeGeometry(1.8, 1.8, 12), std("#c8312f"), f.x, y0 + 20.7, f.z);
-        fenerLamps.push(lamp);
+        const g = new THREE.Group();
+        g.position.set(f.x, y0, f.z);
+        group.add(g);
+        const toLand = world.fener?.door ? Math.atan2(world.fener.door[0] - f.x, world.fener.door[1] - f.z) : 0;
+        g.rotation.y = toLand;
+        const put = (geo, mat, x, y, z, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; m.receiveShadow = true; g.add(m); return m; };
+        const H = 17, r0 = 2.7, r1 = 1.95;
+        put(new THREE.CylinderGeometry(4.3, 4.7, 1.3, 8), stone, 0, 0.65, 0);
+        put(new THREE.CylinderGeometry(4.0, 4.0, 0.15, 8), std("#bdb5a8"), 0, 1.35, 0, false);
+        // Gövde bantları (gövde koniği boyunca, birbirine tam oturan halkalar).
+        const bands = 5;
+        for (let i = 0; i < bands; i++) {
+          const ya = 1.4 + (i * (H - 1.4)) / bands, yb = 1.4 + ((i + 1) * (H - 1.4)) / bands;
+          const ra = r0 + ((r1 - r0) * (ya - 1.4)) / (H - 1.4), rb = r0 + ((r1 - r0) * (yb - 1.4)) / (H - 1.4);
+          put(new THREE.CylinderGeometry(rb, ra, yb - ya, 24), std(i % 2 ? "#c8312f" : "#f7f5f0", { roughness: 0.6 }), 0, (ya + yb) / 2, 0);
+        }
+        // Kapı (kara tarafında) ve basamaklar; gövdede kademeli küçük pencereler.
+        put(new THREE.BoxGeometry(1.1, 2.2, 0.3), std("#4a3426"), 0, 2.5, r0 - 0.05, false);
+        put(new THREE.BoxGeometry(1.5, 0.2, 0.6), stone, 0, 1.45, r0 + 0.3, false);
+        for (let k = 0; k < 4; k++) {
+          const y = 5 + k * 3, rr = r0 + ((r1 - r0) * (y - 1.4)) / (H - 1.4), a = k * 1.3 + 0.6;
+          const w = put(new THREE.BoxGeometry(0.5, 0.8, 0.12), std("#2a3440"), Math.sin(a) * rr, y, Math.cos(a) * rr, false);
+          w.rotation.y = a;
+        }
+        // Balkon: konsollar, döşeme, korkuluk.
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2;
+          const c = put(new THREE.BoxGeometry(0.2, 0.6, 0.6), std("#f7f5f0"), Math.sin(a) * (r1 + 0.3), H - 0.35, Math.cos(a) * (r1 + 0.3), false);
+          c.rotation.y = a;
+        }
+        put(new THREE.CylinderGeometry(r1 + 0.85, r1 + 0.85, 0.22, 24), metal, 0, H + 0.08, 0);
+        for (let k = 0; k < 20; k++) {
+          const a = (k / 20) * Math.PI * 2;
+          put(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 5), metal, Math.sin(a) * (r1 + 0.8), H + 0.7, Math.cos(a) * (r1 + 0.8), false);
+        }
+        put(new THREE.TorusGeometry(r1 + 0.8, 0.04, 6, 40).rotateX(Math.PI / 2), metal, 0, H + 1.2, 0, false);
+        put(new THREE.TorusGeometry(r1 + 0.8, 0.025, 6, 40).rotateX(Math.PI / 2), metal, 0, H + 0.7, 0, false);
+        // Fener odası: alt duvar, camlar ve kayıtlar, mercek.
+        put(new THREE.CylinderGeometry(1.45, 1.45, 0.8, 16), std("#f7f5f0"), 0, H + 0.6, 0);
+        put(new THREE.CylinderGeometry(1.42, 1.42, 2.1, 16, 1, true), new THREE.MeshStandardMaterial({ color: "#cfe3ee", transparent: true, opacity: 0.28, roughness: 0.05, metalness: 0.4, side: THREE.DoubleSide, depthWrite: false }), 0, H + 2.05, 0, false);
+        for (let k = 0; k < 10; k++) {
+          const a = (k / 10) * Math.PI * 2;
+          put(new THREE.BoxGeometry(0.06, 2.1, 0.06), metal, Math.sin(a) * 1.43, H + 2.05, Math.cos(a) * 1.43, false);
+        }
+        const lensMat = new THREE.MeshStandardMaterial({ color: "#fff6d6", emissive: new THREE.Color("#fff1c4"), emissiveIntensity: 0.15, roughness: 0.1 });
+        const lens = put(new THREE.CylinderGeometry(0.55, 0.55, 1.3, 12), lensMat, 0, H + 2.0, 0, false);
+        put(new THREE.CylinderGeometry(1.5, 1.5, 0.12, 16), metal, 0, H + 3.15, 0);
+        put(new THREE.SphereGeometry(1.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), std("#3e6b5a", { roughness: 0.5, metalness: 0.3 }), 0, H + 3.2, 0);
+        put(new THREE.SphereGeometry(0.28, 10, 8), std("#3e6b5a", { metalness: 0.3 }), 0, H + 4.85, 0);
+        put(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 5), metal, 0, H + 5.6, 0, false);
+        // Işık huzmeleri: gece görünür, yavaşça döner.
+        // Huzme: kaynağında parlak, uzaklaştıkça sönen ince ışık konisi (uv.y: 1 kaynak, 0 uç).
+        const beamMat = new THREE.ShaderMaterial({
+          uniforms: { uOpacity: { value: 0 }, uColor: { value: new THREE.Color("#fff3c8") } },
+          vertexShader: "varying float vT; void main() { vT = uv.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+          fragmentShader: "uniform float uOpacity; uniform vec3 uColor; varying float vT; void main() { gl_FragColor = vec4(uColor, uOpacity * pow(vT, 2.2)); }",
+          transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+        });
+        const beam = new THREE.Group();
+        beam.position.set(0, H + 2.0, 0);
+        for (const s of [1, -1]) {
+          const cone = new THREE.Mesh(new THREE.ConeGeometry(3.2, 60, 16, 1, true).translate(0, -30, 0).rotateX(s * Math.PI / 2), beamMat);
+          beam.add(cone);
+        }
+        beam.visible = false;
+        g.add(beam);
+        fenerLamps.push({ lens, lensMat, beam, beamMat });
         break;
       }
       case "tribun": {
@@ -942,8 +1006,10 @@ function buildFeatures(world) {
   group.userData.setFlood = (n) => {
     floodLens.emissiveIntensity = 3.2 * n;
     floodGlareMat.opacity = 0.75 * n;
+    for (const f of fenerLamps) { f.lensMat.emissiveIntensity = 0.15 + 3.5 * n; f.beamMat.uniforms.uOpacity.value = 0.35 * n; f.beam.visible = n > 0; }
   };
   group.userData.tick = (t) => {
+    for (const f of fenerLamps) f.beam.rotation.y = t * 0.6;
     for (const fo of fountains) {
       fo.curtains.forEach((c, i) => { c.scale.set(1 + Math.sin(t * 3 + i) * 0.015, 1, 1 + Math.cos(t * 3 + i) * 0.015); c.material.opacity = 0.45 + 0.1 * Math.sin(t * 5); });
       fo.jet.scale.set(1, 0.9 + 0.12 * Math.sin(t * 4.3), 1);

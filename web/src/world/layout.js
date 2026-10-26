@@ -886,6 +886,12 @@ export class World {
     }
     this.places.fener = { anchors: views.map((v) => [v.x, v.z]), spots: views, spread: 0, path: fenerPath };
     this.fener = { x: fx, z: fz, door: [fx - Math.cos(Math.atan2(fz - hz, fx - hx)) * 4.8, fz - Math.sin(Math.atan2(fz - hz, fx - hx)) * 4.8] };
+    // Bekçi evi: fenerin kara tarafında, kapısı fenere bakar.
+    {
+      const a = Math.atan2(fz - hz, fx - hx);
+      const ex = fx - Math.cos(a) * 14 + Math.sin(a) * 6, ez = fz - Math.sin(a) * 14 - Math.cos(a) * 6;
+      this.addBuilding({ kind: "kulube", x: ex, z: ez, rot: Math.atan2(fx - ex, fz - ez), w: 8, d: 6, floors: 1, roofType: "gable", wall: "#f2efe8", roof: "#b8412f", address: "Fener Bekçisi Evi, Fener" });
+    }
     this.labels.push({ text: "Fener", x: fx, z: fz, h: 34 });
 
     // Batı: köy yolu, iki çiftlik ve plaj.
