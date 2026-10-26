@@ -21,6 +21,7 @@ import { buildHarbor } from "./world/harbor.js";
 import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
 import { startOnline } from "./online.js";
+import { Follower } from "./follow.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -68,7 +69,7 @@ function fitDepth(dist) {
 }
 const controls = new MapControls2(camera, canvas);
 // Kaydırınca uçuş da takip de biter; yakınlaştırıp döndürmek takibi bozmaz (hedef aracın üstünde kalır).
-controls.onUserMove = (kind) => { flight = null; if (kind === "pan") following = null; };
+controls.onUserMove = (kind) => { flight = null; if (kind === "pan") follower?.stop(); };
 
 const T0 = performance.now();
 const world = new World(population);
@@ -182,7 +183,7 @@ function setSpeed(next) {
 
 // --- kamera uçuşu ---
 let flight = null;
-let following = null; // takip edilen araç {key, t: yumuşak başlangıç 0→1}
+let follower = null; // takip (araç ya da sakin; harita ya da omuz görünümü), aşağıda kurulur
 function flyTo(x, y, z, distance = 120, direction = null) {
   const dir = direction ? direction.clone().normalize() : camera.position.clone().sub(controls.target).normalize();
   if (!direction && dir.y < 0.45) dir.setY(0.45).normalize();
@@ -197,8 +198,11 @@ const nameTags = new NameTags(scene);
 if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents };
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
-const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => following?.key ?? null, set: (k) => { following = k ? { key: k, t: 0 } : null; flight = null; } }, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
-if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, followKey: () => following?.key ?? null });
+follower = new Follower({ camera, controls, world, people, traffic });
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => follower.get(), set: (t, view) => { if (t) follower.start(t, view); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
+// Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
+follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false); };
 // Çevrimiçi sayacı yalnızca yayındaki sitede (ya da ?sayac ile denerken).
 if (location.hostname === "ada.rumpuskit.com" || params.has("sayac")) startOnline();
 const mapUI = createMapUI({ world, camera, controls, flyTo });
@@ -206,9 +210,13 @@ const mapUI = createMapUI({ world, camera, controls, flyTo });
 // Bir sakine dokununca kartını aç.
 const raycaster = new THREE.Raycaster();
 let down = null;
-canvas.addEventListener("pointerdown", (e) => { down = [e.clientX, e.clientY]; });
+canvas.addEventListener("pointerdown", (e) => { down = e.button === 0 ? [e.clientX, e.clientY] : null; });
 canvas.addEventListener("pointerup", (e) => {
-  if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+  // Yalnızca sol tık / dokunma seçer; sağ tık ve sürükleme yalnızca kamerayı döndürür.
+  if (e.button !== 0 || !down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
+  down = null;
+  // Omuz görünümünde dokunmak/tıklamak yalnızca bakışı çevirir; seçimi değiştirmez.
+  if (follower.target && follower.view === "omuz") return;
   const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const index = people.pick(raycaster);
@@ -219,6 +227,7 @@ canvas.addEventListener("pointerup", (e) => {
   const inside = index != null ? traffic.active.get(people.poses[index].vehicleKey) : null;
   if (inside) return ui.selectVehicle({ kind: inside.kind, key: inside.key, owner: inside.owner, line: inside.line, dep: inside.dep });
   if (index != null) return ui.select(index, false);
+  if (follower.target) return; // takipteyken binaya dokunmak kamerayı kaçırmaz
   const building = city.pickBuilding(raycaster);
   if (building) ui.openBuilding(building);
 });
@@ -301,28 +310,16 @@ function tick() {
     camera.position.lerpVectors(flight.fromC, flight.toC, k);
     if (flight.t >= 1) flight = null;
   }
-  // Takip edilen araç: hedef aracın üstünde kalır, kamera onunla birlikte kayar.
-  // İlk saniyede hedef araca yumuşakça yetişir (uzaktan bakılıyorsa biraz da yaklaşır), sonra kilitlenir.
-  if (following && !flight) {
-    const fv = traffic.active.get(following.key);
-    if (fv) {
-      const fp = fv.route.position(fv.s);
-      following.t = Math.min(1, following.t + dt / 0.9);
-      const k = following.t >= 1 ? 1 : 1 - Math.exp(-dt * (4 + 30 * following.t * following.t));
-      const d = new THREE.Vector3((fp.x - controls.target.x) * k, 0, (fp.z - controls.target.z) * k);
-      controls.target.add(d); camera.position.add(d);
-      const cd = camera.position.distanceTo(controls.target);
-      if (following.t < 1 && cd > 220) controls._zoom(Math.pow(140 / cd, Math.min(1, dt * 3)));
-    } else following = null; // yolculuk bitti: kamera aracın son yerinde kalır
-  }
-  controls.lockTarget = !!following;
+  // Takip: hedef aracın ya da sakinin üstünde (harita) veya arkasında (omuz).
+  if (follower.target && !flight) follower.update(dt);
+  const shoulder = follower.target && follower.view === "omuz";
   // Hedef adanın çevresinde kalır; yüksekliği zemini izler (kamera da birlikte kayar).
   {
     const t = controls.target;
     const nx = THREE.MathUtils.clamp(t.x, bounds.x0 - 200, bounds.x1 + 200), nz = THREE.MathUtils.clamp(t.z, bounds.z0 - 200, bounds.z1 + 300);
-    const ny = flight || dollhouse.isOpen() ? t.y : THREE.MathUtils.lerp(t.y, Math.max(0, world.height(t.x, t.z)), 0.1);
+    const ny = flight || dollhouse.isOpen() || shoulder ? t.y : THREE.MathUtils.lerp(t.y, Math.max(0, world.height(t.x, t.z)), 0.1);
     const d = new THREE.Vector3(nx - t.x, ny - t.y, nz - t.z);
-    if (d.lengthSq() > 1e-8) { t.add(d); camera.position.add(d); }
+    if (!shoulder && d.lengthSq() > 1e-8) { t.add(d); camera.position.add(d); }
   }
   controls.update(dt);
 
@@ -354,7 +351,9 @@ function tick() {
   scaleLabels(labels, camera);
 
   const sel = ui.selected();
-  if (sel != null) {
+  if (sel != null && shoulder) {
+    marker.visible = false; // omuz görünümünde başının üstünde işaret olmaz
+  } else if (sel != null) {
     marker.visible = true;
     const [x, z] = people.focusPoint(sel);
     const y = people.visible[sel] ? people.positions[sel * 3 + 1] : world.groundY(x, z);
@@ -377,7 +376,7 @@ function tick() {
   }
 
   tryFollow();
-  nameTags.update(camera, controls.target, people, residents, ui.selected());
+  nameTags.update(camera, controls.target, people, residents, ui.selected(), shoulder ? follower.target.i ?? null : null);
   mapUI.update(real);
   renderer.render(scene, camera);
   if (frame === 1) {

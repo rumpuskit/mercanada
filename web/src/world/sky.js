@@ -71,7 +71,10 @@ export function createSky(scene) {
         varying vec3 vDir;
         void main() {
           vDir = normalize(position);
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          // Gök kubbesi sonsuz uzakta: yalnızca bakış yönü kullanılır ve hep en arka derinlikte çizilir
+          // (yakın bakışta uzak düzlem kısa olsa da gök kırpılıp siyah kalmaz).
+          vec4 p = projectionMatrix * vec4(mat3(viewMatrix) * position, 1.0);
+          gl_Position = vec4(p.xy, p.w * 0.99999, p.w);
         }`,
       fragmentShader: `
         uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; uniform vec3 moonDir; uniform vec3 glow;
@@ -97,6 +100,7 @@ export function createSky(scene) {
     }),
   );
   dome.renderOrder = -1;
+  dome.frustumCulled = false;
   scene.add(dome);
 
   const hemi = new THREE.HemisphereLight("#dff1ff", "#c9b99a", 1.4);

@@ -57,7 +57,8 @@ export class NameTags {
     return t;
   }
 
-  update(camera, target, people, residents, selected) {
+  /** hide: omuz görünümünde izlenen sakinin kendi etiketi gösterilmez. */
+  update(camera, target, people, residents, selected, hide = null) {
     const camDist = camera.position.distanceTo(target);
     for (const s of this.sprites) s.visible = false;
     if (camDist > SHOW_WITHIN) return;
@@ -65,13 +66,13 @@ export class NameTags {
     const near = [];
     const P = people.positions;
     for (let i = 0; i < residents.length; i++) {
-      if (!people.visible[i]) continue;
+      if (!people.visible[i] || i === hide) continue;
       const dx = P[i * 3] - cx, dy = P[i * 3 + 1] - cy, dz = P[i * 3 + 2] - cz;
       const d = dx * dx + dy * dy + dz * dz;
       if (d < 70 * 70) near.push([d, i]);
     }
     near.sort((a, b) => a[0] - b[0]);
-    if (selected != null && people.visible[selected] && !near.slice(0, MAX_TAGS).some(([, i]) => i === selected)) near.unshift([0, selected]);
+    if (selected != null && selected !== hide && people.visible[selected] && !near.slice(0, MAX_TAGS).some(([, i]) => i === selected)) near.unshift([0, selected]);
     const fade = Math.min(1, (SHOW_WITHIN - camDist) / 12);
     near.slice(0, MAX_TAGS).forEach(([d2, i], k) => {
       const s = this.sprites[k];

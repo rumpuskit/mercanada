@@ -250,6 +250,9 @@ export class Traffic {
         const M = this.lanes[v];
         const uturn = v === L.reverse;
         if (uturn && outs.length > 1) continue;
+        // Otopark, hastane ve garaj girişleri yalnızca oraya giden araç içindir: kimse dönmek ya da
+        // kestirme için girip çıkmaz.
+        if (M.road.type === "giris" && !goals.has(v)) continue;
         const cost = gu + M.len / M.vmax + (N.signal ? 9 : 2) + (uturn ? 25 : 0);
         if (cost < (g.get(v) ?? Infinity)) { g.set(v, cost); prev.set(v, u); heap.push(cost, v); }
       }

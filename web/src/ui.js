@@ -80,6 +80,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     $("card-now").textContent = nowText(selected);
     $("card-tabs").hidden = false;
     $("card-traits").replaceChildren();
+    const f = follow.get();
+    followActions(f?.kind === "sakin" && f.i === selected ? f.view : null, { kind: "sakin", i: selected }, "Gözünden bak");
     if (tab === "bugun") {
       const homeLabel = (k) => {
         const seg = people.plans[selected][k];
@@ -212,9 +214,19 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       $("card-now").textContent = live ? ({ out: "Göreve gidiyor", wait: "Görevde", back: "Dönüyor" }[live.phase] ?? (live.v < 0.3 ? "Konteyner boşaltıyor" : "Toplama turunda")) : "Görevini tamamladı";
     }
     facts(rows);
-    const on = follow.get() === r.key;
-    if (live && (!live.parked || on)) {
-      action(on ? "Takibi bırak" : "Takip et", () => { follow.set(on ? null : r.key); render(); }, !on);
+    const f = follow.get();
+    const on = f?.kind === "arac" && f.key === r.key;
+    if (live && (!live.parked || on)) followActions(on ? f.view : null, { kind: "arac", key: r.key }, "Arkasından izle");
+  }
+
+  /** Takip düğmeleri: haritada takip, omuz (arkasından) görünümü ya da bırak. */
+  function followActions(view, target, shoulderLabel) {
+    if (view) {
+      action(view === "omuz" ? "Haritaya dön" : shoulderLabel, () => { follow.set(target, view === "omuz" ? "harita" : "omuz"); render(); });
+      action("Takibi bırak", () => { follow.set(null); render(); });
+    } else {
+      action("Takip et", () => { follow.set(target, "harita"); render(); }, true);
+      action(shoulderLabel, () => { follow.set(target, "omuz"); render(); });
     }
   }
 

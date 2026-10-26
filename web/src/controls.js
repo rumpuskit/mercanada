@@ -20,6 +20,9 @@ export class MapControls2 {
     this.enabled = true;
     this.onUserMove = null; // (tür) => …  tür: "pan" | "zoom" | "rotate"
     this.lockTarget = false; // takipte: yakınlaştırma ve döndürme hedefin çevresinde, kaydırma takibi bırakır
+    // Omuz kamerası gibi özel kipler: verilirse sürüklemeler custom.rotate(dx, dy), yakınlaştırma
+    // custom.zoom(çarpan) olur; kamera bu sınıf yerine o kipin sahibince yerleştirilir.
+    this.custom = null;
     this._pointers = new Map();
     this._ray = new THREE.Raycaster();
     this._v = new THREE.Vector3();
@@ -92,6 +95,7 @@ export class MapControls2 {
   }
 
   _zoomAt(cx, cy, factor) {
+    if (this.custom) return this.custom.zoom(factor);
     const P = this.lockTarget ? this.target.clone() : this._ground(cx, cy) ?? this.target.clone();
     this.onUserMove?.("zoom");
     this._zoom(factor, P);
@@ -141,6 +145,7 @@ export class MapControls2 {
     if (this._mode === "pan" && this._pointers.size === 1) {
       // Dokunurken parmak titrer: birkaç pikselden kısa sürüklemeler kaydırma sayılmaz.
       if (this._dragPx < 8) return;
+      if (this.custom) return this.custom.rotate(dx, dy);
       this.onUserMove?.("pan");
       if (!this._grab) { this._grab = this._ground(e.clientX, e.clientY); return; }
       const now = this._ground(e.clientX, e.clientY);
@@ -151,10 +156,17 @@ export class MapControls2 {
       this._vel.copy(delta);
     } else if (this._mode === "rotate" && this._pointers.size === 1) {
       const h = this.dom.clientHeight || 1;
+      if (this.custom) return this.custom.rotate(dx, dy);
       if (Math.abs(dx) + Math.abs(dy) > 0) this.onUserMove?.("rotate");
       this._rotate(-dx * (Math.PI / h) * 0.9, -dy * (Math.PI / h) * 0.7);
     } else if (this._mode === "multi" && this._pointers.size === 2) {
       const prev = this._multi, cur = this._multiState();
+      if (this.custom) {
+        if (prev.dist > 0 && cur.dist > 0) this.custom.zoom(prev.dist / cur.dist);
+        this.custom.rotate(cur.mx - prev.mx, cur.my - prev.my);
+        this._multi = cur;
+        return;
+      }
       // Sıkıştır: yakınlaştır; çevir: döndür (parmakların ortası çevresinde); birlikte kaydır: eğ ya da kaydır.
       const pivot = this.lockTarget ? this.target.clone() : this._ground(cur.mx, cur.my) ?? this.target.clone();
       this.onUserMove?.("zoom");
@@ -204,12 +216,20 @@ export class MapControls2 {
       "+": () => this._zoom(0.8), "=": () => this._zoom(0.8), "-": () => this._zoom(1.25),
       q: () => this._rotate(0.12, 0), e: () => this._rotate(-0.12, 0),
     };
+    if (this.custom) {
+      const k = { ArrowLeft: [-30, 0], ArrowRight: [30, 0], ArrowUp: [0, -20], ArrowDown: [0, 20], q: [-30, 0], e: [30, 0] }[e.key];
+      if (k) this.custom.rotate(...k);
+      else if (e.key === "+" || e.key === "=") this.custom.zoom(0.8);
+      else if (e.key === "-") this.custom.zoom(1.25);
+      return;
+    }
     const f = map[e.key];
     if (f) { f(); this.onUserMove?.(e.key.startsWith("Arrow") ? "pan" : e.key === "q" || e.key === "e" ? "rotate" : "zoom"); }
   }
 
   /** Her karede: bırakınca kısa süreli kayma (eylemsizlik). */
   update(dt = 1 / 60) {
+    if (this.custom) { this._vel.set(0, 0, 0); this.camera.lookAt(this.target); return; }
     if (this.lockTarget) this._vel.set(0, 0, 0);
     if (this._pointers.size === 0 && this._vel.lengthSq() > 1e-4) {
       this._pan(this._vel);
