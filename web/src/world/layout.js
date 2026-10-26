@@ -1193,8 +1193,8 @@ export class World {
             const seedP = m * 7 + r * 3 + (side > 0 ? 1 : 0);
             this.plazas.push({ x0: x - 11, z0: cz - g.h / 2 + 2, x1: x + 11, z1: cz + g.h / 2 - 2, kind: "oyun", color: ["#4f8a57", "#b8523f", "#4f78a8", "#7a8f3f", "#3e8a86"][seedP % 5] });
             this.features.push({ type: "oyun", x, z: cz, seed: seedP, w: 20, d: g.h - 6 });
+            // Banklar velilerin; oyun parkı yetişkin buluşma noktası değil (çocuklar oynar).
             for (const dz of [-1, 1]) this.addBench(x + side * -10, cz + dz * 6, side < 0 ? Math.PI / 2 : -Math.PI / 2, place);
-            anchors.push([x + side * -8, cz]);
             break;
           }
           case "basket": {

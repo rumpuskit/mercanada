@@ -16,6 +16,7 @@ import { pedWait } from "./signals.js";
 import { nextArrival, nextDeparture } from "./ferry.js";
 import { craneSeat, forkliftSeat, portMotion, shipWalkY, stackerSeat } from "./port.js";
 import { pointAt } from "./traffic.js";
+import { playgroundItems } from "./layout.js";
 import * as P from "./palette.js";
 
 const UNIFORMS = {
@@ -1657,6 +1658,116 @@ export class People {
             idleGesture(v, time, ph, true);
           }
           Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: SCHOOL_TOPS[seed % 3], bottom: P.BOTTOMS[1], sleeves: true, skirt: seed % 2 === 1 && seed % 3 === 0, beard: false, glasses: seed % 9 === 0 });
+          crowd.add(-1, v);
+        }
+      }
+    }
+    // Oyun parklarında çocuklar ve veliler (sakin değil): hafta içi okul çıkışından akşama, hafta sonu
+    // gün boyu. Aletlere göre: salıncakta sallanır, tahterevallide iner kalkar, atlıkarıncada döner,
+    // yaylıda sallanır, kum havuzunda oynar; diğerleri aletlerin çevresinde koşar.
+    const parkOpen = minute < 1170 && (wd < 5 ? minute >= 940 : minute >= 600);
+    if (parkOpen) {
+      const v = (this._parkKid ??= {});
+      const dressKid = (seed, adult) => Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: P.CLOTHES[(seed * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length], sleeves: seed % 3 !== 0, skirt: seed % 4 === 1, beard: adult && seed % 5 === 0, glasses: adult && seed % 6 === 0 });
+      let pi = 0;
+      for (const f of this.world.features) {
+        if (f.type !== "oyun") continue;
+        pi++;
+        const y0 = this.world.groundY(f.x, f.z);
+        const items = playgroundItems(f);
+        let kid = 0;
+        const put = (it, lx, lz, h) => {
+          const c = Math.cos(it.rot), s2 = Math.sin(it.rot);
+          v.x = it.x + lx * c + lz * s2; v.z = it.z - lx * s2 + lz * c; v.heading = it.rot + h;
+        };
+        for (const it of items) {
+          const seed = pi * 131 + kid * 17 + this.day;
+          const ph = seed * 0.37;
+          const start = () => { resetPose(v); v.height = 1.05 + (seed % 6) * 0.06; v.t = time; v.y = y0; dressKid(seed + kid, false); kid++; };
+          const kk = 1.05 / 1.75;
+          switch (it.kind) {
+            case "salincak": {
+              const n = 2 + (it.c % 2);
+              for (let k = 0; k < n - 1; k++) {
+                start();
+                const sw = Math.sin(time * 2.1 + ph + k);
+                put(it, -it.w / 2 + ((k + 1) * it.w) / (n + 1), sw * 0.55, 0);
+                v.y = y0 + 0.5 + 0.18 * sw * sw - 0.92 * kk + 0.06;
+                v.hipL = v.hipR = 1.5; v.kneeL = v.kneeR = 1.2 - 0.6 * sw; v.shL = v.shR = 2.6; v.elL = v.elR = 0.1; v.lean = -0.2 * sw;
+                crowd.add(-1, v);
+              }
+              break;
+            }
+            case "tahterevalli": {
+              const a = 0.14 * Math.sin(time * 1.4 + ph);
+              for (const sx of [-1, 1]) {
+                start();
+                put(it, sx * 1.35, 0, sx > 0 ? -Math.PI / 2 : Math.PI / 2);
+                sitPose(v, y0 + 0.58 + sx * 1.35 * a, kk);
+                v.shL = v.shR = 0.9; v.elL = v.elR = 0.6;
+                crowd.add(-1, v);
+              }
+              break;
+            }
+            case "atlikarinca": {
+              for (let k = 0; k < 3; k++) {
+                start();
+                const a = time * 1.2 + (k / 3) * Math.PI * 2;
+                put(it, Math.cos(a) * 1.05, Math.sin(a) * 1.05, Math.atan2(-Math.sin(a), Math.cos(a)) + Math.PI);
+                sitPose(v, y0 + 0.43, kk);
+                v.shR = 1.4; v.elR = 0.3;
+                crowd.add(-1, v);
+              }
+              break;
+            }
+            case "yayli": {
+              start();
+              const r = Math.sin(time * 3 + ph);
+              put(it, -0.8, 0, Math.PI / 2);
+              sitPose(v, y0 + 0.88, kk);
+              v.lean = 0.25 * r; v.shL = v.shR = 1.0; v.elL = v.elR = 0.5;
+              crowd.add(-1, v);
+              break;
+            }
+            case "kum": {
+              for (let k = 0; k < 2; k++) {
+                start();
+                put(it, -0.6 + k * 1.1, 0.4 - k * 0.7, k ? Math.PI : 0);
+                v.drop = 0.3 * kk; v.hipL = v.hipR = 1.3; v.kneeL = v.kneeR = 2.0; v.lean = 0.4;
+                v.shR = 1.0 + 0.3 * Math.sin(time * 2.5 + ph + k); v.elR = 0.6;
+                crowd.add(-1, v);
+              }
+              break;
+            }
+            default: {
+              // Aletin çevresinde koşuşturma.
+              start();
+              const a = time * 0.9 + ph, r = Math.max(it.w, it.d) / 2 + 1.2;
+              put(it, Math.cos(a) * r, Math.sin(a) * r, Math.atan2(-Math.sin(a), Math.cos(a)) + Math.PI);
+              walkPose(v, time * 8 + ph, 1);
+              crowd.add(-1, v);
+            }
+          }
+        }
+        // Kovalamaca: parkın ortasında koşan iki üç çocuk.
+        for (let k = 0; k < 3; k++) {
+          const seed = pi * 53 + k * 7 + this.day;
+          resetPose(v); v.height = 1.05 + (seed % 6) * 0.06; v.t = time; dressKid(seed, false);
+          const a = time * (0.5 + k * 0.07) + k * 2.1, rx = (f.w ?? 18) * 0.28, rz = (f.d ?? 14) * 0.22;
+          v.x = f.x + Math.sin(a) * rx; v.z = f.z + Math.sin(a * 2 + k) * rz;
+          v.heading = Math.atan2(Math.cos(a) * rx, 2 * Math.cos(a * 2 + k) * rz);
+          v.y = this.world.groundY(v.x, v.z);
+          walkPose(v, time * 9 + k, 1);
+          crowd.add(-1, v);
+        }
+        // Veliler: parkın kenarında ayakta sohbet.
+        for (let k = 0; k < 2; k++) {
+          const seed = pi * 977 + k * 31 + this.day;
+          resetPose(v); v.height = 1.6 + (seed % 7) * 0.04; v.t = time;
+          v.x = f.x + (k ? 1 : -1) * 0.4 + (f.w ?? 18) * 0.45; v.z = f.z + (k ? 0.4 : -0.4);
+          v.y = this.world.groundY(v.x, v.z); v.heading = k ? Math.PI : 0;
+          idleGesture(v, time, seed, true);
+          dressKid(seed, true);
           crowd.add(-1, v);
         }
       }
