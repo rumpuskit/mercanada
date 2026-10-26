@@ -130,6 +130,8 @@ export function makeKit() {
       chimneys: new Batch(box, std("#a29a90")),
       railPanels: new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({ map: T.railing(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.4, metalness: 0.5, color: "#3a3f47" }), { shadow: false }),
       domes: new Batch(new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), std(0xffffff, { roughness: 0.5, metalness: 0.3 })),
+      // Kemer başı: yarım daire levha (pencere ve revak kemerleri); ölçek x: yarıçap, z: kalınlık.
+      arches: new Batch(new THREE.CylinderGeometry(1, 1, 1, 16, 1, false, -Math.PI / 2, Math.PI).rotateX(-Math.PI / 2), std(0xffffff, { roughness: 0.8 }), { shadow: false }),
     },
     glass: new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), { shadow: false }),
     windowOwners: [], // cam -> {slot} (daire) veya {workplace, seed}
@@ -256,6 +258,47 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.3, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.3, h: 2.3 };
     B.slabs.add(local(b, 0, 2.6, b.d / 2 + 0.6), b.rot, s.set(2.2, 0.12, 1.2));
     B.slabs.add(local(b, 0, 0, b.d / 2 + 0.7), b.rot, s.set(2.2, 0.15, 1.4));
+    return;
+  }
+
+  if (b.kind === "cami") {
+    // Cami: iki sıra kemerli pencere (dört cephe), önde beş kemerli son cemaat yeri ve üstünde küçük
+    // kubbeler, köşelerde kasnaklı küçük kubbeler, ahşap kapı.
+    const sides = [[0, b.w, b.d], [Math.PI, b.w, b.d], [Math.PI / 2, b.d, b.w], [-Math.PI / 2, b.d, b.w]];
+    sides.forEach(([dr, fw, fd], si) => {
+      const fake = { ...b, rot: b.rot + dr, w: fw, d: fd };
+      const n = 4;
+      for (let k = 0; k < n; k++) {
+        const lx = -fw / 2 + (k + 0.5) * (fw / n);
+        if (si === 0 && Math.abs(lx) < 2) continue; // kapı
+        for (const [y, hgt, wd] of [[0.9, 2.0, 1.0], [3.9, 1.6, 0.9]]) {
+          B.frames.add(local(fake, lx, y - 0.12, fd / 2), fake.rot, s.set(wd + 0.3, hgt + 0.2, 0.16), "#d9cfbd");
+          addGlass(fake, lx, y + hgt / 2, fd / 2 + 0.085, wd, hgt, false, { workplace: "cami", seed: si * 8 + k });
+          B.arches.add(local(fake, lx, y + hgt, fd / 2 + 0.02), fake.rot, s.set(wd / 2 + 0.15, 1, 0.2), "#d9cfbd");
+          B.arches.add(local(fake, lx, y + hgt, fd / 2 + 0.09), fake.rot, s.set(wd / 2, 1, 0.05), "#7fa3b8");
+        }
+      }
+    });
+    // Son cemaat yeri (revak): 6 sütun, kemerler, düz çatı ve üstünde 5 küçük kubbe.
+    const pd = 4.2, pz = b.d / 2 + pd / 2;
+    for (let k = 0; k < 6; k++) {
+      const lx = -b.w / 2 + 0.4 + (k * (b.w - 0.8)) / 5;
+      B.trims.add(local(b, lx, 0, b.d / 2 + pd - 0.3), b.rot, s.set(0.45, 3.2, 0.45), "#f4f1ea");
+      if (k < 5) {
+        const ax = lx + (b.w - 0.8) / 10;
+        B.arches.add(local(b, ax, 3.2, b.d / 2 + pd - 0.3), b.rot, s.set((b.w - 0.8) / 10, 1, 0.45), "#f4f1ea");
+        B.domes.add(local(b, ax, 4.35, pz), b.rot, s.set(1.15, 0.9, 1.15), b.roof);
+      }
+    }
+    B.walls.add(local(b, 0, 3.2, pz), b.rot, s.set(b.w, 1.15, pd), b.wall);
+    B.slabs.add(local(b, 0, 0, pz), b.rot, s.set(b.w + 0.4, 0.15, pd + 0.4), "#d6cfc2");
+    b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.6, 2.8, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.6, h: 2.8 };
+    B.arches.add(local(b, 0, 2.95, b.d / 2 + 0.05), b.rot, s.set(0.8, 1, 0.1), "#6b4a35");
+    // Köşe kubbeleri (kasnaklı).
+    if (full) for (const [lx, lz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      B.walls.add(local(b, lx * (b.w / 2 - 1.3), h, lz * (b.d / 2 - 1.3)), b.rot, s.set(2.2, 0.8, 2.2), b.wall);
+      B.domes.add(local(b, lx * (b.w / 2 - 1.3), h + 0.8, lz * (b.d / 2 - 1.3)), b.rot, s.set(1.15, 1.0, 1.15), b.roof);
+    }
     return;
   }
 
@@ -866,13 +909,21 @@ function buildFeatures(world) {
         break;
       }
       case "minare": {
+        // Minare: kare taş kaide (pabuç), on iki köşeli gövde, mukarnaslı şerefe ve korkuluğu, üst gövde,
+        // kurşun külah ve alem.
         const y0 = world.groundY(f.x, f.z);
-        add(new THREE.CylinderGeometry(1.5, 1.6, 2, 12), stone, f.x, y0 + 1, f.z);
-        add(new THREE.CylinderGeometry(1.0, 1.15, 22, 12), white, f.x, y0 + 13, f.z);
-        add(new THREE.CylinderGeometry(1.55, 1.2, 0.5, 12), stone, f.x, y0 + 18, f.z);
-        add(new THREE.CylinderGeometry(0.9, 1.0, 4, 12), white, f.x, y0 + 26, f.z);
-        add(new THREE.ConeGeometry(1.05, 5, 12), std("#7d8e9c", { metalness: 0.3, roughness: 0.5 }), f.x, y0 + 30.5, f.z);
-        add(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 6), std("#c9a24a", { metalness: 0.7, roughness: 0.3 }), f.x, y0 + 33.6, f.z, 0, false);
+        add(new THREE.BoxGeometry(2.6, 2.6, 2.6), stone, f.x, y0 + 1.3, f.z);
+        add(new THREE.CylinderGeometry(1.25, 1.45, 0.8, 12), stone, f.x, y0 + 3.0, f.z);
+        add(new THREE.CylinderGeometry(0.95, 1.12, 19.6, 12), white, f.x, y0 + 13.2, f.z);
+        add(new THREE.CylinderGeometry(1.65, 1.0, 0.9, 12), stone, f.x, y0 + 23.4, f.z);
+        add(new THREE.CylinderGeometry(1.7, 1.7, 0.15, 12), stone, f.x, y0 + 23.9, f.z);
+        add(new THREE.TorusGeometry(1.62, 0.04, 6, 24).rotateX(Math.PI / 2), metal, f.x, y0 + 24.85, f.z, 0, false);
+        for (let k = 0; k < 12; k++) { const a = (k / 12) * Math.PI * 2; add(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 5), metal, f.x + Math.cos(a) * 1.62, y0 + 24.4, f.z + Math.sin(a) * 1.62, 0, false); }
+        add(new THREE.CylinderGeometry(0.85, 0.95, 3.6, 12), white, f.x, y0 + 25.8, f.z);
+        add(new THREE.CylinderGeometry(1.0, 1.0, 0.25, 12), stone, f.x, y0 + 27.7, f.z);
+        add(new THREE.ConeGeometry(1.0, 5, 12), std("#7d8e9c", { metalness: 0.3, roughness: 0.5 }), f.x, y0 + 30.3, f.z);
+        add(new THREE.CylinderGeometry(0.06, 0.06, 1.4, 6), std("#c9a24a", { metalness: 0.7, roughness: 0.3 }), f.x, y0 + 33.4, f.z, 0, false);
+        add(new THREE.SphereGeometry(0.16, 8, 6), std("#c9a24a", { metalness: 0.7, roughness: 0.3 }), f.x, y0 + 33.5, f.z, 0, false);
         break;
       }
       case "sadirvan": {

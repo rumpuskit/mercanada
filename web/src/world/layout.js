@@ -1116,9 +1116,15 @@ export class World {
         this.block(x - 13, cz - g.h / 2, x + 13, cz + g.h / 2, 0);
         switch (kind) {
           case "cami": {
-            this.addBuilding({ kind: "cami", x, z: cz + 3, rot: side < 0 ? Math.PI / 2 : -Math.PI / 2, w: 16, d: 16, floors: 2, roofType: "dome", wall: "#f2ede4", roof: "#8a9aa8", workplace: true, style: { dome: true }, address: `${mahalleName(m).replace(" Mahallesi", "")} Camii, ${mahalleName(m)}` });
-            this.features.push({ type: "minare", x: x + side * -9.5, z: cz - 8 });
-            this.features.push({ type: "sadirvan", x, z: cz - 11 });
+            // Cami: arka tarafa çekilir; önde son cemaat yeri ve avlu (şadırvan). Minare ön köşeye bitişik.
+            const rot = side < 0 ? Math.PI / 2 : -Math.PI / 2, bxm = x + side * 3, bzm = cz + 2;
+            const cw = 14, cd = 14;
+            this.addBuilding({ kind: "cami", x: bxm, z: bzm, rot, w: cw, d: cd, floors: 2, roofType: "dome", wall: "#ece4d6", roof: "#7d8e9c", workplace: true, style: { dome: true }, address: `${mahalleName(m).replace(" Mahallesi", "")} Camii, ${mahalleName(m)}` });
+            const toWorld = (lx, lz) => [bxm + lx * Math.cos(rot) + lz * Math.sin(rot), bzm - lx * Math.sin(rot) + lz * Math.cos(rot)];
+            const [mx, mz] = toWorld(-cw / 2 - 1.15, cd / 2 - 1.2);
+            this.features.push({ type: "minare", x: mx, z: mz });
+            const [sx2, sz2] = toWorld(cw / 2 + 4.5, cd / 2 + 1.5); // avluda, son cemaat yerinin yanında
+            this.features.push({ type: "sadirvan", x: sx2, z: sz2 });
             this.plazas.push({ x0: x - 12.5, z0: cz - g.h / 2 + 0.5, x1: x + 12.5, z1: cz + g.h / 2 - 0.5, kind: "avlu" });
             break;
           }
