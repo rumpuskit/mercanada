@@ -194,7 +194,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
       }
     }
     // Giriş: kapı, saçak, basamak.
-    B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.3, 2.3, 0.1));
+    b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.3, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.3, h: 2.3 };
     B.slabs.add(local(b, 0, 2.6, b.d / 2 + 0.6), b.rot, s.set(2.2, 0.12, 1.2));
     B.slabs.add(local(b, 0, 0, b.d / 2 + 0.7), b.rot, s.set(2.2, 0.15, 1.4));
     return;
@@ -206,13 +206,18 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   const owner = (k) => ({ workplace: b.kind, seed: k });
   if (st.shop) {
     // Zemin kat dükkân vitrini, tente ve tabela.
-    addGlass(b, 0, 0.45 + 1.3, b.d / 2 + 0.06, b.w - 2.4, 2.6, false, { workplace: b.kind, seed: 0, shop: true });
+    // Vitrin ortada camlı kapıyla ikiye bölünür.
+    const pane = (b.w - 2.4 - 1.5) / 2;
+    addGlass(b, -(0.75 + pane / 2), 0.45 + 1.3, b.d / 2 + 0.06, pane, 2.6, false, { workplace: b.kind, seed: 0, shop: true });
+    addGlass(b, 0.75 + pane / 2, 0.45 + 1.3, b.d / 2 + 0.06, pane, 2.6, false, { workplace: b.kind, seed: 1, shop: true });
     B.frames.add(local(b, 0, 0.35, b.d / 2), b.rot, s.set(b.w - 2.1, 2.9, 0.1));
+    b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.07), b.rot, s.set(1.3, 2.45, 0.06)), y: 0.15, z: b.d / 2 + 0.07, w: 1.3, h: 2.45 };
     B.awnings.add(local(b, 0, 3.0, b.d / 2 + 0.9), b.rot, s.set(b.w - 1.6, 0.12, 1.9), st.awning);
     B.awnings.add(local(b, 0, 2.75, b.d / 2 + 1.85), b.rot, s.set(b.w - 1.6, 0.35, 0.06), st.awning);
     B.signs.add(local(b, 0, 3.25, b.d / 2 + 0.1), b.rot, s.set(Math.min(b.w - 2, 7), 0.7, 0.12), st.awning);
   } else if (!st.glass) {
-    B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(b.w > 20 ? 2.6 : 1.6, 2.5, 0.1));
+    const dw = b.w > 20 ? 2.6 : 1.6;
+    b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(dw, 2.5, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: dw, h: 2.5 };
     B.slabs.add(local(b, 0, 2.9, b.d / 2 + 0.8), b.rot, s.set(b.w > 20 ? 4 : 2.4, 0.15, 1.6));
   }
   for (let f = 0; f < floors; f++) {
@@ -281,6 +286,30 @@ export function buildCity(world) {
         });
         if (touched) batch.mesh.instanceMatrix.needsUpdate = true;
       }
+    },
+    /** Kapılar: içinden biri geçenler açılır (menteşesinden dışa doğru), diğerleri kapanır. */
+    setOpenDoors(open) {
+      const mesh = K.B.doors.mesh;
+      let touched = false;
+      const m = new THREE.Matrix4(), qq = new THREE.Quaternion(), pp = new THREE.Vector3(), ss = new THREE.Vector3();
+      for (const b of this._open ?? []) {
+        if (open.has(b) || !b.door) continue;
+        mesh.setMatrixAt(b.door.idx, K.B.doors.items[b.door.idx].m);
+        touched = true;
+      }
+      for (const b of open) {
+        if (!b?.door || this._hidden === b) continue;
+        const a = 1.25, d = b.door;
+        const lx = -d.w / 2 + (d.w / 2) * Math.cos(a), lz = d.z + (d.w / 2) * Math.sin(a);
+        const c = Math.cos(b.rot), sn = Math.sin(b.rot);
+        pp.set(b.x + lx * c + lz * sn, FLAT_Y + d.y, b.z - lx * sn + lz * c);
+        qq.setFromAxisAngle(UP, b.rot - a);
+        m.compose(pp, qq, ss.set(d.w, d.h, 0.08));
+        mesh.setMatrixAt(d.idx, m);
+        touched = true;
+      }
+      this._open = new Set(open);
+      if (touched) mesh.instanceMatrix.needsUpdate = true;
     },
     /** Işın hangi binaya çarpıyor? */
     pickBuilding(raycaster) {

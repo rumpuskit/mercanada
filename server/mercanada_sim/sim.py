@@ -13,6 +13,8 @@ MASK = 0xFFFFFFFF
 TZ_OFFSET = 3 * 3600
 PLACE_HOME = "ev"
 PLACE_WORK = "is"
+OUTING_LATEST_HOBBY = 1140   # 19:00
+OUTING_LATEST_MEYDAN = 1230  # 20:30
 
 CATALOG_PATH = Path(__file__).resolve().parents[2] / "data" / "catalog.json"
 
@@ -217,9 +219,9 @@ def _travel(plan: list, commute: int, from_: str, to: str) -> None:
 
 def _evening_place(s: int, day: int, hobby_place: str) -> str:
     x = roll(s, "aksam", day) % 100
-    if x < 40:
+    if x < 20:
         return hobby_place
-    if x < 65:
+    if x < 35:
         return "meydan"
     return ""
 
@@ -246,8 +248,10 @@ def day_plan(r: dict, day: int) -> list:
         _travel(plan, commute, PLACE_HOME, PLACE_WORK)
         _add(plan, end, "is", PLACE_WORK)
         outing = _evening_place(s, day, hobby_place)
-        duration = 60 + roll(s, "sure", day) % 90
-        if outing and end + 3 * commute + duration <= sleep - 10:
+        duration = 45 + roll(s, "sure", day) % 60
+        # Hobiler hava kararmadan (19:00), meydan buluşmaları 20:30'dan önce başlar.
+        latest = OUTING_LATEST_HOBBY if outing.startswith("hobi:") else OUTING_LATEST_MEYDAN
+        if outing and end + commute <= latest and end + 3 * commute + duration <= sleep - 10:
             _travel(plan, commute, PLACE_WORK, outing)
             _add(plan, _end(plan) + duration, _activity_of(outing), outing)
             _travel(plan, commute, outing, PLACE_HOME)
@@ -260,11 +264,11 @@ def day_plan(r: dict, day: int) -> list:
         _travel(plan, commute, PLACE_HOME, hobby_place)
         _add(plan, _end(plan) + 90 + roll(s, "sure", day) % 90, "hobi", hobby_place)
         _travel(plan, commute, hobby_place, PLACE_HOME)
-        evening = 1140 + roll(s, "aksam_saat", day) % 60
-        if roll(s, "aksam", day) % 100 < 50 and evening + 60 + commute <= sleep - 10:
+        evening = 1110 + roll(s, "aksam_saat", day) % 60
+        if roll(s, "aksam", day) % 100 < 30 and evening + 45 + commute <= sleep - 10:
             _add(plan, evening - commute, "ev", PLACE_HOME)
             _travel(plan, commute, PLACE_HOME, "meydan")
-            _add(plan, _end(plan) + 60 + roll(s, "meydan_sure", day) % 60, "meydan", "meydan")
+            _add(plan, _end(plan) + 45 + roll(s, "meydan_sure", day) % 60, "meydan", "meydan")
             _travel(plan, commute, "meydan", PLACE_HOME)
     _add(plan, max(sleep, _end(plan)), "ev", PLACE_HOME)
     _add(plan, 1440, "uyku", PLACE_HOME)

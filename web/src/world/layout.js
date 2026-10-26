@@ -167,6 +167,7 @@ export class World {
     this.seats = [];       // oturulabilecek yerler {x, z, heading, top, place}
     this.piers = [];       // iskeleler {x0, x1, z0, z1, top}
     this.lamps = [];       // yollar dışındaki sokak lambaları {x, z, dir}
+    this.buildingBySlot0 = new Map();
 
     this._roadHCache = new Map();
     this._groundCache = new Map();
@@ -492,15 +493,17 @@ export class World {
       front.cursor += style.w + 3;
       const off = av / 2 + 1.5 + style.d / 2;
       let x, z, rot, door, street;
+      // Kapı noktası cephenin hemen içinde: insanlar kapıdan girip kaybolur, kapıdan çıkıp görünür.
+      const inDoor = av / 2 + 1.5 + 0.35;
       if (front.axis === "x") {
         x = front.sign * t; z = front.side * off;
         rot = front.side < 0 ? 0 : Math.PI;
-        door = [x, front.side * (av / 2 + 1)];
+        door = [x, front.side * inDoor];
         street = [x, 0];
       } else {
         z = front.sign * t; x = front.side * off;
         rot = front.side < 0 ? Math.PI / 2 : -Math.PI / 2;
-        door = [front.side * (av / 2 + 1), z];
+        door = [front.side * inDoor, z];
         street = [0, z];
       }
       const b = this.addBuilding({
@@ -510,11 +513,12 @@ export class World {
       const path = [street, HUB];
       if (kind === "kahvehane") {
         this.places.kahvehane = { anchors: [door], spread: 3, path, building: b };
-        const toward = front.axis === "x" ? -front.side : -front.side;
-        this.addTables(door[0], door[1], 3, front.axis, toward, "kahvehane");
+        const outside = front.axis === "x" ? [door[0], front.side * (av / 2 + 1)] : [front.side * (av / 2 + 1), door[1]];
+        this.addTables(outside[0], outside[1], 3, front.axis, -front.side, "kahvehane");
       } else {
         this._addWorkplace(kind, index, { door, path, anchor: door, spread: 2, building: b });
-        if (kind === "kafe" || kind === "firin") this.addTables(door[0], door[1], kind === "kafe" ? 3 : 2, front.axis, -front.side, "kafe");
+        const outside = front.axis === "x" ? [door[0], front.side * (av / 2 + 1)] : [front.side * (av / 2 + 1), door[1]];
+        if (kind === "kafe" || kind === "firin") this.addTables(outside[0], outside[1], kind === "kafe" ? 3 : 2, front.axis, -front.side, "kafe");
       }
     });
 
@@ -649,7 +653,12 @@ export class World {
     this.piers.push({ x0: ix - 1.5, x1: ix + 1.5, z0: iz - 3, z1: iz + 33, top: 1.53 });
     const pi = promAt(ix);
     const promTo0 = (from) => promenade.filter(([x]) => (from < 0 ? x >= from && x <= 0 : x <= from && x >= 0)).sort((a, b) => Math.abs(a[0]) - Math.abs(b[0])).reverse();
-    this.places.iskele = { anchors: [[ix - 1.0, iz + 22], [ix + 1.0, iz + 26], [ix - 1.0, iz + 30], [ix + 1.0, iz + 31]], spread: 0, path: [[ix, iz - 3], pi, ...promTo0(ix), [0, avZ0], HUB] };
+    const fishing = [];
+    for (let k = 0; k < 6; k++) {
+      const side = k % 2 ? 1 : -1;
+      fishing.push({ x: ix + side * 1.05, z: iz + 12 + k * 3.4, heading: side * Math.PI / 2 });
+    }
+    this.places.iskele = { anchors: fishing.map((f) => [f.x, f.z]), spots: fishing, spread: 0, path: [[ix, iz - 3], pi, ...promTo0(ix), [0, avZ0], HUB] };
 
     // Tersane: gezinti yolunun bittiği doğu kıyısında, deniz tarafında.
     const [tx, tz] = coast(198);
@@ -695,7 +704,15 @@ export class World {
     this.addRoad(fenerTrail, "patika");
     const fenerPath = [...fenerTrail, [halfW, 0], HUB];
     this._addWorkplace("fener", 0, { door: [fx, fz], path: fenerPath, anchor: [fx - 4, fz - 4], spread: 2 });
-    this.places.fener = { anchors: [[fx - 6, fz - 6]], spread: 3, path: fenerPath };
+    // Seyir noktaları: fenerin çevresinde, karada, denize (tepeden uzağa) bakan yerler.
+    const views = [];
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      const vx = fx + Math.cos(a) * 9, vz = fz + Math.sin(a) * 9;
+      if (this.rawHeight(vx, vz) > 0.8) views.push({ x: vx, z: vz, heading: Math.atan2(vx - hx, vz - hz) });
+    }
+    this.places.fener = { anchors: views.map((v) => [v.x, v.z]), spots: views, spread: 0, path: fenerPath };
+    this.fener = { x: fx, z: fz, door: [fx - Math.cos(Math.atan2(fz - hz, fx - hx)) * 4.8, fz - Math.sin(Math.atan2(fz - hz, fx - hx)) * 4.8] };
     this.labels.push({ text: "Fener", x: fx, z: fz, h: 34 });
 
     // Batı: köy yolu, iki çiftlik ve plaj.
@@ -773,6 +790,7 @@ export class World {
           balconies: hash2(key, 6, 5) < 0.7,
           slot0, daireler: perBina,
         });
+        this.buildingBySlot0.set(slot0, this.buildings[this.buildings.length - 1]);
       }
     }
     this.labels.push({ text: mahalleName(cell.mahalle), x: ox, z: oz, h: 45 });
@@ -793,10 +811,10 @@ export class World {
     const bx = ox + SOKAK_COLS[c][0] + LOT / 2 + (p.bina % half) * LOT;
     const facade = ROADS.sokak.width / 2 + FRONT_YARD;
     const bz = streetZ + (north ? -1 : 1) * (facade + BINA_D / 2);
-    const door = [bx, streetZ + (north ? -1 : 1) * (facade - 0.5)];
+    const door = [bx, streetZ + (north ? -1 : 1) * (facade + 0.35)];
     const entryZ = this._entryZ(cell);
     const path = [[bx, streetZ], [ox, streetZ], [ox, entryZ], [0, entryZ], [0, -CELL_D / 2], HUB];
-    return { bx, bz, door, path, north, parts: p };
+    return { bx, bz, door, path, north, parts: p, building: this.buildingBySlot0.get(slot - p.daire) };
   }
 
   workplaceOf(wp) {

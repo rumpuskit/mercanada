@@ -123,6 +123,8 @@ const PROPS = {
       tint(new THREE.BoxGeometry(0.04, 0.5, 0.04).rotateX(0.3).translate(0, 0.68, 0.45), "#c8312f"),
       tint(new THREE.BoxGeometry(0.5, 0.03, 0.03).translate(0, 0.95, 0.38), "#202024"),
       tint(new THREE.BoxGeometry(0.12, 0.05, 0.24).translate(0, 0.9, -0.3), "#202024"),
+      tint(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 10).rotateZ(Math.PI / 2).translate(0, 0.3, 0.02), "#8a8a8a"),
+      tint(new THREE.BoxGeometry(0.3, 0.025, 0.025).translate(0, 0.3, 0.02), "#2a2a2a"),
     ]);
   },
   mat: () => merge([tint(new THREE.BoxGeometry(0.62, 0.012, 1.8), "#7a5cc4")]),
@@ -300,7 +302,14 @@ export class Crowd {
         case "gitar": this._prop("gitar", this._joint(propM, torso, 0.02, 1.12, 0.17, 0, 0, 1.15)); break;
         case "kasa": this._prop("kasa", this._joint(propM, torso, 0, 1.12, 0.32)); break;
         case "sovale": this._prop("sovale", this._joint(propM, root, 0.1, 0, 0.75, 0, Math.PI)); break;
-        case "bisiklet": this._prop("bisiklet", this._joint(propM, root, 0, p.propY || 0, 0)); break;
+        case "bisiklet": {
+          // Bisiklet ölçeklenmez; tekerlekler yerde, sele kalçanın altında.
+          this._q.setFromAxisAngle(AY, p.heading);
+          // Sele (bisikletin 0,3 m arkası) kalçanın altına gelir.
+          propM.compose(this._p.set(p.x + Math.sin(p.heading) * 0.3, p.groundY ?? p.y, p.z + Math.cos(p.heading) * 0.3), this._q, this._one);
+          this._prop("bisiklet", propM);
+          break;
+        }
         case "mat": this._prop("mat", this._joint(propM, root, 0, 0.01, 0.3)); break;
         case "havlu": {
           // Havlu yerde, bedenin ortasında (yatan kişinin başı arkada kalır).

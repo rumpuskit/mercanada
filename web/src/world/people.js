@@ -1,56 +1,30 @@
 // Sakinler: günlük planına göre evden çıkar, işe gider, hobisini yapar, meydanda arkadaşlarıyla buluşur.
-// Plan simülasyondan gelir (sim.js); burada o planın sokakta nasıl göründüğü kurulur:
-//  - Yürüyüş: herkesin kendi hızı var (1,1-1,5 m/s), kaldırımdan yürür, köşeleri yuvarlak döner;
-//    erken kalırsa yolda durur (vitrine bakar, telefonuna bakar), köpeği varsa yanında yürür.
-//  - Yerinde: meydanda gruplar halinde sohbet eder ya da bankta oturur, kahvehanede tavla oynar,
-//    iskelede balık tutar, sahilde koşar ya da bisiklete biner, plajda yüzer, güneşlenir, yoga yapar,
-//    tepede uçurtma uçurur, fenerde fotoğraf çeker, parkta kitap okur ya da resim yapar.
-//  - İşte: dışarıda çalışanlar işini yapar (kasa taşır, tarlada eğilir, kulede nöbet tutar...).
-// Oturak ve grup yerleri her karede sırayla dağıtılır; aynı yere iki kişi oturmaz.
+// Plan simülasyondan gelir (sim.js); burada o planın sokakta nasıl yaşandığı kurulur.
+//
+//  - Gün başında herkese, gideceği her yer için bir "rol" ayrılır: oturacağı bank ya da masa, katılacağı
+//    sohbet grubu, olta atacağı iskele noktası, seyir noktası... Ayırma, varış saatine göre sırayla yapılır;
+//    aynı yere aynı anda iki kişi düşmez ve kişinin yeri gün içinde değişmez.
+//  - Yolculuk: kapının içinden çıkar, kaldırımdan (her yolun kendi kaldırım çizgisinden) yürür, köşeleri
+//    yuvarlak döner, meydanda çeşmenin çevresinden dolanır, ayrılan yerine varır; oturacaksa oturur.
+//    Erken kalırsa yolda kısa molalar verir. Kapıdan girerken kapı açılır.
+//  - Yürüyenler birbirine çok yaklaşırsa yana çekilir; durağan insanların ve engellerin içinden geçilmez.
 import { Color } from "three";
 import { activityAt, dayPlan, hobby, job, look, pet, roll, workplace } from "../sim.js";
 import { Crowd } from "./human.js";
+import { Navigator } from "./nav.js";
 import * as P from "./palette.js";
 
-// Dışarıda çalışanlar iş başındayken iş kıyafeti giyer.
 const UNIFORMS = {
   cankurtaran: "#e0463c", liman_iscisi: "#f28c28", balikci: "#f2c230", gemi_ustasi: "#33507a",
   bahcivan: "#6a8f3c", zeytinci: "#7d8a4e", fener_bekcisi: "#2f3f5f", rehber: "#3e8a86",
 };
 const DOG_COLORS = ["#8a5a32", "#2b2622", "#e8dcc4", "#c9954f", "#6b6b6b"].map((c) => new Color(c));
-const SIDEWALK = 4.9; // yol ortasından kaldırıma
+const HUB = [0, 0];
+const POSE_KEYS = ["y", "lie", "drop", "lean", "twist", "headYaw", "headPitch", "hipL", "hipR", "kneeL", "kneeR", "shL", "shR", "abL", "abR", "elL", "elR"];
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const frac = (n) => (n % 10000) / 10000;
-
-/** Yol çizgisini kaldırıma kaydırır ve köşeleri yuvarlar. Uç noktalar (kapı, yer) sabit kalır. */
-function sidewalkPath(pts, d) {
-  const off = [pts[0]];
-  for (let i = 1; i < pts.length - 1; i++) {
-    const [px, pz] = pts[i - 1], [x, z] = pts[i], [nx, nz] = pts[i + 1];
-    let ax = x - px, az = z - pz, bx = nx - x, bz = nz - z;
-    const la = Math.hypot(ax, az) || 1, lb = Math.hypot(bx, bz) || 1;
-    ax /= la; az /= la; bx /= lb; bz /= lb;
-    let mx = -(az + bz), mz = ax + bx;
-    const lm = Math.hypot(mx, mz);
-    if (lm < 1e-3) { mx = -az; mz = ax; } else { mx /= lm; mz /= lm; }
-    const cos = Math.max(0.5, mx * -az + mz * ax);
-    off.push([x + (mx * d) / cos, z + (mz * d) / cos]);
-  }
-  off.push(pts[pts.length - 1]);
-  // Köşe yuvarlama: her iç köşeyi, iki komşu parça üzerinde 2,5 m geriden iki noktayla değiştir.
-  const out = [off[0]];
-  for (let i = 1; i < off.length - 1; i++) {
-    const [px, pz] = off[i - 1], [x, z] = off[i], [nx, nz] = off[i + 1];
-    const la = Math.hypot(x - px, z - pz), lb = Math.hypot(nx - x, nz - z);
-    const r = Math.min(2.5, la / 2.2, lb / 2.2);
-    if (r < 0.3) { out.push(off[i]); continue; }
-    out.push([x - ((x - px) / la) * r, z - ((z - pz) / la) * r]);
-    out.push([x + ((nx - x) / lb) * r, z + ((nz - z) / lb) * r]);
-  }
-  out.push(off[off.length - 1]);
-  return out;
-}
+const smooth = (t) => t * t * (3 - 2 * t);
 
 function lengths(pts) {
   const lens = [0];
@@ -70,27 +44,95 @@ function along(pts, lens, d, out) {
   return out;
 }
 
+/** Yaya hattı: yol çizgisinden ne kadar yana (yolun türüne göre kaldırımın ortası). */
+function laneOf(road, jitter) {
+  if (!road) return 0;
+  const hc = road.carriage / 2, hw = road.width / 2;
+  if (road.carriage > 0) return hw - hc > 0.3 ? (hc + hw) / 2 + jitter * 0.6 * (hw - hc) : hw - 0.7;
+  if (road.type === "yaya") return 1.6 + (jitter + 0.5) * 3.0;
+  if (road.type === "sahil") return 0.5 + (jitter + 0.5) * 1.4;
+  return 0;
+}
+
+/**
+ * Yol çizgisini her parçanın yolu üzerindeki kaldırım çizgisine kaydırır; komşu parçalar kesişim
+ * noktalarında birleşir, köşeler yuvarlanır. İlk ve son parça (kapıdan yola bağlantı) kaydırılmaz.
+ */
+function sidewalkPath(world, raw, side, jitter) {
+  const pts = [raw[0]];
+  for (const p of raw.slice(1)) if (Math.hypot(p[0] - pts[pts.length - 1][0], p[1] - pts[pts.length - 1][1]) > 0.05) pts.push(p);
+  const n = pts.length;
+  if (n < 3) return pts;
+  const segs = [];
+  for (let i = 0; i < n - 1; i++) {
+    const [ax, az] = pts[i], [bx, bz] = pts[i + 1];
+    const l = Math.hypot(bx - ax, bz - az) || 1;
+    const dx = (bx - ax) / l, dz = (bz - az) / l;
+    let o = 0;
+    if (i > 0 && i < n - 2) o = side * laneOf(world.roadIndex.at((ax + bx) / 2, (az + bz) / 2)?.road, jitter);
+    segs.push({ a: [ax - dz * o, az + dx * o], b: [bx - dz * o, bz + dx * o], d: [dx, dz] });
+  }
+  const out = [segs[0].a];
+  for (let i = 1; i < segs.length; i++) {
+    const s1 = segs[i - 1], s2 = segs[i];
+    const den = s1.d[0] * s2.d[1] - s1.d[1] * s2.d[0];
+    if (Math.abs(den) < 0.05) {
+      out.push(s1.b);
+      if (Math.hypot(s2.a[0] - s1.b[0], s2.a[1] - s1.b[1]) > 0.05) out.push(s2.a);
+      continue;
+    }
+    const t = ((s2.a[0] - s1.a[0]) * s2.d[1] - (s2.a[1] - s1.a[1]) * s2.d[0]) / den;
+    out.push([s1.a[0] + s1.d[0] * t, s1.a[1] + s1.d[1] * t]);
+  }
+  out.push(segs[segs.length - 1].b);
+  // Köşe yuvarlama.
+  const res = [out[0]];
+  for (let i = 1; i < out.length - 1; i++) {
+    const [px, pz] = out[i - 1], [x, z] = out[i], [nx, nz] = out[i + 1];
+    const la = Math.hypot(x - px, z - pz), lb = Math.hypot(nx - x, nz - z);
+    const r = Math.min(2.2, la / 2.2, lb / 2.2);
+    if (r < 0.3) { res.push(out[i]); continue; }
+    res.push([x - ((x - px) / la) * r, z - ((z - pz) / la) * r]);
+    res.push([x + ((nx - x) / lb) * r, z + ((nz - z) / lb) * r]);
+  }
+  res.push(out[out.length - 1]);
+  return res;
+}
+
+/** Bacak için iki kemikli ters kinematik: kalçadan ayağa (öne dz, yukarı dy) → {hip, knee}. */
+function legIK(dz, dy, L1 = 0.45, L2 = 0.47) {
+  const d = clamp(Math.hypot(dz, dy), 0.25, L1 + L2 - 0.005);
+  const alpha = Math.atan2(dz, -dy);
+  const knee = Math.PI - Math.acos(clamp((L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2), -1, 1));
+  const beta = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1));
+  return { hip: alpha + beta, knee };
+}
+
 // --- duruşlar ---
 
 export function resetPose(p) {
   p.lie = 0; p.drop = 0; p.lean = 0; p.twist = 0; p.headYaw = 0; p.headPitch = 0;
-  p.hipL = 0; p.hipR = 0; p.kneeL = 0; p.kneeR = 0;
+  p.hipL = 0; p.hipR = 0; p.kneeL = 0.05; p.kneeR = 0.05;
   p.shL = 0; p.shR = 0; p.abL = 0; p.abR = 0; p.elL = 0.12; p.elR = 0.12;
-  p.props = null;
+  p.props = null; p.moving = false; p.radius = 0.32; p.dog = false; p.door = null;
 }
 
-/** Yürüyüş: φ adım evresi; koşu için run = 1. */
+/** Yürüyüş: φ adım evresi; koşu için run = 1. Topuk vuruşu, kalça salınımı, kol sallama. */
 export function walkPose(p, phi, run = 0) {
   const s = Math.sin(phi), c = Math.cos(phi);
-  const hipA = run ? 0.62 : 0.42, kneeA = run ? 1.25 : 0.7;
+  const hipA = run ? 0.62 : 0.4, kneeA = run ? 1.3 : 0.75;
   p.hipL = hipA * s; p.hipR = -hipA * s;
-  p.kneeL = 0.1 + kneeA * Math.max(0, c) * (0.6 + 0.4 * Math.max(0, -s));
-  p.kneeR = 0.1 + kneeA * Math.max(0, -c) * (0.6 + 0.4 * Math.max(0, s));
-  p.shL = -(run ? 0.55 : 0.32) * s; p.shR = (run ? 0.55 : 0.32) * s;
-  p.elL = run ? 1.45 : 0.2 + 0.18 * Math.max(0, -s); p.elR = run ? 1.45 : 0.2 + 0.18 * Math.max(0, s);
-  p.lean = run ? 0.16 : 0.03;
-  p.twist = 0.06 * s;
-  p.y += (run ? 0.05 : 0.025) * Math.abs(Math.cos(phi));
+  // Diz, bacak öne salınırken bükülür; yere basarken hafifçe esner.
+  p.kneeL = 0.08 + kneeA * Math.max(0, c) ** 1.4 + 0.06 * Math.max(0, -s);
+  p.kneeR = 0.08 + kneeA * Math.max(0, -c) ** 1.4 + 0.06 * Math.max(0, s);
+  p.shL = -(run ? 0.6 : 0.3) * s; p.shR = (run ? 0.6 : 0.3) * s;
+  p.abL = p.abR = 0.04;
+  p.elL = run ? 1.5 : 0.18 + 0.22 * Math.max(0, -s); p.elR = run ? 1.5 : 0.18 + 0.22 * Math.max(0, s);
+  p.lean = run ? 0.18 : 0.04;
+  p.twist = (run ? 0.1 : 0.07) * s;
+  p.headYaw = -0.03 * s;
+  p.y += (run ? 0.06 : 0.028) * Math.abs(Math.cos(phi)) - (run ? 0.02 : 0.01);
+  p.moving = true;
 }
 
 export function sitPose(p, top, k) {
@@ -101,7 +143,8 @@ export function sitPose(p, top, k) {
 }
 
 export function idleGesture(p, t, phase, talk) {
-  // Ağırlığını değiştirir, arada konuşurken elleriyle anlatır.
+  // Ağırlığını bir bacaktan ötekine verir, başını çevirir, konuşurken elleriyle anlatır.
+  const shift = Math.sin(t * 0.21 + phase);
   p.twist = 0.05 * Math.sin(t * 0.4 + phase);
   p.headYaw = 0.25 * Math.sin(t * 0.3 + phase * 2);
   if (talk) {
@@ -109,7 +152,14 @@ export function idleGesture(p, t, phase, talk) {
     p.shR = 0.35 + 0.5 * g; p.elR = 0.6 + 0.9 * g; p.abR = 0.05 * g;
     p.shL = 0.1 * g; p.elL = 0.3;
   }
-  if (p.hipL < 1) p.kneeL = 0.06 + 0.06 * Math.max(0, Math.sin(t * 0.25 + phase)); // otururken dizler bükülü kalır
+  if (p.hipL < 1) {
+    p.kneeL = 0.05 + 0.1 * Math.max(0, shift);
+    p.kneeR = 0.05 + 0.1 * Math.max(0, -shift);
+  }
+}
+
+function blendPose(p, a, b, t) {
+  for (const key of POSE_KEYS) p[key] = a[key] + (b[key] - a[key]) * t;
 }
 
 export class People {
@@ -124,6 +174,11 @@ export class People {
     this.visible = new Uint8Array(this.n);
     this.activities = new Array(this.n);
     this.travelCache = new Array(this.n);
+    this.poses = Array.from({ length: this.n }, () => ({}));
+    this.slotToIndex = new Map(residents.map((r, i) => [r.slot, i]));
+    this.homeActs = new Array(this.n);
+    this.dollhouse = null;
+    this.openDoors = new Set();
 
     this.homes = residents.map((r) => world.homeOf(r.slot));
     this.works = residents.map((r) => ({ wp: workplace(r), loc: world.workplaceOf(workplace(r)), job: job(r).id }));
@@ -144,18 +199,157 @@ export class People {
       };
     });
 
-    // Oturaklar yere göre.
-    this.seatsByPlace = {};
-    for (const s of world.seats) (this.seatsByPlace[s.place] ??= []).push(s);
-
-    this.slotToIndex = new Map(residents.map((r, i) => [r.slot, i]));
-    this.homeActs = new Array(this.n);
-    this.dollhouse = null; // ev içi görünümü açıksa o kattaki sakinler içeride çizilir
-
+    this.nav = new Navigator(world);
+    this._buildPools();
     this.crowd = new Crowd(this.n);
     this.group = this.crowd.group;
-    this.pose = {};
     this._at = {};
+    this._tmp = {};
+    this._stand = {};
+    this._sit = {};
+  }
+
+  // --- yer havuzları: oturaklar, durma noktaları, sohbet grupları ---
+
+  _buildPools() {
+    const w = this.world;
+    const pools = {};
+    const add = (name, item) => (pools[name] ??= []).push({ ...item, busy: [] });
+    for (const s of w.seats) add("seat:" + s.place, s);
+    for (const s of w.places.iskele.spots) add("fish", s);
+    for (const s of w.places.fener.spots) add("view", s);
+    // Park (şövale), plaj (yoga, yüzme), tepe (uçurtma): engelsiz noktalar.
+    const scatter = (name, cx, cz, radius, count, heading, salt, accept = (x, z) => w.isWalkable(x, z)) => {
+      for (let k = 0, tries = 0; k < count && tries < count * 20; tries++) {
+        const a = frac(roll(salt, name, tries)) * Math.PI * 2, r = Math.sqrt(frac(roll(salt + 1, name, tries))) * radius;
+        const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+        if (!accept(x, z)) continue;
+        if ((pools[name] ?? []).some((q) => Math.hypot(q.x - x, q.z - z) < 2.4)) continue;
+        add(name, { x, z, heading: typeof heading === "function" ? heading(x, z) : heading });
+        k++;
+      }
+    };
+    const park = w.plazas.find((p) => p.kind === "park");
+    const pond = w.features.find((f) => f.type === "gol");
+    scatter("easel", (park.x0 + park.x1) / 2, (park.z0 + park.z1) / 2, 40, 14, (x, z) => Math.atan2(pond.x - x, pond.z - z), 11);
+    const beach = w.places.plaj.anchors;
+    const sea = (x, z) => w.height(x, z) > 0.35 && w.height(x, z) < 1.6 && !w.obstacles.has(w._obKey(x, z));
+    for (const [bx, bz] of beach) scatter("yoga", bx, bz, 6, 2, Math.PI, 13 + Math.round(bx), sea);
+    for (const [bx, bz] of beach) scatter("swim", bx, bz + 22, 10, 2, 0, 17 + Math.round(bx), (x, z) => w.height(x, z) < -0.6 && w.height(x, z) > -3);
+    for (const [bx, bz] of beach) scatter("towel", bx, bz, 7, 3, Math.PI, 19 + Math.round(bx), sea);
+    const top = w.places.tepe.anchors[0];
+    scatter("kite", top[0], top[1], 16, 10, (x, z) => Math.atan2(x - top[0], z - top[1]), 23);
+
+    // Sohbet grupları: meydanda çeşme ile banklar arasında ve dışında; diğer yerlerde çapanın çevresinde.
+    const groups = {};
+    const addGroup = (place, x, z, cap) => {
+      if (!w.isWalkable(x, z)) return;
+      (groups[place] ??= []).push({ x, z, cap, slots: Array.from({ length: cap }, () => []) });
+    };
+    for (let g = 0; g < 44; g++) {
+      const a = g * 2.39996, r = 9.5 + ((g * 7) % 17);
+      addGroup("meydan", Math.cos(a) * r, Math.sin(a) * r, 2 + (g % 4));
+    }
+    for (const place of ["park", "tepe", "sahil_yolu", "plaj", "pazar"]) {
+      const pl = w.places[place];
+      if (!pl) continue;
+      pl.anchors.forEach(([ax, az], i) => {
+        for (let g = 0; g < 3; g++) {
+          const a = g * 2.1 + i, r = 3 + g * 2.5;
+          const [x, z] = w.nearestWalkable(ax + Math.cos(a) * r, az + Math.sin(a) * r, 5);
+          addGroup(place, x, z, 2 + ((g + i) % 3));
+        }
+      });
+    }
+    // Dışarıdaki iş yerlerinde her çalışana ayrı bir çalışma noktası.
+    for (const [kind, list] of Object.entries(w.workplaces)) {
+      list.forEach((loc, idx) => {
+        if (!loc?.outdoor) return;
+        const center = loc.anchor;
+        const rad = Math.max(9, (loc.spread ?? 6) * 1.6);
+        const toward = (x, z) => Math.atan2(center[0] - x, center[1] - z);
+        scatter(`work:${kind}:${idx}`, center[0], center[1], rad, 14, toward, 31 + idx * 7 + kind.length);
+      });
+    }
+    this.groupPools = groups;
+    this.pools = pools;
+  }
+
+  /** Bir sakinin bir yerdeki modu: ne yapacak? */
+  _mode(i, seg, k) {
+    const s = this.residents[i].seed;
+    if (seg.ne === "is") return `work:${this.works[i].wp.kind}:${this.works[i].wp.index}`;
+    if (seg.ne === "hobi") {
+      return {
+        balik: "fish", kitap: "seat:park", resim: "easel", bisiklet: "bike", kosu: "jog", yuzme: "swim",
+        yoga: "yoga", ucurtma: "kite", gitar: "seat:meydan", satranc: "seat:meydan", fotograf: "view", tavla: "seat:kahvehane",
+      }[this.hobbies[i].id] ?? "group:" + seg.yer.replace("hobi:", "");
+    }
+    if (seg.ne === "meydan") {
+      const m = roll(s, "meydanMod", this.day * 16 + k) % 100;
+      return m < 22 ? "seat:meydan" : m < 50 ? "seat:kafe" : m < 72 ? "shop" : "group:meydan";
+    }
+    return "group:meydan";
+  }
+
+  /** Gün başı: herkesin her yer ziyareti için rolünü varış sırasıyla ayırır. */
+  _schedule() {
+    for (const list of Object.values(this.pools)) for (const it of list) it.busy = [];
+    for (const list of Object.values(this.groupPools)) for (const g of list) g.slots = g.slots.map(() => []);
+    const free = (busy, a, b) => busy.every(([x, y]) => y <= a || x >= b);
+    const requests = [];
+    this.roles = this.plans.map(() => []);
+    this.plans.forEach((plan, i) => {
+      plan.forEach((seg, k) => {
+        if (seg.ne === "yol" || seg.ne === "ev" || seg.ne === "uyku") return;
+        if (seg.ne === "is" && !this.works[i].loc.outdoor) return;
+        requests.push({ i, k, seg, mode: this._mode(i, seg, k) });
+      });
+    });
+    requests.sort((a, b) => a.seg.bas - b.seg.bas || a.i - b.i);
+    for (const q of requests) {
+      const { i, k, seg } = q;
+      const s = this.residents[i].seed;
+      let mode = q.mode;
+      let role = { mode };
+      const pool = this.pools[mode] ?? (mode.startsWith("seat:") ? this.pools[mode] : null);
+      if (pool?.length) {
+        const start = roll(s, "yer" + mode, this.day) % pool.length;
+        let item = null;
+        for (let n = 0; n < pool.length && !item; n++) {
+          const cand = pool[(start + n) % pool.length];
+          if (free(cand.busy, seg.bas - 2, seg.son + 2)) item = cand;
+        }
+        if (item) {
+          item.busy.push([seg.bas - 2, seg.son + 2]);
+          role = { mode, item };
+        } else if (mode.startsWith("work:")) {
+          role = { mode };
+        } else {
+          mode = "group:" + (mode.startsWith("seat:") ? mode.slice(5).replace("kafe", "meydan").replace("kahvehane", "meydan") : seg.yer.replace("hobi:", ""));
+          role = { mode };
+        }
+      }
+      if (mode.startsWith("group:")) {
+        const key = mode.slice(6);
+        const groups = this.groupPools[key];
+        if (groups?.length) {
+          const g0 = roll(s, "grup", this.day + k) % groups.length;
+          for (let n = 0; n < groups.length && !role.group; n++) {
+            const g = groups[(g0 + n) % groups.length];
+            const slot = g.slots.findIndex((busy) => free(busy, seg.bas - 1, seg.son + 1));
+            if (slot >= 0) {
+              g.slots[slot].push([seg.bas - 1, seg.son + 1]);
+              const a = (slot / g.cap) * Math.PI * 2 + (g.x * 0.37 + g.z * 0.11);
+              const r = 0.5 + 0.13 * g.cap;
+              const [x, z] = this.world.nearestWalkable(g.x + Math.cos(a) * r, g.z + Math.sin(a) * r, 2);
+              role.group = { x, z, heading: Math.atan2(g.x - x, g.z - z) };
+            }
+          }
+        }
+      }
+      this.roles[i][k] = role;
+    }
   }
 
   setDay(day) {
@@ -164,55 +358,80 @@ export class People {
     this.plans = this.residents.map((r) => dayPlan(r, day));
     this.dogs = this.residents.map((r) => pet(r, day) === "Köpek");
     this.travelCache.fill(null);
+    this._schedule();
   }
 
-  /** Bir yer adının (ev, is, meydan, hobi:park...) bu sakin için konumu ve meydana giden yolu. */
-  location(i, yer) {
-    if (yer === "ev") return { spot: this.homes[i].door, path: this.homes[i].path, indoor: true };
-    if (yer === "is") {
-      const { loc } = this.works[i];
-      return { spot: this._spot(i, "is", [loc.anchor], loc.spread), path: loc.path, indoor: !loc.outdoor, name: loc.name };
+  /** Yer için meydana giden yol (kapı/yer tarafından meydana doğru). */
+  _roadPath(i, yer) {
+    if (yer === "ev") return this.homes[i].path;
+    if (yer === "is") return this.works[i].loc.path;
+    return this.world.placeOf(yer.replace("hobi:", "")).path;
+  }
+
+  /** Plan parçası k'nin başındaki ya da sonundaki konum (yolculuk uçları için). */
+  _endpoint(i, k, atEnd) {
+    const seg = this.plans[i][k];
+    if (!seg) return this.homes[i].door;
+    if (seg.ne === "ev" || seg.ne === "uyku") return this.homes[i].door;
+    if (seg.ne === "is" && !this.works[i].loc.outdoor) return this.works[i].loc.door;
+    const p = this._tmp;
+    p.height = this.colors[i].height;
+    resetPose(p);
+    this._placeState(i, k, atEnd ? seg.son - 0.001 : seg.bas, 0, p);
+    return [p.x, p.z];
+  }
+
+  /** Bir yerin yol ağına bağlandığı nokta: yerin meydana giden yolunda ağ üstündeki ilk nokta. */
+  _access(i, yer, endpoint) {
+    const path = this._roadPath(i, yer);
+    for (let j = 0; j < path.length; j++) {
+      if (this.nav.locate(path[j])) return { prefix: path.slice(0, j), point: path[j] };
     }
-    const name = yer.startsWith("hobi:") ? yer.slice(5) : yer;
-    const place = this.world.placeOf(name);
-    return { spot: this._spot(i, name, place.anchors, place.spread), path: place.path, indoor: false, place: name };
+    // Meydanın içindeki yerler: en yakın meydan girişi.
+    const gates = this.nav.plazaGates ?? [];
+    let best = gates[0];
+    for (const g of gates) if (Math.hypot(g.p[0] - endpoint[0], g.p[1] - endpoint[1]) < Math.hypot(best.p[0] - endpoint[0], best.p[1] - endpoint[1])) best = g;
+    return { prefix: [], point: best ? best.p : endpoint };
   }
 
-  _spot(i, tag, anchors, spread) {
+  _trip(i, seg, k) {
+    const w = this.world;
+    const A = this._endpoint(i, k - 1, true), B = this._endpoint(i, k + 1, false);
     const s = this.residents[i].seed;
-    const a = anchors[roll(s, "nokta_" + tag) % anchors.length];
-    const ang = frac(roll(s, "aci_" + tag)) * Math.PI * 2;
-    const rad = Math.sqrt(frac(roll(s, "uzak_" + tag))) * spread;
-    return [a[0] + Math.cos(ang) * rad, a[1] + Math.sin(ang) * rad];
-  }
-
-  /** Yolculuk: kaldırımdan, kişinin kendi hızında; artan süre yolda iki kısa mola olarak geçer. */
-  _trip(i, seg, segIndex) {
-    const from = this.location(i, seg.nereden), to = this.location(i, seg.nereye);
-    const a = from.path, b = to.path;
-    let k = 0;
-    while (k < a.length && k < b.length && a[a.length - 1 - k][0] === b[b.length - 1 - k][0] && a[a.length - 1 - k][1] === b[b.length - 1 - k][1]) k++;
-    const road = [...a.slice(0, a.length - k + 1), ...b.slice(0, b.length - k).reverse()];
-    const s = this.residents[i].seed;
-    const side = roll(s, "kaldirim", segIndex) % 2 ? 1 : -1;
-    const lane = SIDEWALK + (frac(roll(s, "serit")) - 0.5) * 0.9;
-    const pts = sidewalkPath([from.spot, ...road, to.spot], side * lane);
+    const jitter = frac(roll(s, "serit")) - 0.5;
+    const ea = this._access(i, seg.nereden, A), eb = this._access(i, seg.nereye, B);
+    const road = [...ea.prefix, ...this.nav.route(ea.point, eb.point), ...[...eb.prefix].reverse()];
+    const side = roll(s, "kaldirim", k) % 2 ? 1 : -1;
+    const pts = sidewalkPath(w, [A, ...road, B], side, jitter);
     const lens = lengths(pts);
     const L = lens[lens.length - 1];
     const window = (seg.son - seg.bas) * 60;
     let v = this.speeds[i];
-    const walkTime = L / v;
     let stops = [];
-    if (walkTime < window) {
-      const slack = window - walkTime;
-      const stopTotal = Math.min(slack, 900);
-      const f1 = 0.25 + frac(roll(s, "mola1", segIndex)) * 0.25, f2 = 0.6 + frac(roll(s, "mola2", segIndex)) * 0.25;
-      stops = [{ at: f1 * L, dur: stopTotal * 0.4, kind: roll(s, "molaTur", segIndex) % 2 }, { at: f2 * L, dur: stopTotal * 0.6, kind: (roll(s, "molaTur", segIndex) + 1) % 2 }];
-      v = L / Math.max(1, window - stopTotal);
+    if (L / v < window) {
+      const slack = window - L / v;
+      const total = Math.min(slack, 900);
+      const pickStop = (f) => {
+        // Mola yeri taşıt yolunun üstüne denk gelmesin.
+        let d = f * L;
+        for (let tries = 0; tries < 30; tries++, d += 2) {
+          along(pts, lens, Math.min(d, L - 1), this._at);
+          const hit = w.roadIndex.at(this._at.x, this._at.z);
+          if (!hit || hit.road.carriage === 0 || hit.dist > hit.road.carriage / 2 + 0.4) break;
+        }
+        return Math.min(d, L - 1);
+      };
+      stops = [
+        { at: pickStop(0.25 + frac(roll(s, "mola1", k)) * 0.2), dur: total * 0.4, kind: roll(s, "molaTur", k) % 2 },
+        { at: pickStop(0.6 + frac(roll(s, "mola2", k)) * 0.2), dur: total * 0.6, kind: (roll(s, "molaTur", k) + 1) % 2 },
+      ].sort((x, y) => x.at - y.at);
+      v = L / Math.max(1, window - total);
     } else {
       v = L / window;
     }
-    return { seg: segIndex, pts, lens, L, v, stops, toWork: seg.nereye === "is", fromWork: seg.nereden === "is" };
+    const doorA = seg.nereden === "ev" ? this.homes[i].building : seg.nereden === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
+    const doorB = seg.nereye === "ev" ? this.homes[i].building : seg.nereye === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
+    return { seg: k, pts, lens, L, v, stops, fromWork: seg.nereden === "is", doorA, doorB };
   }
 
   /** Sakinin şu an bulunduğu nokta: dışarıdaysa kendisi, içerideyse bulunduğu binanın kapısı. */
@@ -220,50 +439,21 @@ export class People {
     if (this.visible[i]) return [this.positions[i * 3], this.positions[i * 3 + 2]];
     const seg = this.activities[i];
     if (!seg || seg.ne === "uyku" || seg.ne === "ev" || seg.ne === "yol") return this.homes[i].door;
-    const loc = this.location(i, seg.yer);
-    return seg.yer === "is" ? this.works[i].loc.door : loc.spot;
+    if (seg.ne === "is") return this.works[i].loc.door;
+    return this.homes[i].door;
   }
 
-  _takeSeat(place, i, prefer) {
-    const seats = this.seatsByPlace[place];
-    if (!seats?.length) return null;
-    for (let k = 0; k < seats.length; k++) {
-      const idx = (prefer + k) % seats.length;
-      if (!this.taken.has(seats[idx])) {
-        this.taken.add(seats[idx]);
-        return seats[idx];
-      }
-    }
-    return null;
-  }
-
-  /** Grup sohbeti: aynı gruptakiler merkezin çevresine altın açıyla dizilir, merkeze bakar. */
-  _groupSpot(key, cx, cz, out) {
-    const n = this.groups.get(key) ?? 0;
-    this.groups.set(key, n + 1);
-    const a = n * 2.39996;
-    const r = 0.75 + 0.18 * Math.sqrt(n);
-    out.x = cx + Math.cos(a) * r;
-    out.z = cz + Math.sin(a) * r;
-    out.heading = Math.atan2(cx - out.x, cz - out.z);
-    return out;
-  }
-
-  /** Bir yerdeki davranış: konum, duruş ve eşyalar. */
-  _atPlace(i, seg, loc, minute, t, p) {
+  /** Bir yerde (plan parçası k) verilen dakikadaki konum ve duruş. Görünmüyorsa false. */
+  _placeState(i, k, minute, t, p) {
+    const w = this.world;
+    const seg = this.plans[i][k];
+    const role = this.roles[i]?.[k] ?? { mode: "group:meydan" };
     const s = this.residents[i].seed;
-    const k = p.height / 1.75;
+    const kk = p.height / 1.75;
     const ph = frac(s) * 6.283;
     const sec = minute * 60;
-    const w = this.world;
     const at = this._at;
-    const place = seg.ne === "is" ? "is" : loc.place;
-    const hobbyId = seg.ne === "hobi" ? this.hobbies[i].id : null;
-    p.dog = false;
-
-    const stand = (x, z, heading) => {
-      p.x = x; p.z = z; p.heading = heading; p.y = w.groundY(x, z);
-    };
+    const stand = (x, z, heading) => { p.x = x; p.z = z; p.heading = heading; p.y = w.groundY(x, z); };
     const pingPong = (pts, speed, offset = 0) => {
       const lens = lengths(pts);
       const L = lens[lens.length - 1];
@@ -273,290 +463,260 @@ export class People {
       along(pts, lens, d, at);
       return { d, back, heading: back ? at.heading + Math.PI : at.heading };
     };
+    const it = role.item;
 
-    if (seg.ne === "is") {
-      const jobId = this.works[i].job;
-      const [ax, az] = loc.spot;
-      switch (jobId) {
+    if (role.mode.startsWith("work:")) {
+      const loc = this.works[i].loc;
+      const [ax, az] = it ? [it.x, it.z] : loc.anchor;
+      switch (this.works[i].job) {
         case "liman_iscisi": {
-          // İskeleden vapura kasa taşır.
-          const r = pingPong([[ax - 2, az - 16], [ax - 2, az + 16]], 1.0, ph * 10);
+          // Kasaları iskelenin başından vapura taşır.
+          const pier = loc.anchor;
+          const lane = pier[0] - 3 + (s % 3) * 1.2;
+          const r = pingPong([[lane, pier[1] - 14], [lane, pier[1] + 14]], 1.0, ph * 10);
           stand(at.x, at.z, r.heading);
-          walkPose(p, r.d / (0.72 * k) * Math.PI);
+          walkPose(p, r.d / (0.72 * kk) * Math.PI);
           if (!r.back) { p.props = ["kasa"]; p.shL = p.shR = 0.9; p.elL = p.elR = 1.1; p.abL = p.abR = 0.05; }
-          return;
+          return true;
         }
         case "zeytinci": case "bahcivan": {
-          // Tarlada sıra boyunca ilerleyip eğilerek toplar.
-          const r = pingPong([[ax - 30, az], [ax + 30, az]], 0.08, ph * 50);
-          stand(at.x, at.z + ((s % 7) - 3) * 2.2, r.heading);
+          // Tarlada sıra boyunca ağır ağır ilerleyip eğilerek toplar.
+          const row = ((s % 7) - 3) * 2.4;
+          const r = pingPong([[ax - 32, az + row], [ax + 32, az + row]], 0.06, ph * 50);
+          stand(at.x, at.z, r.heading);
           const bend = Math.max(0, Math.sin(t * 0.6 + ph));
           p.lean = 0.25 + 0.75 * bend; p.hipL = p.hipR = 0.3 * bend; p.kneeL = p.kneeR = 0.35 * bend;
           p.shL = p.shR = 0.6 + 0.6 * bend; p.elL = p.elR = 0.4;
-          return;
+          return true;
         }
         case "cankurtaran": {
           const tower = w.features.find((f) => f.type === "cankurtaran");
           if (tower) {
-            stand(tower.x, tower.z, 0);
-            sitPose(p, w.groundY(tower.x, tower.z) + 2.7, k);
-            p.headYaw = 0.6 * Math.sin(t * 0.15 + ph);
-            return;
+            stand(tower.x, tower.z, Math.PI * 0.05);
+            p.y = w.groundY(tower.x, tower.z);
+            sitPose(p, w.groundY(tower.x, tower.z) + 2.75, kk);
+            p.headYaw = 0.7 * Math.sin(t * 0.15 + ph);
+            return true;
           }
           break;
         }
         case "fener_bekcisi": {
-          const fener = w.features.find((f) => f.type === "fener");
-          const a = sec * 0.03 + ph;
-          stand(fener.x + Math.cos(a) * 6.5, fener.z + Math.sin(a) * 6.5, Math.atan2(-Math.sin(a), Math.cos(a)));
-          walkPose(p, (sec * 0.03 * 6.5) / (0.72 * k) * Math.PI);
-          return;
+          // Kapısının önünde durur, arada uçurum kenarındaki seyir noktasına yürüyüp denizi gözetler.
+          const view = w.places.fener.spots[s % w.places.fener.spots.length];
+          const door = w.fener.door;
+          const cycle = (sec / 60 + ph * 10) % 40; // dakika
+          if (cycle < 26) {
+            stand(door[0], door[1], Math.atan2(view.x - door[0], view.z - door[1]));
+            idleGesture(p, t, ph, false);
+          } else if (cycle < 30 || cycle > 36) {
+            const u = cycle < 30 ? (cycle - 26) / 4 : 1 - (cycle - 36) / 4;
+            const x = door[0] + (view.x - door[0]) * u, z = door[1] + (view.z - door[1]) * u;
+            stand(x, z, Math.atan2((view.x - door[0]) * (cycle < 30 ? 1 : -1), (view.z - door[1]) * (cycle < 30 ? 1 : -1)));
+            walkPose(p, (u * Math.hypot(view.x - door[0], view.z - door[1])) / (0.72 * kk) * Math.PI);
+          } else {
+            stand(view.x, view.z, view.heading);
+            p.shL = p.shR = 1.3; p.elL = p.elR = 2.2; p.headPitch = -0.05; // dürbünle bakar gibi
+          }
+          return true;
         }
         case "balikci": {
-          // Kıyıda ağ onarır: çömelir, elleri önde.
-          stand(ax, az, Math.PI * 0.1 + (s % 5) * 0.5);
-          p.drop = 0.38 * k; p.hipL = p.hipR = 1.25; p.kneeL = p.kneeR = 2.0; p.lean = 0.35;
+          stand(ax, az, it?.heading ?? 0);
+          p.drop = 0.38 * kk; p.hipL = p.hipR = 1.25; p.kneeL = p.kneeR = 2.0; p.lean = 0.35;
           p.shL = p.shR = 0.8; p.elL = p.elR = 0.9 + 0.2 * Math.sin(t * 2 + ph);
-          return;
+          return true;
         }
         case "gemi_ustasi": {
-          // Tersanede çekiçle çalışır.
-          stand(ax, az, (s % 4) * 1.57);
+          stand(ax, az, it?.heading ?? 0);
           const hit = Math.max(0, Math.sin(t * 2.2 + ph));
           p.shR = 1.0 + 1.3 * hit; p.elR = 0.4 + 0.8 * (1 - hit); p.lean = 0.15;
-          return;
-        }
-        default: {
-          // Rehber ve diğerleri: iş arkadaşlarıyla küçük gruplar halinde konuşur.
-          this._groupSpot("is:" + Math.round(ax) + ":" + Math.round(az) + ":" + (s % 3), ax + (s % 3) * 3, az, at);
-          stand(at.x, at.z, at.heading);
-          idleGesture(p, t, ph, true);
-          return;
+          return true;
         }
       }
+      stand(ax, az, it?.heading ?? ph);
+      idleGesture(p, t, ph, true);
+      return true;
     }
 
-    switch (hobbyId ?? place) {
-      case "balik": {
-        // İskelenin kenarında denize dönük, oltası elinde; arada olta atar.
-        const [x, z] = loc.spot;
-        const pier = w.piers.find((q) => x > q.x0 - 1 && x < q.x1 + 1 && z > q.z0 && z < q.z1);
-        stand(x, z, pier && x < (pier.x0 + pier.x1) / 2 ? -Math.PI / 2 : Math.PI / 2);
+    // Oturanlar: bankta, kafede, kahvehanede. Yaklaşır, oturur; kalkar, gider.
+    if (role.mode.startsWith("seat:") && it) {
+      const since = (minute - seg.bas) * 60, until = (seg.son - minute) * 60;
+      const u = smooth(clamp(Math.min(since, until) / 1.6, 0, 1));
+      const fx = Math.sin(it.heading), fz = Math.cos(it.heading);
+      const ax = it.x + fx * 0.55, az = it.z + fz * 0.55;
+      p.x = ax + (it.x - ax) * u; p.z = az + (it.z - az) * u; p.heading = it.heading;
+      const st = this._stand, si = this._sit;
+      st.height = si.height = p.height;
+      resetPose(st); st.y = w.groundY(ax, az);
+      resetPose(si); sitPose(si, it.top, kk);
+      blendPose(p, st, si, u);
+      if (u >= 1) {
+        const hobbyId = seg.ne === "hobi" ? this.hobbies[i].id : null;
+        if (hobbyId === "kitap") { p.shL = p.shR = 0.7; p.elL = p.elR = 1.5; p.headPitch = 0.45; p.props = ["kitap"]; }
+        else if (hobbyId === "gitar") { p.shR = 0.5; p.elR = 1.3 + 0.25 * Math.sin(t * 6 + ph); p.shL = 0.8; p.abL = 0.3; p.elL = 1.6; p.headPitch = 0.25; p.props = ["gitar"]; }
+        else if (it.table && seg.ne === "hobi") {
+          const move = Math.max(0, Math.sin(t * 0.7 + ph)) ** 6;
+          p.lean = 0.25; p.shL = 0.6; p.elL = 1.4; p.shR = 0.7 + 0.5 * move; p.elR = 1.3 - 0.6 * move; p.headPitch = 0.4;
+        } else if (it.table) {
+          const sip = Math.max(0, Math.sin(t * 0.35 + ph)) ** 10;
+          idleGesture(p, t, ph, sip < 0.1 && roll(s, "konuskan") % 2 === 0);
+          p.shR = Math.max(p.shR, 0.5 + 0.9 * sip); p.elR = Math.max(p.elR, 1.2 + 1.0 * sip); p.lean = 0.12;
+        } else {
+          idleGesture(p, t, ph, roll(s, "konuskan") % 2 === 0);
+          p.shL = 0.35; p.elL = 0.9;
+          if (roll(s, "telefoncu") % 4 === 0) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
+        }
+      } else {
+        p.moving = since < 1.6 || until < 1.6;
+      }
+      return true;
+    }
+
+    switch (role.mode) {
+      case "fish": {
+        stand(it.x, it.z, it.heading);
         const cast = Math.max(0, Math.sin(t * 0.08 + ph)) ** 8;
         p.shR = 0.75 + 1.0 * cast; p.elR = 0.9 - 0.6 * cast; p.shL = 0.55; p.elL = 1.0;
         p.props = ["olta"];
-        return;
+        return true;
       }
-      case "bisiklet": case "kosu": {
-        const prom = w.roads.find((r) => r.type === "sahil").points;
-        const run = hobbyId === "kosu";
-        const lanePts = prom.map(([x, z]) => [x, z + (run ? -1.6 : 1.6)]);
-        const r = pingPong(lanePts, run ? 2.7 : 4.5, ph * 400);
-        stand(at.x, at.z, r.heading);
-        if (run) {
-          walkPose(p, r.d / (1.1 * k) * Math.PI, 1);
-          p.sleeves = false;
-        } else {
-          const crank = r.d / 2.2 * Math.PI;
-          p.y += 0.98 - 0.92 * k + 0.0;
-          p.hipL = 1.1 + 0.4 * Math.sin(crank); p.hipR = 1.1 - 0.4 * Math.sin(crank);
-          p.kneeL = 1.2 + 0.5 * Math.cos(crank); p.kneeR = 1.2 - 0.5 * Math.cos(crank);
-          p.lean = 0.35; p.shL = p.shR = 0.95; p.elL = p.elR = 0.35;
-          p.props = ["bisiklet"];
-          p.propY = -(0.98 - 0.92 * k) / k;
-        }
-        return;
+      case "view": {
+        stand(it.x, it.z, it.heading + 0.3 * Math.sin(t * 0.05 + ph));
+        p.shR = 1.25; p.elR = 2.1; p.shL = 1.15; p.elL = 2.0; p.abL = -0.2;
+        p.props = ["fotograf"];
+        return true;
       }
-      case "yuzme": {
-        // Yüzer, arada havlusuna uzanıp güneşlenir.
-        if (Math.floor(sec / 900 + ph) % 5 >= 3) break;
-        const [x, z] = loc.spot;
-        const a = sec * 0.01 + ph;
-        const sx = x + Math.cos(a) * 6, sz = z + 26 + Math.sin(a) * 4;
-        p.x = sx; p.z = sz; p.heading = Math.atan2(-Math.sin(a), Math.cos(a));
-        p.y = -1.25 * k; p.lean = 0.9;
-        p.shL = 1.5 + 1.6 * Math.sin(t * 2 + ph); p.shR = 1.5 + 1.6 * Math.sin(t * 2 + ph + Math.PI);
-        p.elL = p.elR = 0.3;
-        return;
+      case "easel": {
+        stand(it.x, it.z, it.heading);
+        p.shR = 1.3 + 0.15 * Math.sin(t * 1.5 + ph); p.elR = 0.5; p.headPitch = 0.05;
+        p.props = ["sovale"];
+        return true;
+      }
+      case "kite": {
+        stand(it.x, it.z, it.heading + 0.3 * Math.sin(t * 0.05 + ph));
+        p.shL = p.shR = 1.7; p.elL = p.elR = 0.4; p.headPitch = -0.55;
+        p.props = ["ucurtma"];
+        return true;
       }
       case "yoga": {
-        const [x, z] = loc.spot;
-        stand(x, z, Math.PI / 2);
+        stand(it.x, it.z, it.heading);
         const pose = Math.floor((t / 20 + ph) % 3);
         if (pose === 0) { p.shL = p.shR = 3.0; p.elL = p.elR = 0; p.kneeR = 0.6; p.hipR = 0.9; p.abR = 0.5; }
         else if (pose === 1) { p.abL = p.abR = 1.5; p.hipL = 0.6; p.kneeL = 0.6; p.hipR = -0.4; p.headYaw = 1.2; }
-        else { p.lean = 1.3; p.shL = p.shR = 2.6; p.hipL = p.hipR = 0; }
+        else { p.lean = 1.3; p.shL = p.shR = 2.6; }
         p.props = ["mat"];
-        return;
+        return true;
       }
-      case "ucurtma": {
-        const [x, z] = loc.spot;
-        stand(x, z, Math.PI * 0.75 + 0.3 * Math.sin(t * 0.05 + ph));
-        p.shL = p.shR = 1.7; p.elL = p.elR = 0.4; p.headPitch = -0.55;
-        p.props = ["ucurtma"];
-        return;
-      }
-      case "fotograf": {
-        const [x, z] = loc.spot;
-        stand(x, z, ph + t * 0.03);
-        p.shR = 1.25; p.elR = 2.1; p.shL = 1.15; p.elL = 2.0; p.abL = -0.2; p.headPitch = 0.05;
-        p.props = ["fotograf"];
-        return;
-      }
-      case "resim": {
-        const [x, z] = loc.spot;
-        stand(x, z, ph);
-        p.shR = 1.3 + 0.15 * Math.sin(t * 1.5 + ph); p.elR = 0.5; p.headPitch = 0.05;
-        p.props = ["sovale"];
-        return;
-      }
-    }
-
-    // Meydana gelenler dağılır: bir kısmı kafede oturur, bir kısmı çarşıda vitrin gezer.
-    if (place === "meydan" && !hobbyId) {
-      const mode = roll(s, "meydanMod", this.day) % 100;
-      if (mode >= 30 && mode < 55) {
-        const seat = this._takeSeat("kafe", i, roll(s, "kafeMasa", this.day));
-        if (seat) {
-          p.x = seat.x; p.z = seat.z; p.heading = seat.heading;
-          sitPose(p, seat.top, k);
-          const sip = Math.max(0, Math.sin(t * 0.35 + ph)) ** 10;
-          p.shR = 0.5 + 0.9 * sip; p.elR = 1.2 + 1.0 * sip; p.headPitch = 0.1 * sip;
-          idleGesture(p, t, ph, sip < 0.1 && roll(s, "konuskan") % 2 === 0);
-          p.lean = 0.12;
-          return;
+      case "swim": {
+        // Yüzer; arada kumsaldaki havlusuna uzanır.
+        if (Math.floor(sec / 900 + ph) % 5 >= 3) {
+          const towel = this.pools.towel?.[s % (this.pools.towel?.length || 1)];
+          if (towel) {
+            p.x = towel.x; p.z = towel.z; p.heading = Math.PI; p.y = w.groundY(towel.x, towel.z) + 0.12; p.lie = Math.PI / 2;
+            p.shL = p.shR = 0.1; p.abL = p.abR = 0.15; p.elL = p.elR = 0.2;
+            p.props = ["havlu"]; p.sleeves = false; p.shorts = true;
+            return true;
+          }
         }
-      } else if (mode >= 55 && mode < 85) {
+        const a = sec * 0.012 + ph;
+        p.x = it.x + Math.cos(a) * 4; p.z = it.z + Math.sin(a) * 3;
+        p.heading = Math.atan2(-Math.sin(a), Math.cos(a));
+        p.y = -1.25 * kk; p.lean = 0.9;
+        p.shL = 1.5 + 1.6 * Math.sin(t * 2 + ph); p.shR = 1.5 + 1.6 * Math.sin(t * 2 + ph + Math.PI);
+        p.elL = p.elR = 0.3; p.radius = 0;
+        return true;
+      }
+      case "bike": case "jog": {
+        const prom = w.promenade;
+        const run = role.mode === "jog";
+        const lane = prom.map(([x, z]) => [x, z + (run ? -1.7 : 1.7)]);
+        const r = pingPong(lane, run ? 2.7 : 4.5, ph * 400);
+        stand(at.x, at.z, r.heading);
+        if (run) {
+          walkPose(p, r.d / (1.1 * kk) * Math.PI, 1);
+          p.sleeves = false;
+        } else {
+          // Bisiklet: sele 0,95 m'de; ayaklar pedala kilitli (ters kinematik).
+          const ground = p.y;
+          p.y = ground + 0.95 - 0.92 * kk;
+          p.groundY = ground;
+          const crank = r.d / 2.1;
+          for (const [sideAng, hipKey, kneeKey] of [[0, "hipL", "kneeL"], [Math.PI, "hipR", "kneeR"]]) {
+            const fz = 0.32 + 0.17 * Math.sin(crank + sideAng), fy = 0.3 + 0.17 * Math.cos(crank + sideAng);
+            const ik = legIK(fz / kk, (fy - 0.95) / kk);
+            p[hipKey] = ik.hip; p[kneeKey] = ik.knee;
+          }
+          p.lean = 0.42; p.shL = p.shR = 1.0; p.elL = p.elR = 0.35; p.abL = p.abR = 0.06; p.headPitch = -0.3;
+          p.props = ["bisiklet"]; p.radius = 0.6;
+          p.moving = true;
+        }
+        return true;
+      }
+      case "shop": {
         const walk = w.carsiWalks[roll(s, "carsiYol", this.day) % w.carsiWalks.length];
         const r = pingPong(walk, 0.85 + frac(roll(s, "gezHiz")) * 0.35, ph * 200);
-        // Arada durup vitrine bakar.
         const look = Math.sin(sec / 40 + ph) > 0.75;
         const alongX = walk[0][1] === walk[1][1];
         const shopSide = alongX ? (walk[0][1] < 0 ? Math.PI : 0) : walk[0][0] < 0 ? -Math.PI / 2 : Math.PI / 2;
         stand(at.x, at.z, look ? shopSide : r.heading);
-        if (!look) walkPose(p, r.d / (0.72 * k) * Math.PI);
+        if (!look) walkPose(p, r.d / (0.72 * kk) * Math.PI);
         else idleGesture(p, t, ph, false);
         p.dog = true;
-        return;
+        return true;
       }
     }
 
-    // Oturanlar: kahvehanede tavla, bankta kitap ya da gitar, meydanda dinlenme.
-    const wantsSeat =
-      place === "kahvehane" ||
-      hobbyId === "kitap" || hobbyId === "gitar" || hobbyId === "satranc" ||
-      (place === "meydan" && roll(s, "meydanMod", this.day) % 100 < 30) ||
-      (place === "tepe" && roll(s, "tepeMod", this.day) % 100 < 40);
-    if (wantsSeat) {
-      const seat = this._takeSeat(place, i, roll(s, "oturak", this.day));
-      if (seat) {
-        p.x = seat.x; p.z = seat.z; p.heading = seat.heading;
-        sitPose(p, seat.top, k);
-        if (hobbyId === "kitap") { p.shL = p.shR = 0.7; p.elL = p.elR = 1.5; p.headPitch = 0.45; p.props = ["kitap"]; }
-        else if (hobbyId === "gitar") { p.shR = 0.5; p.elR = 1.3 + 0.25 * Math.sin(t * 6 + ph); p.shL = 0.8; p.abL = 0.3; p.elL = 1.6; p.headPitch = 0.25; p.props = ["gitar"]; }
-        else if (seat.table) {
-          // Tavla/satranç: masaya eğilir, arada taş oynar.
-          const move = Math.max(0, Math.sin(t * 0.7 + ph)) ** 6;
-          p.lean = 0.25; p.shL = 0.6; p.elL = 1.4; p.shR = 0.7 + 0.5 * move; p.elR = 1.3 - 0.6 * move; p.headPitch = 0.4;
-        } else {
-          idleGesture(p, t, ph, roll(s, "konuskan") % 2 === 0);
-          p.shL = p.shR = 0.35; p.elL = p.elR = 0.9;
-          if (roll(s, "telefoncu") % 4 === 0) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
-        }
-        return;
-      }
+    // Sohbet grubu (ya da yer kalmadıysa yerin yakınında durma).
+    const g = role.group;
+    if (g) {
+      stand(g.x, g.z, g.heading);
+    } else {
+      const place = w.placeOf(seg.yer.replace("hobi:", ""));
+      const a = place.anchors[s % place.anchors.length];
+      const [x, z] = w.nearestWalkable(a[0] + ((s % 7) - 3) * 1.4, a[1] + (((s >> 3) % 7) - 3) * 1.4, 6);
+      stand(x, z, ph);
     }
-
-    // Plajda güneşlenenler.
-    if (place === "plaj") {
-      const [x, z] = loc.spot;
-      p.x = x; p.z = z; p.heading = Math.PI; p.y = w.groundY(x, z) + 0.12; p.lie = Math.PI / 2;
-      p.shL = p.shR = 0.1; p.abL = p.abR = 0.15; p.elL = p.elR = 0.2;
-      p.props = ["havlu"]; p.sleeves = false; p.shorts = true;
-      return;
-    }
-
-    // Gezinenler: meydanda çeşmenin, parkta havuzun, sahilde yolun çevresinde.
-    const stroll = (place === "meydan" && roll(s, "meydanMod", this.day) % 100 >= 80) || place === "sahil_yolu" || place === "park";
-    if (stroll) {
-      let cx = 0, cz = 0, R = 20;
-      if (place === "park") { const g = w.features.find((f) => f.type === "gol"); cx = g.x; cz = g.z; R = 19; }
-      if (place === "sahil_yolu") {
-        const prom = w.roads.find((r) => r.type === "sahil").points;
-        const r = pingPong(prom, 0.9, ph * 300);
-        stand(at.x, at.z, r.heading);
-        walkPose(p, r.d / (0.72 * k) * Math.PI);
-        p.dog = true;
-        return;
-      }
-      const dir = s % 2 ? 1 : -1;
-      const a = (sec * 0.9 * dir) / R + ph;
-      const rr = R + ((s >> 3) % 5) * 0.8;
-      stand(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, Math.atan2(-Math.sin(a) * dir, Math.cos(a) * dir));
-      walkPose(p, (sec * 0.9) / (0.72 * k) * Math.PI);
-      p.dog = true;
-      return;
-    }
-
-    // Diğerleri: küçük gruplar halinde sohbet.
-    const [x, z] = loc.spot;
-    const groupsHere = place === "meydan" ? 48 : 12;
-    let g = roll(s, "grup", this.day) % groupsHere;
-    for (let tries = 0; tries < groupsHere && (this.groups.get(place + g) ?? 0) >= 2 + (g % 4); tries++) g = (g + 1) % groupsHere;
-    let gx = x + ((g % 4) - 1.5) * 4, gz = z + (Math.floor(g / 4) % 3 - 1) * 4;
-    if (place === "meydan") {
-      const a = g * 2.39996;
-      const rr = 9 + ((g * 7) % 19);
-      gx = Math.cos(a) * rr; gz = Math.sin(a) * rr;
-    }
-    this._groupSpot(place + g, gx, gz, at);
-    stand(at.x, at.z, at.heading);
     idleGesture(p, t, ph, true);
     p.dog = true;
+    return true;
   }
 
   /** Sakinlerin konumlarını verilen dakikaya göre günceller ve çizim listesini kurar. */
   update(minute, time) {
-    const crowd = this.crowd, p = this.pose, at = this._at;
-    this.taken = new Set();
-    this.groups = new Map();
-    crowd.begin();
+    const crowd = this.crowd, at = this._at;
+    const w = this.world;
+    this.openDoors.clear();
+    const shown = [];
     for (let i = 0; i < this.n; i++) {
       const plan = this.plans[i];
-      let segIndex = 0;
-      while (segIndex < plan.length - 1 && minute >= plan[segIndex].son) segIndex++;
+      let k = 0;
+      while (k < plan.length - 1 && minute >= plan[k].son) k++;
       const seg = activityAt(plan, minute);
       this.activities[i] = seg;
       this.athome[i] = seg.ne === "ev" ? 1 : 0;
       const c = this.colors[i];
+      const p = this.poses[i];
+      resetPose(p);
+      p.height = c.height; p.t = time; p.sleeves = c.sleeves; p.shorts = false;
+      let atWork = false;
+
       if (seg.ne === "uyku" || seg.ne === "ev") {
         this.homeActs[i] = null;
-        p.height = c.height; p.t = time; p.sleeves = c.sleeves; p.shorts = false; p.dog = false;
         if (this.dollhouse?.contains(i) && this.dollhouse.pose(i, seg, minute, time, p)) {
           this.homeActs[i] = p.activity;
-          this.visible[i] = 1;
-          this.positions[i * 3] = p.x; this.positions[i * 3 + 1] = p.y; this.positions[i * 3 + 2] = p.z;
-          p.style = c.style; p.skin = c.skin; p.hairColor = c.hairColor; p.top = c.top; p.bottom = c.bottom;
-          p.skirt = c.skirt; p.beard = c.beard; p.glasses = c.glasses;
-          crowd.add(i, p);
+          shown.push(i);
+          p.indoor = true;
           continue;
         }
         this.visible[i] = 0;
         continue;
       }
-
-      resetPose(p);
-      p.height = c.height; p.t = time; p.sleeves = c.sleeves; p.shorts = false; p.dog = false;
-      const k = c.height / 1.75;
-      let atWork = false;
+      p.indoor = false;
 
       if (seg.ne === "yol") {
         let trip = this.travelCache[i];
-        if (!trip || trip.seg !== segIndex) trip = this.travelCache[i] = this._trip(i, seg, segIndex);
-        // Geçen süreden yürünen mesafe; molalarda durur.
+        if (!trip || trip.seg !== k) trip = this.travelCache[i] = this._trip(i, seg, k);
         let el = (minute - seg.bas) * 60;
-        let d = 0, stop = null;
-        let last = 0;
+        let d = 0, stop = null, last = 0;
         for (const st of trip.stops) {
           const reach = (st.at - last) / trip.v;
           if (el < reach) break;
@@ -567,42 +727,88 @@ export class People {
         if (!stop) d = Math.min(trip.L, d + el * trip.v);
         along(trip.pts, trip.lens, d, at);
         p.x = at.x; p.z = at.z; p.heading = at.heading;
-        p.y = this.world.groundY(at.x, at.z);
+        p.y = w.groundY(at.x, at.z);
         if (stop) {
-          // Molada: vitrine/denize bakar ya da telefonuna.
           p.heading += stop.kind ? Math.PI / 2 : 0;
           idleGesture(p, time, i, false);
           if (!stop.kind) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
         } else {
-          walkPose(p, d / (0.72 * k) * Math.PI);
+          walkPose(p, d / (0.72 * (c.height / 1.75)) * Math.PI);
         }
         p.dog = true;
         atWork = trip.fromWork;
         p.phase = d;
+        // Kapıdan çıkarken ve girerken kapı açılır.
+        if (trip.doorA && d < 2.5) this.openDoors.add(trip.doorA);
+        if (trip.doorB && trip.L - d < 2.5) this.openDoors.add(trip.doorB);
       } else {
-        const loc = this.location(i, seg.yer);
-        if (loc.indoor) { this.visible[i] = 0; continue; }
-        this._atPlace(i, seg, loc, minute, time, p);
+        if (seg.ne === "is" && !this.works[i].loc.outdoor) { this.visible[i] = 0; continue; }
+        if (!this._placeState(i, k, minute, time, p)) { this.visible[i] = 0; continue; }
         atWork = seg.ne === "is";
         p.phase = time * 2;
       }
+      p.atWork = atWork;
+      shown.push(i);
+    }
 
+    // Yürüyenler birbirine çok yaklaşırsa yana çekilir (oturan ve duranların içinden geçilmez).
+    const grid = new Map();
+    for (const i of shown) {
+      const p = this.poses[i];
+      if (p.indoor || !p.radius) continue;
+      const key = Math.floor(p.x) * 100003 + Math.floor(p.z);
+      if (!grid.has(key)) grid.set(key, []);
+      grid.get(key).push(i);
+    }
+    for (const i of shown) {
+      const p = this.poses[i];
+      if (!p.moving || p.indoor || !p.radius) continue;
+      const gx = Math.floor(p.x), gz = Math.floor(p.z);
+      let px = 0, pz = 0;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          for (const j of grid.get((gx + dx) * 100003 + gz + dz) ?? []) {
+            if (j === i) continue;
+            const q = this.poses[j];
+            const ox = p.x - q.x, oz = p.z - q.z;
+            const dist = Math.hypot(ox, oz);
+            const min = p.radius + q.radius;
+            if (dist >= min || dist < 1e-4) continue;
+            // Yürüme yönüne dik, uzaklaşan yana itilir.
+            const sx = Math.cos(p.heading), sz = -Math.sin(p.heading);
+            const sign = ox * sx + oz * sz >= 0 ? 1 : -1;
+            const push = (min - dist) * (q.moving ? 0.5 : 1);
+            px += sx * sign * push; pz += sz * sign * push;
+          }
+        }
+      }
+      if (px || pz) {
+        const nx = p.x + px, nz = p.z + pz;
+        if (w.isWalkable(nx, nz)) { p.x = nx; p.z = nz; }
+      }
+    }
+
+    crowd.begin();
+    for (const i of shown) {
+      const p = this.poses[i];
+      const c = this.colors[i];
       this.visible[i] = 1;
       this.positions[i * 3] = p.x; this.positions[i * 3 + 1] = p.y; this.positions[i * 3 + 2] = p.z;
       p.style = c.style; p.skin = c.skin; p.hairColor = c.hairColor;
-      p.skirt = c.skirt && !(atWork && c.uniform) && !p.props?.includes("bisiklet"); p.beard = c.beard; p.glasses = c.glasses;
-      p.top = atWork && c.uniform ? c.uniform : c.top;
+      p.skirt = c.skirt && !(p.atWork && c.uniform) && !p.props?.includes("bisiklet");
+      p.beard = c.beard; p.glasses = c.glasses;
+      p.top = p.atWork && c.uniform ? c.uniform : c.top;
       p.bottom = c.bottom;
       crowd.add(i, p);
-
-      if (p.dog && this.dogs[i]) {
+      if (p.dog && this.dogs[i] && !p.indoor) {
         const side = 0.75;
         const dx = Math.cos(p.heading) * side, dz = -Math.sin(p.heading) * side;
-        crowd.addDog(p.x + dx + Math.sin(p.heading) * 0.5, this.world.groundY(p.x, p.z), p.z + dz + Math.cos(p.heading) * 0.5, p.heading, p.phase * 1.6, DOG_COLORS[this.residents[i].seed % DOG_COLORS.length]);
+        const x = p.x + dx + Math.sin(p.heading) * 0.5, z = p.z + dz + Math.cos(p.heading) * 0.5;
+        if (w.isWalkable(x, z)) crowd.addDog(x, w.groundY(x, z), z, p.heading, (p.phase ?? 0) * 1.6, DOG_COLORS[this.residents[i].seed % DOG_COLORS.length]);
       }
     }
     crowd.end();
-    this.visibleCount = crowd.count;
+    this.visibleCount = shown.length;
   }
 
   /** Dokunulan figürün sakin indeksi. */

@@ -132,6 +132,8 @@ export function addressText(slot) {
 
 export const PLACE_HOME = "ev";
 export const PLACE_WORK = "is";
+const OUTING_LATEST_HOBBY = 1140; // 19:00
+const OUTING_LATEST_MEYDAN = 1230; // 20:30
 
 function pickWeighted(items, r) {
   const total = items.reduce((sum, item) => sum + item.agirlik, 0);
@@ -231,8 +233,8 @@ function travel(plan, commute, from, to) {
 /** İş çıkışı: %40 hobi, %25 meydan, gerisi doğrudan ev (""). */
 function eveningPlace(s, day, hobbyPlace) {
   const x = roll(s, "aksam", day) % 100;
-  if (x < 40) return hobbyPlace;
-  if (x < 65) return "meydan";
+  if (x < 20) return hobbyPlace;
+  if (x < 35) return "meydan";
   return "";
 }
 
@@ -258,8 +260,10 @@ export function dayPlan(r, day) {
     travel(plan, commute, PLACE_HOME, PLACE_WORK);
     add(plan, shift.son, "is", PLACE_WORK);
     const outing = eveningPlace(s, day, hobbyPlace);
-    const duration = 60 + (roll(s, "sure", day) % 90);
-    if (outing !== "" && shift.son + 3 * commute + duration <= sleep - 10) {
+    const duration = 45 + (roll(s, "sure", day) % 60);
+    // Hobiler hava kararmadan (19:00), meydan buluşmaları 20:30'dan önce başlar.
+    const latest = outing.startsWith("hobi:") ? OUTING_LATEST_HOBBY : OUTING_LATEST_MEYDAN;
+    if (outing !== "" && shift.son + commute <= latest && shift.son + 3 * commute + duration <= sleep - 10) {
       travel(plan, commute, PLACE_WORK, outing);
       add(plan, end(plan) + duration, activityOf(outing), outing);
       travel(plan, commute, outing, PLACE_HOME);
@@ -273,11 +277,11 @@ export function dayPlan(r, day) {
     travel(plan, commute, PLACE_HOME, hobbyPlace);
     add(plan, end(plan) + 90 + (roll(s, "sure", day) % 90), "hobi", hobbyPlace);
     travel(plan, commute, hobbyPlace, PLACE_HOME);
-    const evening = 1140 + (roll(s, "aksam_saat", day) % 60);
-    if (roll(s, "aksam", day) % 100 < 50 && evening + 60 + commute <= sleep - 10) {
+    const evening = 1110 + (roll(s, "aksam_saat", day) % 60);
+    if (roll(s, "aksam", day) % 100 < 30 && evening + 45 + commute <= sleep - 10) {
       add(plan, evening - commute, "ev", PLACE_HOME);
       travel(plan, commute, PLACE_HOME, "meydan");
-      add(plan, end(plan) + 60 + (roll(s, "meydan_sure", day) % 60), "meydan", "meydan");
+      add(plan, end(plan) + 45 + (roll(s, "meydan_sure", day) % 60), "meydan", "meydan");
       travel(plan, commute, "meydan", PLACE_HOME);
     }
   }

@@ -186,6 +186,7 @@ function tick() {
   const minute = sim.minuteOf(unix);
   people.setDay(day);
   people.update(minute, real);
+  city.setOpenDoors(people.openDoors);
 
   if (flight) {
     flight.t = Math.min(1, flight.t + dt / 1.3);
@@ -232,6 +233,7 @@ function tick() {
     marker.visible = false;
   }
 
+  tryFollow();
   renderer.render(scene, camera);
   if (frame === 1) {
     document.getElementById("loading").classList.add("done");
@@ -253,3 +255,20 @@ if (look?.length >= 2 && look.every(Number.isFinite)) {
 
 const wanted = params.get("bul");
 if (wanted) setTimeout(() => ui.find(wanted), 300);
+
+// ?takip=yol|meydan|is|<hobi>[:sıra]: o anda bunu yapan (görünür) bir sakini seçer — denetim ve paylaşım için.
+const follow = params.get("takip");
+let followDone = !follow;
+function tryFollow() {
+  if (followDone || frame < 3) return;
+  followDone = true;
+  const [what, nth = "0"] = follow.split(":");
+  const hits = [];
+  for (let i = 0; i < residents.length; i++) {
+    const a = people.activities[i];
+    if (!people.visible[i] || !a) continue;
+    if (a.ne === what || (a.ne === "hobi" && people.hobbies[i].id === what)) hits.push(i);
+  }
+  console.info(`takip ${what}: ${hits.length} kişi`);
+  if (hits.length) ui.select(hits[Number(nth) % hits.length]);
+}
