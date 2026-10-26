@@ -1,0 +1,341 @@
+// İnsan figürü: gerçek oranlarda (1,75 m'ye ölçeklenmiş, yaklaşık 7,5 baş boyu) eklemli low-poly beden.
+// İskelet: kalça (kök) → gövde → baş; kalça → uyluk → baldır; gövde → üst kol → ön kol → el.
+// Her parça ayrı bir InstancedMesh; renkler kişiye göre (ten, saç, üst, alt) instance rengiyle verilir.
+// Eşyalar (olta, kitap, gitar, bisiklet, uçurtma...) ve köpekler de burada çizilir.
+import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+
+const HIP_Y = 0.92;
+const WAIST_Y = 1.0;
+const NECK_Y = 1.52;
+const SHOULDER_Y = 1.44;
+const THIGH = 0.45;
+const UPPER_ARM = 0.29;
+const FOREARM = 0.27;
+
+function tint(geo, color) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const c = new THREE.Color(color);
+  const n = g.attributes.position.count;
+  const arr = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) arr.set([c.r, c.g, c.b], i * 3);
+  g.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+  if (g.attributes.uv) g.deleteAttribute("uv");
+  return g;
+}
+
+function merge(parts) {
+  const g = mergeGeometries(parts);
+  g.computeVertexNormals();
+  return g;
+}
+
+const W = "#ffffff";
+const GEO = {
+  head: () => merge([
+    tint(new THREE.CylinderGeometry(0.047, 0.055, 0.12, 7).translate(0, NECK_Y + 0.03, 0), W),
+    tint(new THREE.SphereGeometry(0.104, 12, 9).scale(1, 1.18, 1.06).translate(0, NECK_Y + 0.15, 0.006), W),
+    tint(new THREE.ConeGeometry(0.019, 0.05, 4).rotateX(Math.PI / 2).translate(0, NECK_Y + 0.135, 0.116), "#eeeeee"),
+    tint(new THREE.SphereGeometry(0.025, 5, 4).scale(0.5, 1, 0.8).translate(-0.103, NECK_Y + 0.15, 0), "#eeeeee"),
+    tint(new THREE.SphereGeometry(0.025, 5, 4).scale(0.5, 1, 0.8).translate(0.103, NECK_Y + 0.15, 0), "#eeeeee"),
+    ...[-0.037, 0.037].map((x) => tint(new THREE.SphereGeometry(0.013, 5, 4).translate(x, NECK_Y + 0.168, 0.098), "#1d1d24")),
+    tint(new THREE.BoxGeometry(0.04, 0.008, 0.01).translate(0, NECK_Y + 0.098, 0.104), "#9a5a50"),
+  ]),
+  torso: () => merge([
+    tint(new THREE.CylinderGeometry(0.195, 0.155, 0.34, 10).scale(1, 1, 0.58).translate(0, 1.27, 0), W),
+    tint(new THREE.CylinderGeometry(0.155, 0.165, 0.16, 10).scale(1, 1, 0.62).translate(0, 1.03, 0), W),
+    tint(new THREE.SphereGeometry(0.195, 10, 4, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.32, 0.58).translate(0, 1.44, 0), W),
+  ]),
+  hips: () => merge([tint(new THREE.CylinderGeometry(0.165, 0.158, 0.17, 10).scale(1, 1, 0.66).translate(0, HIP_Y + 0.04, 0), W)]),
+  thigh: () => merge([tint(new THREE.CylinderGeometry(0.078, 0.056, THIGH, 8).translate(0, -THIGH / 2, 0), W)]),
+  shin: () => merge([
+    tint(new THREE.CylinderGeometry(0.055, 0.042, 0.42, 8).translate(0, -0.21, 0), W),
+    tint(new THREE.BoxGeometry(0.095, 0.07, 0.24).translate(0, -0.44, 0.045), "#2b2b31"),
+  ]),
+  upperArm: () => merge([tint(new THREE.CylinderGeometry(0.048, 0.04, UPPER_ARM, 7).translate(0, -UPPER_ARM / 2, 0), W)]),
+  forearm: () => merge([tint(new THREE.CylinderGeometry(0.039, 0.032, FOREARM, 7).translate(0, -FOREARM / 2, 0), W)]),
+  hand: () => merge([tint(new THREE.SphereGeometry(0.042, 6, 5).scale(0.75, 1.15, 0.55).translate(0, -0.04, 0), W)]),
+};
+
+/** Saç biçimleri (görünüş.sac); null: kel. Baş kemiğine bağlıdır. */
+function hairGeometries() {
+  const y = NECK_Y + 0.155;
+  const cap = (theta = 0.52, r = 0.112) => tint(new THREE.SphereGeometry(r, 12, 7, 0, Math.PI * 2, 0, Math.PI * theta).scale(1, 1.18, 1.08).translate(0, y, -0.012), W);
+  return [
+    merge([cap()]), // kısa
+    merge([cap(0.44, 0.108)]), // asker tıraşı
+    merge([cap(0.6), tint(new THREE.BoxGeometry(0.2, 0.3, 0.06).translate(0, y - 0.12, -0.08), W)]), // uzun
+    merge([cap(), tint(new THREE.SphereGeometry(0.056, 8, 6).translate(0, y + 0.12, -0.07), W)]), // topuz
+    merge([cap(), tint(new THREE.CylinderGeometry(0.034, 0.016, 0.24, 6).rotateX(0.35).translate(0, y - 0.07, -0.13), W)]), // at kuyruğu
+    merge([tint(new THREE.IcosahedronGeometry(0.133, 1).scale(1, 0.95, 1).translate(0, y + 0.035, -0.018), W)]), // kıvırcık
+    null, // kel
+    merge([cap(0.68, 0.115)]), // küt
+  ];
+}
+
+// Eşyalar: yerel kökleri tutulduğu yere göre.
+const PROPS = {
+  olta: () => merge([tint(new THREE.CylinderGeometry(0.012, 0.022, 3.4, 5).translate(0, 1.7, 0), "#3a3a3a"), tint(new THREE.CylinderGeometry(0.035, 0.035, 0.06, 8).rotateZ(Math.PI / 2).translate(0.04, 0.35, 0), "#c0c0c0")]),
+  kitap: () => merge([tint(new THREE.BoxGeometry(0.16, 0.22, 0.03), "#ffffff")]),
+  telefon: () => merge([tint(new THREE.BoxGeometry(0.07, 0.14, 0.012), "#1c1c22")]),
+  fotograf: () => merge([tint(new THREE.BoxGeometry(0.13, 0.09, 0.07), "#222226"), tint(new THREE.CylinderGeometry(0.03, 0.03, 0.06, 8).rotateX(Math.PI / 2).translate(0, 0, 0.06), "#111114")]),
+  gitar: () => merge([
+    tint(new THREE.CylinderGeometry(0.17, 0.17, 0.09, 12).rotateX(Math.PI / 2).translate(0, -0.12, 0), "#b9783f"),
+    tint(new THREE.CylinderGeometry(0.13, 0.13, 0.09, 12).rotateX(Math.PI / 2).translate(0, 0.1, 0), "#b9783f"),
+    tint(new THREE.BoxGeometry(0.05, 0.5, 0.03).translate(0, 0.45, 0), "#4a3020"),
+  ]),
+  kasa: () => merge([tint(new THREE.BoxGeometry(0.5, 0.32, 0.36), "#b48a5a")]),
+  sovale: () => merge([
+    tint(new THREE.BoxGeometry(0.04, 1.7, 0.04).rotateX(0.15).translate(-0.3, 0.85, 0), "#8a6a4a"),
+    tint(new THREE.BoxGeometry(0.04, 1.7, 0.04).rotateX(0.15).translate(0.3, 0.85, 0), "#8a6a4a"),
+    tint(new THREE.BoxGeometry(0.04, 1.6, 0.04).rotateX(-0.35).translate(0, 0.8, -0.2), "#8a6a4a"),
+    tint(new THREE.BoxGeometry(0.7, 0.55, 0.03).rotateX(0.15).translate(0, 1.3, 0.1), "#f4efe4"),
+    tint(new THREE.BoxGeometry(0.5, 0.3, 0.035).rotateX(0.15).translate(0, 1.33, 0.11), "#7fb3d9"),
+  ]),
+  bisiklet: () => {
+    const wheel = (z) => tint(new THREE.TorusGeometry(0.33, 0.025, 5, 16).rotateY(Math.PI / 2).translate(0, 0.35, z), "#202024");
+    return merge([
+      wheel(-0.52), wheel(0.52),
+      tint(new THREE.BoxGeometry(0.04, 0.04, 0.75).rotateX(-0.45).translate(0, 0.55, 0.05), "#c8312f"),
+      tint(new THREE.BoxGeometry(0.04, 0.5, 0.04).rotateX(-0.25).translate(0, 0.62, -0.25), "#c8312f"),
+      tint(new THREE.BoxGeometry(0.04, 0.5, 0.04).rotateX(0.3).translate(0, 0.68, 0.45), "#c8312f"),
+      tint(new THREE.BoxGeometry(0.5, 0.03, 0.03).translate(0, 0.95, 0.38), "#202024"),
+      tint(new THREE.BoxGeometry(0.12, 0.05, 0.24).translate(0, 0.9, -0.3), "#202024"),
+    ]);
+  },
+  mat: () => merge([tint(new THREE.BoxGeometry(0.62, 0.012, 1.8), "#7a5cc4")]),
+  havlu: () => merge([tint(new THREE.BoxGeometry(0.8, 0.01, 1.7), "#e8607a")]),
+  ucurtma: () => merge([
+    tint(new THREE.ConeGeometry(0.55, 1.1, 4).scale(1, 1, 0.05).rotateX(Math.PI / 2).rotateX(-Math.PI / 2), "#e0463c"),
+    tint(new THREE.BoxGeometry(0.03, 1.4, 0.01).translate(0, -1.1, 0), "#f2c230"),
+  ]),
+  ip: () => merge([tint(new THREE.CylinderGeometry(0.006, 0.006, 1, 3).translate(0, 0.5, 0), "#f4f4f4")]),
+};
+
+function dogGeometries() {
+  return {
+    body: merge([
+      tint(new THREE.CylinderGeometry(0.13, 0.12, 0.6, 8).rotateX(Math.PI / 2).translate(0, 0.42, 0), W),
+      tint(new THREE.SphereGeometry(0.12, 8, 6).scale(1, 1, 1.25).translate(0, 0.58, 0.36), W),
+      tint(new THREE.BoxGeometry(0.1, 0.08, 0.14).translate(0, 0.55, 0.5), W),
+      tint(new THREE.SphereGeometry(0.025, 5, 4).translate(0, 0.57, 0.58), "#141414"),
+      tint(new THREE.BoxGeometry(0.05, 0.12, 0.04).rotateZ(0.3).translate(-0.08, 0.68, 0.33), "#9a9a9a"),
+      tint(new THREE.BoxGeometry(0.05, 0.12, 0.04).rotateZ(-0.3).translate(0.08, 0.68, 0.33), "#9a9a9a"),
+      tint(new THREE.CylinderGeometry(0.02, 0.03, 0.28, 5).rotateX(-0.9).translate(0, 0.55, -0.38), W),
+    ]),
+    leg: merge([tint(new THREE.CylinderGeometry(0.035, 0.03, 0.34, 6).translate(0, -0.17, 0), W)]),
+  };
+}
+
+const AX = new THREE.Vector3(1, 0, 0);
+const AY = new THREE.Vector3(0, 1, 0);
+const AZ = new THREE.Vector3(0, 0, 1);
+
+export class Crowd {
+  constructor(capacity) {
+    this.capacity = capacity;
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 });
+    const make = (geo, shadow, n = capacity) => {
+      const m = new THREE.InstancedMesh(geo, mat, n);
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.frustumCulled = false;
+      m.castShadow = shadow;
+      m.count = 0;
+      return m;
+    };
+    const parts = ["head", "torso", "hips", "thighL", "thighR", "shinL", "shinR", "upperArmL", "upperArmR", "forearmL", "forearmR", "handL", "handR"];
+    const shared = {};
+    for (const p of parts) {
+      const base = p.replace(/[LR]$/, "");
+      shared[base] ??= GEO[base]();
+      this[p] = make(shared[base], ["torso", "thighL", "thighR", "shinL", "shinR", "head"].includes(p));
+    }
+    this.parts = parts.map((p) => this[p]);
+    this.hair = hairGeometries().map((g) => (g ? make(g, false) : null));
+    const propCap = Math.max(16, Math.ceil(capacity / 3));
+    this.props = Object.fromEntries(Object.entries(PROPS).map(([k, f]) => [k, make(f(), k === "bisiklet" || k === "sovale", propCap)]));
+    const dog = dogGeometries();
+    const dogCap = Math.max(16, Math.ceil(capacity / 4));
+    this.dogBody = make(dog.body, true, dogCap);
+    this.dogLegs = make(dog.leg, false, dogCap * 4);
+    this.group = new THREE.Group();
+    for (const m of [...this.parts, ...this.hair, ...Object.values(this.props), this.dogBody, this.dogLegs]) if (m) this.group.add(m);
+    this.drawToIndex = new Int32Array(capacity);
+
+    this._m = Array.from({ length: 12 }, () => new THREE.Matrix4());
+    this._q = new THREE.Quaternion();
+    this._q2 = new THREE.Quaternion();
+    this._p = new THREE.Vector3();
+    this._one = new THREE.Vector3(1, 1, 1);
+    this._s = new THREE.Vector3();
+    this._c = new THREE.Color();
+  }
+
+  begin() {
+    this.count = 0;
+    this.hairCounts = this.hair.map(() => 0);
+    this.propCounts = Object.fromEntries(Object.keys(this.props).map((k) => [k, 0]));
+    this.dogCount = 0;
+  }
+
+  /** out = parent × T(x,y,z) × R(eksen sırası: Y, X, Z). */
+  _joint(out, parent, x, y, z, rx = 0, ry = 0, rz = 0) {
+    const q = this._q;
+    q.setFromAxisAngle(AY, ry);
+    if (rx) q.multiply(this._q2.setFromAxisAngle(AX, rx));
+    if (rz) q.multiply(this._q2.setFromAxisAngle(AZ, rz));
+    out.compose(this._p.set(x, y, z), q, this._one);
+    return out.premultiply(parent);
+  }
+
+  _prop(name, matrix) {
+    const mesh = this.props[name];
+    const k = this.propCounts[name];
+    if (k >= mesh.instanceMatrix.count) return;
+    mesh.setMatrixAt(k, matrix);
+    this.propCounts[name] = k + 1;
+  }
+
+  /**
+   * Bir kişiyi çizer. pose: konum ve yön, boy, renkler ve eklem açıları (radyan):
+   * lie (sırtüstü yatma), drop (kalça alçalması, m), lean (gövde öne), twist, headYaw, headPitch,
+   * hipL/R (uyluk öne), kneeL/R (diz bükümü), shL/R (kol öne), abL/R (kol yana), elL/R (dirsek), props.
+   */
+  add(index, p) {
+    const d = this.count++;
+    this.drawToIndex[d] = index;
+    const [root, torso, head, thigh, shin, upper, fore, hand, tmp, propM] = this._m;
+    const k = p.height / 1.75;
+    this._q.setFromAxisAngle(AY, p.heading);
+    if (p.lie) this._q.multiply(this._q2.setFromAxisAngle(AX, -p.lie));
+    root.compose(this._p.set(p.x, p.y, p.z), this._q, this._s.set(k, k, k));
+    if (p.drop) root.multiply(tmp.makeTranslation(0, -p.drop, 0));
+
+    this.hips.setMatrixAt(d, root);
+    // Gövde belden döner, baş boyundan.
+    this._joint(torso, root, 0, WAIST_Y, 0, p.lean || 0, p.twist || 0).multiply(tmp.makeTranslation(0, -WAIST_Y, 0));
+    this.torso.setMatrixAt(d, torso);
+    this._joint(head, torso, 0, NECK_Y, 0, p.headPitch || 0, p.headYaw || 0).multiply(tmp.makeTranslation(0, -NECK_Y, 0));
+    this.head.setMatrixAt(d, head);
+
+    const leg = (side, hipA, kneeA, thighMesh, shinMesh) => {
+      this._joint(thigh, root, side * 0.088, HIP_Y, 0, -hipA, 0, side * 0.03);
+      thighMesh.setMatrixAt(d, thigh);
+      this._joint(shin, thigh, 0, -THIGH, 0, kneeA);
+      shinMesh.setMatrixAt(d, shin);
+    };
+    leg(-1, p.hipL || 0, p.kneeL || 0, this.thighL, this.shinL);
+    leg(1, p.hipR || 0, p.kneeR || 0, this.thighR, this.shinR);
+
+    const hands = [];
+    const arm = (side, shA, abA, elA, upperMesh, foreMesh, handMesh) => {
+      this._joint(upper, torso, side * 0.215, SHOULDER_Y, 0, -shA, 0, side * (0.07 + abA));
+      upperMesh.setMatrixAt(d, upper);
+      this._joint(fore, upper, 0, -UPPER_ARM, 0, -elA);
+      foreMesh.setMatrixAt(d, fore);
+      this._joint(hand, fore, 0, -FOREARM, 0);
+      handMesh.setMatrixAt(d, hand);
+      hands.push(this._m[10 + hands.length].copy(hand));
+    };
+    arm(-1, p.shL || 0, p.abL || 0, p.elL || 0, this.upperArmL, this.forearmL, this.handL);
+    arm(1, p.shR || 0, p.abR || 0, p.elR || 0, this.upperArmR, this.forearmR, this.handR);
+
+    for (const [mesh, color] of [
+      [this.head, p.skin], [this.handL, p.skin], [this.handR, p.skin],
+      [this.torso, p.top], [this.upperArmL, p.top], [this.upperArmR, p.top],
+      [this.forearmL, p.sleeves ? p.top : p.skin], [this.forearmR, p.sleeves ? p.top : p.skin],
+      [this.hips, p.bottom], [this.thighL, p.bottom], [this.thighR, p.bottom],
+      [this.shinL, p.shorts ? p.skin : p.bottom], [this.shinR, p.shorts ? p.skin : p.bottom],
+    ]) mesh.setColorAt(d, color);
+
+    const hair = this.hair[p.style];
+    if (hair) {
+      const h = this.hairCounts[p.style]++;
+      hair.setMatrixAt(h, head);
+      hair.setColorAt(h, p.hairColor);
+    }
+
+    // Eşyalar.
+    const handR = hands[1];
+    for (const prop of p.props ?? []) {
+      switch (prop) {
+        case "olta": this._prop("olta", this._joint(propM, handR, 0, -0.05, 0, -1.9)); break;
+        case "kitap": this._prop("kitap", this._joint(propM, handR, -0.08, -0.06, 0.06, -1.1)); break;
+        case "telefon": this._prop("telefon", this._joint(propM, handR, 0, -0.07, 0.03, -1.3)); break;
+        case "fotograf": this._prop("fotograf", this._joint(propM, handR, -0.08, -0.06, 0.04, -1.57)); break;
+        case "gitar": this._prop("gitar", this._joint(propM, torso, 0.02, 1.12, 0.17, 0, 0, 1.15)); break;
+        case "kasa": this._prop("kasa", this._joint(propM, torso, 0, 1.12, 0.32)); break;
+        case "sovale": this._prop("sovale", this._joint(propM, root, 0.1, 0, 0.75, 0, Math.PI)); break;
+        case "bisiklet": this._prop("bisiklet", this._joint(propM, root, 0, p.propY || 0, 0)); break;
+        case "mat": this._prop("mat", this._joint(propM, root, 0, 0.01, 0.3)); break;
+        case "havlu": {
+          // Havlu yerde, bedenin ortasında (yatan kişinin başı arkada kalır).
+          this._q.setFromAxisAngle(AY, p.heading);
+          propM.compose(this._p.set(p.x - Math.sin(p.heading) * 0.85 * k, p.y - 0.1, p.z - Math.cos(p.heading) * 0.85 * k), this._q, this._one);
+          this._prop("havlu", propM);
+          break;
+        }
+        case "ucurtma": {
+          const kx = p.x + Math.sin(p.heading) * 18, kz = p.z + Math.cos(p.heading) * 18;
+          const ky = p.y + 16 + Math.sin(p.t * 0.7) * 1.5;
+          this._q.setFromAxisAngle(AY, p.heading + Math.sin(p.t * 1.3) * 0.3);
+          propM.compose(this._p.set(kx, ky, kz), this._q, this._one);
+          this._prop("ucurtma", propM);
+          // İp: elden uçurtmaya.
+          const hx = handR.elements[12], hy = handR.elements[13], hz = handR.elements[14];
+          const dx = kx - hx, dy = ky - hy, dz = kz - hz, len = Math.hypot(dx, dy, dz);
+          this._q.setFromUnitVectors(AY, this._p.set(dx / len, dy / len, dz / len));
+          propM.compose(this._p.set(hx, hy, hz), this._q, this._s.set(1, len, 1));
+          this._prop("ip", propM);
+          break;
+        }
+      }
+    }
+  }
+
+  /** Köpek: dört bacaklı, tırıs giden basit beden. */
+  addDog(x, y, z, heading, phase, color) {
+    const i = this.dogCount;
+    if (i >= this.dogBody.instanceMatrix.count) return;
+    this.dogCount++;
+    const [root, leg] = this._m;
+    this._q.setFromAxisAngle(AY, heading);
+    root.compose(this._p.set(x, y + Math.abs(Math.sin(phase)) * 0.03, z), this._q, this._one);
+    this.dogBody.setMatrixAt(i, root);
+    this.dogBody.setColorAt(i, color);
+    const legs = [[-0.08, 0.22, 0], [0.08, 0.22, Math.PI], [-0.08, -0.22, Math.PI], [0.08, -0.22, 0]];
+    legs.forEach(([lx, lz, off], j) => {
+      this._joint(leg, root, lx, 0.34, lz, Math.sin(phase + off) * 0.5);
+      this.dogLegs.setMatrixAt(i * 4 + j, leg);
+      this.dogLegs.setColorAt(i * 4 + j, color);
+    });
+  }
+
+  end() {
+    for (const m of this.parts) {
+      m.count = this.count;
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+    this.hair.forEach((m, i) => {
+      if (!m) return;
+      m.count = this.hairCounts[i];
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    });
+    for (const [k, m] of Object.entries(this.props)) {
+      m.count = this.propCounts[k];
+      m.instanceMatrix.needsUpdate = true;
+    }
+    this.dogBody.count = this.dogCount;
+    this.dogLegs.count = this.dogCount * 4;
+    for (const m of [this.dogBody, this.dogLegs]) {
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+  }
+
+  pickTargets() {
+    return [this.torso, this.head, this.thighL, this.thighR];
+  }
+}

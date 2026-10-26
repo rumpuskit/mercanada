@@ -14,7 +14,7 @@ export function createSky(scene) {
     glow: { value: new THREE.Color("#fff1d6") },
   };
   const dome = new THREE.Mesh(
-    new THREE.SphereGeometry(8000, 32, 16),
+    new THREE.SphereGeometry(15000, 32, 16),
     new THREE.ShaderMaterial({
       uniforms,
       side: THREE.BackSide,
@@ -48,7 +48,7 @@ export function createSky(scene) {
   sun.shadow.bias = -0.0008;
   sun.shadow.normalBias = 1.2;
   scene.add(hemi, sun, sun.target);
-  scene.fog = new THREE.Fog(P.SKY.day.horizon.clone(), 900, 3200);
+  scene.fog = new THREE.Fog(P.SKY.day.horizon.clone(), 1600, 6000);
 
   const c1 = new THREE.Color(), c2 = new THREE.Color();
   return {
@@ -74,13 +74,13 @@ export function createSky(scene) {
       // Gece ay ışığı: güneşin tersinden, soluk mavi.
       const moon = light < 0.05;
       const lightDir = moon ? new THREE.Vector3(-0.4, 0.8, 0.3).normalize() : dir;
-      sun.position.copy(focus).addScaledVector(lightDir, 600);
+      sun.position.copy(focus).addScaledVector(lightDir, 1000);
       sun.target.position.copy(focus);
       sun.color.set(moon ? "#9fb4ff" : "#fff4e0").lerp(new THREE.Color("#ffb37a"), moon ? 0 : dusk * 0.7);
-      sun.intensity = moon ? 0.45 : 0.4 + 2.4 * light;
-      hemi.intensity = 0.35 + 1.05 * light;
-      hemi.color.set("#dff1ff").lerp(new THREE.Color("#6f7fc0"), 1 - light);
-      hemi.groundColor.set("#c9b99a").lerp(new THREE.Color("#2b2f4a"), 1 - light);
+      sun.intensity = moon ? 0.9 : 0.4 + 2.4 * light;
+      hemi.intensity = 0.75 + 0.65 * light;
+      hemi.color.set("#dff1ff").lerp(new THREE.Color("#8090cc"), 1 - light);
+      hemi.groundColor.set("#c9b99a").lerp(new THREE.Color("#3a3f5e"), 1 - light);
       return light;
     },
   };

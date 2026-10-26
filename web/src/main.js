@@ -3,7 +3,8 @@ import { MapControls } from "three/addons/controls/MapControls.js";
 import catalog from "../../data/catalog.json";
 import * as sim from "./sim.js";
 import { World } from "./world/layout.js";
-import { buildGrounds, buildRoads, buildTerrain, buildWater } from "./world/terrain.js";
+import { buildTerrain, buildWater } from "./world/terrain.js";
+import { buildGrounds, buildRoads } from "./world/roads.js";
 import { buildCity } from "./world/city.js";
 import { buildClouds, buildTrees, driftClouds } from "./world/nature.js";
 import { buildLabels, scaleLabels } from "./world/labels.js";
@@ -44,18 +45,19 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 2, 14000);
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.5, 20000);
 const controls = new MapControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
 controls.screenSpacePanning = false;
 controls.maxPolarAngle = 1.22;
-controls.minDistance = 25;
-controls.maxDistance = 1900;
+controls.minDistance = 6;
+controls.maxDistance = 3200;
 controls.zoomToCursor = true;
 
 const world = new World(population);
-scene.add(buildWater(), buildTerrain(world), buildRoads(world), buildGrounds(world));
+const roads = buildRoads(world);
+scene.add(buildWater(), buildTerrain(world), roads, buildGrounds(world));
 const city = buildCity(world);
 scene.add(city.group, buildTrees(world));
 const clouds = buildClouds(world);
@@ -68,17 +70,17 @@ sky.sun.shadow.mapSize.set(2048, 2048);
 
 // Seçili sakin işareti.
 const marker = new THREE.Group();
-const pin = new THREE.Mesh(new THREE.ConeGeometry(1.6, 3.6, 12).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: "#e0607a", toneMapped: false }));
-const ring = new THREE.Mesh(new THREE.RingGeometry(2.4, 3.2, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#e0607a", transparent: true, opacity: 0.8, toneMapped: false, depthTest: false }));
+const pin = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.75, 12).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: "#e0607a", toneMapped: false }));
+const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.75, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#e0607a", transparent: true, opacity: 0.8, toneMapped: false, depthTest: false }));
 marker.add(pin, ring);
 marker.visible = false;
 scene.add(marker);
 
 // Başlangıç görünümü: merkez ve ilk mahalleler.
-const home = new THREE.Vector3(0, 0, -70);
+const home = new THREE.Vector3(0, 0, -60);
 controls.target.copy(home);
 const aspectBoost = innerWidth < innerHeight ? 1.9 : 1;
-camera.position.set(230 * aspectBoost, 260 * aspectBoost, 330 * aspectBoost).add(home);
+camera.position.set(260 * aspectBoost, 230 * aspectBoost, 330 * aspectBoost).add(home);
 controls.update();
 
 // --- zaman ---
@@ -116,8 +118,8 @@ canvas.addEventListener("pointerup", (e) => {
   if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6) return;
   const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
-  const hit = raycaster.intersectObject(people.bodies)[0] ?? raycaster.intersectObject(people.heads)[0];
-  if (hit?.instanceId != null) ui.select(hit.instanceId, false);
+  const index = people.pick(raycaster);
+  if (index != null) ui.select(index, false);
 });
 
 addEventListener("resize", () => {
@@ -142,7 +144,9 @@ function updateWindows(minute, light) {
     windows.setColorAt(i, tmpColor);
   }
   windows.instanceColor.needsUpdate = true;
-  const lamps = city.lampHeads;
+  const lampGroup = roads.children.find((c) => c.userData.heads);
+  const lamps = lampGroup.userData.heads;
+  lampGroup.userData.pool.material.opacity = night > 0.35 ? 0.28 * night : 0;
   tmpColor.copy(LAMP_OFF).lerp(P.WINDOW_NIGHT, night > 0.35 ? 1 : 0);
   for (let i = 0; i < lamps.count; i++) lamps.setColorAt(i, tmpColor);
   if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true;
@@ -169,18 +173,18 @@ function tick() {
     camera.position.lerpVectors(flight.fromC, flight.toC, k);
     if (flight.t >= 1) flight = null;
   }
-  controls.target.x = THREE.MathUtils.clamp(controls.target.x, bounds.x0 - 150, bounds.x1 + 150);
-  controls.target.z = THREE.MathUtils.clamp(controls.target.z, bounds.z0 - 150, bounds.z1 + 250);
-  controls.target.y = 0;
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x, bounds.x0 - 200, bounds.x1 + 200);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z, bounds.z0 - 200, bounds.z1 + 300);
+  controls.target.y = flight ? controls.target.y : THREE.MathUtils.lerp(controls.target.y, Math.max(0, world.height(controls.target.x, controls.target.z)), 0.1);
   controls.update();
 
   const light = sky.update(minute, controls.target);
   const dist = camera.position.distanceTo(controls.target);
-  const size = THREE.MathUtils.clamp(dist * 0.75, 90, 900);
+  const size = THREE.MathUtils.clamp(dist * 0.8, 25, 1400);
   const sc = sky.sun.shadow.camera;
   if (sc.right !== size) {
     sc.left = -size; sc.right = size; sc.top = size; sc.bottom = -size;
-    sc.near = 1; sc.far = 1600;
+    sc.near = 1; sc.far = 2400;
     sc.updateProjectionMatrix();
   }
   if (frame % 6 === 0) updateWindows(minute, light);
@@ -192,20 +196,32 @@ function tick() {
   if (sel != null) {
     marker.visible = true;
     const [x, z] = people.focusPoint(sel);
-    const y = people.visible[sel] ? people.positions[sel * 3 + 1] : world.height(x, z);
+    const y = people.visible[sel] ? people.positions[sel * 3 + 1] : world.groundY(x, z);
     marker.position.set(x, y, z);
-    pin.position.y = 6 + Math.sin(real * 3) * 0.6;
+    pin.position.y = 2.6 + Math.sin(real * 3) * 0.15;
     ring.scale.setScalar(1 + (real % 1.2) * 0.4);
   } else {
     marker.visible = false;
   }
 
   renderer.render(scene, camera);
-  if (frame === 1) document.getElementById("loading").classList.add("done");
+  if (frame === 1) {
+    document.getElementById("loading").classList.add("done");
+    console.info(`Mercanada hazır: ${Math.round(performance.now())} ms`);
+  }
   frame++;
   requestAnimationFrame(tick);
 }
 requestAnimationFrame(tick);
+
+// ?bak=x,z,uzaklık: kamerayı bir noktaya çevirir (ekran görüntüsü ve paylaşım için).
+const look = params.get("bak")?.split(",").map(Number);
+if (look?.length >= 2 && look.every(Number.isFinite)) {
+  const [lx, lz, ld = 60] = look;
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  controls.target.set(lx, world.groundY(lx, lz), lz);
+  camera.position.copy(controls.target).addScaledVector(dir, ld);
+}
 
 const wanted = params.get("bul");
 if (wanted) setTimeout(() => ui.find(wanted), 300);

@@ -70,7 +70,7 @@ export function createUI({ residents, people, world, setSpeed, flyTo, speed, tod
     renderCard();
     if (fly) {
       const [x, z] = people.focusPoint(i);
-      flyTo(x, 0, z, innerWidth < innerHeight ? 260 : 130);
+      flyTo(x, world.groundY(x, z), z, innerWidth < innerHeight ? 55 : 32);
     }
   }
 

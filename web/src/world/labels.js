@@ -45,6 +45,6 @@ export function scaleLabels(labels, camera) {
     const d = camera.position.distanceTo(s.position);
     const h = d * 0.035;
     s.scale.set(h * s.userData.aspect, h, 1);
-    s.visible = d > 70;
+    s.visible = d > 120;
   }
 }
