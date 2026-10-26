@@ -348,6 +348,51 @@ export function buildShipyard(world) {
   return group;
 }
 
+/** Balıkçı koyu: ağ serenleri (ağlarıyla), ters sandal, balık kasaları, şamandıralar, çay masası ve tabureler. */
+export function buildFishingCove(world) {
+  const K = world.koy;
+  const parts = [];
+  const y = (x, z) => world.groundY(x, z);
+  for (const [rx, rz] of K.racks) {
+    const y0 = y(rx, rz);
+    for (const dx of [-2.6, 0, 2.6]) parts.push(box(0.14, 2.2, 0.14, rx + dx, y0 + 1.1, rz, "#7a5a3e"));
+    parts.push(box(5.6, 0.12, 0.12, rx, y0 + 2.15, rz, "#7a5a3e"));
+  }
+  const [ux, uz, ur] = K.upturned;
+  const uh = new THREE.Mesh(hull(5.5, 2.0, 0.75, { top: "#3e8a86", stripe: "#f2d36b", deck: "#9b7350" }).geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: THREE.DoubleSide }));
+  uh.rotation.set(Math.PI, ur, 0);
+  uh.position.set(ux, y(ux, uz) + 0.55, uz);
+  uh.castShadow = true;
+  const [cxx, czz] = K.crates;
+  for (let k = 0; k < 5; k++) parts.push(box(0.6, 0.3, 0.4, cxx - 1 + (k % 3) * 0.7, y(cxx, czz) + 0.15 + Math.floor(k / 3) * 0.3, czz, ["#3e7fb0", "#d8342b", "#3e7fb0"][k % 3]));
+  for (const [bx, bz] of K.buoys) parts.push(colored(new THREE.SphereGeometry(0.35, 10, 8).translate(bx, 0.15, bz), "#f28c28"));
+  const [tx, tz] = K.table;
+  const ty = y(tx, tz);
+  parts.push(box(1.0, 0.05, 0.7, tx, ty + 0.7, tz, "#9b7350"), box(0.08, 0.68, 0.08, tx, ty + 0.34, tz, "#3a3f47"));
+  parts.push(cyl(0.05, 0.05, 0.08, tx - 0.2, ty + 0.76, tz, "#c94f3a", 8), cyl(0.05, 0.05, 0.08, tx + 0.2, ty + 0.76, tz + 0.1, "#c94f3a", 8));
+  for (const q of K.posts) if (q.post === "ag" || q.post === "cay") {
+    const sy = y(q.x, q.z);
+    parts.push(cyl(0.18, 0.18, 0.05, q.x, sy + 0.42, q.z, "#9b7350", 10));
+    for (const [dx, dz] of [[-0.12, -0.12], [0.12, -0.12], [-0.12, 0.12], [0.12, 0.12]]) parts.push(box(0.03, 0.42, 0.03, q.x + dx, sy + 0.21, q.z + dz, "#3a3f47"));
+  }
+  const group = new THREE.Group();
+  const m = new THREE.Mesh(merged(parts.map((g) => (g.index ? g.toNonIndexed() : g))), MAT);
+  m.castShadow = m.receiveShadow = true;
+  group.add(m, uh);
+  // Ağlar: serenlere asılı, yarı saydam yeşil-mavi file.
+  const net = new THREE.MeshStandardMaterial({ color: "#3f7f7a", transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 0.9, depthWrite: false });
+  for (const [rx, rz] of K.racks) {
+    const g = new THREE.PlaneGeometry(5.2, 1.7, 8, 2);
+    const pos = g.attributes.position;
+    for (let i = 0; i < pos.count; i++) pos.setZ(i, 0.12 * Math.sin(pos.getX(i) * 1.7) * (1 - (pos.getY(i) + 0.85) / 1.7));
+    g.computeVertexNormals();
+    const n = new THREE.Mesh(g, net);
+    n.position.set(rx, y(rx, rz) + 1.25, rz);
+    group.add(n);
+  }
+  return group;
+}
+
 export function buildHarbor(world) {
   const group = new THREE.Group();
   const floating = [];
@@ -375,6 +420,7 @@ export function buildHarbor(world) {
   const port = world.port ? buildPort(world) : null;
   if (port) group.add(port);
   if (world.tersane) group.add(buildShipyard(world));
+  if (world.koy) group.add(buildFishingCove(world));
   group.userData.setNight = (n) => port?.userData.setNight(n);
   group.userData.tick = (t) => {
     port?.userData.tick(globalThis.__portT ?? t); // __portT: denetimde belirli bir anı görmek için

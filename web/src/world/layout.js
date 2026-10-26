@@ -866,10 +866,37 @@ export class World {
     for (let i = 0; i < 3; i++) {
       this.addBuilding({ kind: "kulube", x: bx - 14 + i * 12, z: bz - 9, rot: 0, w: 8, d: 6, floors: 1, roofType: "gable", wall: ["#e9edf0", "#dbe7ee", "#f3e3c8"][i], roof: "#7a8a9a", address: `Balıkçı Koyu No ${i + 1}` });
     }
-    for (let i = 0; i < 3; i++) this.features.push({ type: "tekne", x: bx - 14 + i * 13, z: bz + 15 + (i % 2) * 5, rot: -0.3 + i * 0.3, len: i === 1 ? 5.5 : 8 });
+    // Ahşap balıkçı iskelesi; tekneler iki yanına palamarlı, sandal şamandırada. Kumsalda ağ serenleri,
+    // ters çevrilmiş sandal, balık kasaları, çay masası. Balıkçıların görev yerleri (fazlası denizde).
+    const jx = bx + 2, jz = bz - 2, jlen = 24;
+    this.features.push({ type: "iskele", x: jx, z: jz, len: jlen, w: 2.6 });
+    this.piers.push({ x0: jx - 1.3, x1: jx + 1.3, z0: jz, z1: jz + jlen, top: 1.53 });
+    this.features.push({ type: "tekne", x: jx + 3.0, z: jz + 10, rot: 0, len: 8 });
+    this.features.push({ type: "tekne", x: jx - 3.0, z: jz + 17, rot: 0, len: 8 });
+    this.features.push({ type: "tekne", x: bx - 12, z: bz + 10, rot: 0.5, len: 5.5 });
+    const K = {
+      jetty: { x: jx, z0: jz, z1: jz + jlen },
+      racks: [[bx - 14, bz - 0.5], [bx + 13, bz - 0.5]],
+      upturned: [bx - 25, bz - 1.5, 0.3],
+      crates: [jx, jz - 1.8],
+      table: [bx - 3.5, bz - 3.4],
+      buoys: [[bx - 12, bz + 13], [bx + 9, bz + 20], [bx - 2, bz + 26]],
+    };
+    const kposts = [];
+    const kpost = (type, x, z, heading, extra = {}) => kposts.push({ post: type, x, z, heading, ...extra });
+    for (const [rx, rz] of K.racks) for (const dx of [-1.4, 1.4]) kpost("ag", rx + dx, rz + 1.3, Math.PI);
+    kpost("kasa", 0, 0, 0, { k: 0 });
+    kpost("kasa", 0, 0, 0, { k: 1 });
+    kpost("iskele", jx + 0.6, jz + 9, Math.PI / 2);
+    kpost("iskele", jx - 0.6, jz + 16.5, -Math.PI / 2);
+    kpost("boya", K.upturned[0] + 2.2, K.upturned[1], -Math.PI / 2);
+    kpost("cay", K.table[0] - 0.75, K.table[1], Math.PI / 2);
+    kpost("cay", K.table[0] + 0.75, K.table[1], -Math.PI / 2);
+    K.posts = kposts;
+    this.koy = K;
     const bDoor = [bx, bz - 15];
     cat().isyerleri.balikci_koyu.forEach((_, i) => this._addWorkplace("balikci_koyu", i, {
-      door: bDoor, path: [bDoor, [bx, this.avenueZ(bx)], ...toHub(bx)], anchor: [bx, bz + 1], spread: 7,
+      door: bDoor, innerDoor: [jx, jz + jlen - 1], path: [bDoor, [bx, this.avenueZ(bx)], ...toHub(bx)], anchor: [bx, bz + 1], spread: 7,
     }));
 
     const mid = promAt(0);

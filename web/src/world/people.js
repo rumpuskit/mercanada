@@ -266,6 +266,7 @@ export class People {
         if (!loc?.outdoor) return;
         if (kind === "liman" && w.port) { for (const q of w.port.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
         if (kind === "tersane" && w.tersane) { for (const q of w.tersane.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
+        if (kind === "balikci_koyu" && w.koy) { for (const q of w.koy.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
         const center = loc.anchor;
         // Nokta sayısı alanın büyüklüğüne göre: tarla geniş, kıyıdaki iş yerleri dar. Noktası olmayan
         // çalışan görünmez (atölyenin içinde, denizde, tarlanın uzak ucunda) — kimse bir noktaya yığılmaz.
@@ -931,10 +932,38 @@ export class People {
           return true;
         }
         case "balikci": {
-          stand(ax, az, it?.heading ?? 0);
-          p.drop = 0.38 * kk; p.hipL = p.hipR = 1.25; p.kneeL = p.kneeR = 2.0; p.lean = 0.35;
-          p.shL = p.shR = 0.8; p.elL = p.elR = 0.9 + 0.2 * Math.sin(t * 2 + ph);
-          return true;
+          // Koyda görev yeri olanlar: ağ örer, kasa taşır, iskelede halat toplar, sandal boyar, çay içer.
+          const K = w.koy;
+          if (!K || !it?.post) return false; // denizde
+          switch (it.post) {
+            case "ag": case "cay": {
+              p.x = it.x; p.z = it.z; p.heading = it.heading; p.y = w.groundY(it.x, it.z);
+              sitPose(p, p.y + 0.45, kk);
+              if (it.post === "ag") { const u = Math.sin(t * 2.4 + ph); p.shL = p.shR = 0.9; p.elL = 1.2 + 0.2 * u; p.elR = 1.2 - 0.2 * u; p.lean = 0.2; p.headPitch = 0.3; }
+              else { const sip = Math.max(0, Math.sin(t * 0.35 + ph)) ** 10; idleGesture(p, t, ph, sip < 0.1); p.shR = Math.max(p.shR, 0.5 + 0.9 * sip); p.elR = Math.max(p.elR, 1.2 + 1.0 * sip); }
+              return true;
+            }
+            case "kasa": {
+              const hut = [K.racks[0][0] + 6 + it.k * 12, K.racks[0][1] - 4];
+              const r = pingPong([[K.crates[0] + it.k * 0.8, K.crates[1] - 0.8], hut], 0.7, ph * 20 + it.k * 11);
+              stand(at.x, at.z, r.heading);
+              walkPose(p, r.d / (0.72 * kk) * Math.PI);
+              if (!r.back) { p.props = ["kasa"]; p.shL = p.shR = 0.9; p.elL = p.elR = 1.1; }
+              return true;
+            }
+            case "iskele": {
+              stand(it.x, it.z, it.heading);
+              p.drop = 0.38 * kk; p.hipL = p.hipR = 1.25; p.kneeL = p.kneeR = 2.0; p.lean = 0.35;
+              p.shL = p.shR = 0.8 + 0.3 * Math.sin(t * 1.8 + ph); p.elL = p.elR = 0.9;
+              return true;
+            }
+            default: {
+              stand(it.x, it.z, it.heading);
+              const u = Math.sin(t * 1.5 + ph);
+              p.shR = 0.9 + 0.3 * u; p.elR = 0.6; p.shL = 0.5; p.lean = 0.35; p.headPitch = 0.3;
+              return true;
+            }
+          }
         }
         case "gemi_ustasi": {
           // Tersanede görev yeri: iskelede, teknenin dibinde, kereste taşırken; yoksa atölyede.
