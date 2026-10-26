@@ -269,6 +269,7 @@ export function buildCity(world) {
     group,
     windows: K.glass.mesh,
     windowOwners: K.windowOwners,
+    wallMaterials: [K.B.walls.material, K.B.plinth.material, K.B.doors.material],
     /** Bir binayı gizler ya da geri getirir (ev içi görünümü için). */
     setHidden(b, on) {
       for (const batch of batches) {
@@ -326,7 +327,7 @@ function buildFeatures(world) {
   for (const f of world.features) {
     switch (f.type) {
       case "cesme": {
-        const y = FLAT_Y + 0.18;
+        const y = world.groundY(f.x, f.z);
         add(new THREE.CylinderGeometry(6.2, 6.5, 0.7, 8), stone, f.x, y + 0.35, f.z);
         add(new THREE.CylinderGeometry(5.7, 5.7, 0.1, 8), water, f.x, y + 0.62, f.z, 0, false);
         add(new THREE.CylinderGeometry(0.5, 0.7, 2.6, 8), stone, f.x, y + 1.3, f.z);

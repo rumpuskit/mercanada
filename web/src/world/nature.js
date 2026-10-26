@@ -4,15 +4,15 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { CELL_D, CELL_W } from "./layout.js";
 import { fbm, hash2, rng } from "./noise.js";
 
-/** Birkaç yumruyu birleştirip doğal görünen bir taç yapar. */
-function clumps(seedText, lumps, spread, radius, squash) {
+/** Birkaç yumruyu birleştirip doğal görünen bir taç yapar (merkez y'de). */
+function clumps(seedText, lumps, spread, radius, squash, y = 0) {
   const rand = rng(seedText);
   const parts = [];
   for (let i = 0; i < lumps; i++) {
     const r = radius * (0.7 + rand() * 0.45);
     const g = new THREE.IcosahedronGeometry(r, 1);
     const a = rand() * Math.PI * 2, d = i === 0 ? 0 : spread * (0.5 + rand() * 0.5);
-    g.scale(1, squash, 1).translate(Math.cos(a) * d, (rand() - 0.3) * radius * squash * 0.8, Math.sin(a) * d);
+    g.scale(1, squash, 1).translate(Math.cos(a) * d, y + (rand() - 0.4) * radius * squash * 0.7, Math.sin(a) * d);
     parts.push(g);
   }
   const m = mergeGeometries(parts);
@@ -20,23 +20,147 @@ function clumps(seedText, lumps, spread, radius, squash) {
   return m;
 }
 
-const KINDS = {
-  // Fıstık çamı: uzun çıplak gövde, şemsiye gibi yayvan tepe (adaların simgesi).
-  cam: { trunk: [0.22, 0.32, 1], crown: () => clumps("cam", 6, 2.6, 2.2, 0.45), crownY: 1, colors: ["#4f7a3e", "#5b8546", "#46703a"], h: [9, 13], trunkH: 0.82 },
-  servi: { trunk: [0.12, 0.18, 1], crown: () => new THREE.CylinderGeometry(0.15, 1, 1, 8, 3).translate(0, 0.5, 0), crownY: 0.08, colors: ["#3c5e34", "#35552f"], h: [9, 14], trunkH: 0.12, crownScale: (h) => [1.3, h * 0.92, 1.3] },
-  cinar: { trunk: [0.25, 0.38, 1], crown: () => clumps("cinar", 7, 2.0, 2.1, 0.85), crownY: 0.62, colors: ["#6f9d4c", "#7aa755", "#64913f", "#86ad5c"], h: [8, 12], trunkH: 0.55 },
-  zeytin: { trunk: [0.14, 0.22, 1], crown: () => clumps("zeytin", 5, 1.3, 1.4, 0.7), crownY: 0.62, colors: ["#8a9c6d", "#7d9163", "#93a578"], h: [4, 6], trunkH: 0.5 },
-  palmiye: { trunk: [0.16, 0.24, 1], crown: () => palmFronds(), crownY: 1, colors: ["#5f8f3e", "#6a9a45"], h: [7, 10], trunkH: 1 },
-};
-
-function palmFronds() {
-  const parts = [];
-  for (let i = 0; i < 9; i++) {
-    const g = new THREE.BoxGeometry(0.5, 0.06, 3.2).translate(0, 0, 1.6).rotateX(0.45).rotateY((i / 9) * Math.PI * 2);
-    parts.push(g);
-  }
-  return mergeGeometries(parts);
+function colored(geo, color) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const c = new THREE.Color(color);
+  const arr = new Float32Array(g.attributes.position.count * 3);
+  for (let i = 0; i < arr.length; i += 3) arr.set([c.r, c.g, c.b], i);
+  g.setAttribute("color", new THREE.BufferAttribute(arr, 3));
+  if (g.attributes.uv) g.deleteAttribute("uv");
+  return g;
 }
+
+function mergeColored(parts) {
+  const g = mergeGeometries(parts);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** Gövdeden tepeye uzanan dal: (x0,y0,z0) -> (x1,y1,z1). */
+function branch(a, b, r0, r1, color) {
+  const from = new THREE.Vector3(...a), to = new THREE.Vector3(...b);
+  const dir = to.clone().sub(from);
+  const g = new THREE.CylinderGeometry(r1, r0, dir.length(), 6).translate(0, dir.length() / 2, 0);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()));
+  g.translate(...a);
+  return colored(g, color);
+}
+
+/** Palmiye gövdesi: hafif kavisli, halkalı (açık ve koyu bantlar). */
+function palmTrunk(H, bend) {
+  const parts = [];
+  const n = 14;
+  for (let i = 0; i < n; i++) {
+    const t0 = i / n, t1 = (i + 1) / n;
+    const x0 = bend * t0 * t0, x1 = bend * t1 * t1;
+    const r0 = 0.24 - 0.08 * t0, r1 = 0.24 - 0.08 * t1;
+    parts.push(branch([x0, t0 * H, 0], [x1, t1 * H, 0], r0 * (i % 2 ? 1 : 1.08), r1, i % 2 ? "#8c7458" : "#a38a6a"));
+  }
+  return mergeColored(parts);
+}
+
+/** Palmiye tacı: kavis yapıp sarkan yapraklar (orta damar ve iki yana inen yaprakçıklar) ve hindistan cevizleri. */
+function palmCrown(H, bend, seed) {
+  const rand = rng(seed);
+  const top = [bend, H, 0];
+  const pos = [], col = [];
+  const green = new THREE.Color("#5e8f3c"), tip = new THREE.Color("#8fae4f"), dark = new THREE.Color("#46702e");
+  const push = (p, c) => { pos.push(...p); col.push(c.r, c.g, c.b); };
+  const fronds = 11;
+  for (let f = 0; f < fronds; f++) {
+    const young = f >= fronds - 3;
+    const a = (f / fronds) * Math.PI * 2 + rand() * 0.4;
+    const L = young ? 2.2 : 3.4 + rand() * 0.8;
+    const lift = young ? 1.6 : 0.9 + rand() * 0.3, droop = young ? 0.6 : 2.0 + rand() * 0.6;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const seg = 7;
+    let prev = null;
+    for (let k = 0; k <= seg; k++) {
+      const t = k / seg;
+      const r = L * t, y = lift * t - droop * t * t;
+      const w = 0.7 * Math.sin(Math.PI * Math.min(1, t * 1.1)) * (young ? 0.6 : 1);
+      const c = [top[0] + ca * r, top[1] + y, top[2] + sa * r];
+      // Yaprakçıklar orta damardan iki yana ve aşağı iner (V kesit).
+      const l = [c[0] - sa * w, c[1] - w * 0.45, c[2] + ca * w];
+      const rr = [c[0] + sa * w, c[1] - w * 0.45, c[2] - ca * w];
+      if (prev) {
+        const cc = green.clone().lerp(tip, t), cd = dark.clone().lerp(tip, t * 0.7);
+        for (const [p, q] of [[prev.l, l], [prev.r, rr]]) {
+          push(prev.c, cc); push(c, cc); push(q, cd);
+          push(prev.c, cc); push(q, cd); push(p, cd);
+        }
+      }
+      prev = { c, l, r: rr };
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  const nuts = [];
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    nuts.push(colored(new THREE.IcosahedronGeometry(0.16, 0).translate(top[0] + Math.cos(a) * 0.25, top[1] - 0.3, Math.sin(a) * 0.25), "#6b4a2a"));
+  }
+  const crown = mergeGeometries([g, ...nuts.map((n) => { n.deleteAttribute("normal"); return n; })]);
+  crown.computeVertexNormals();
+  return crown;
+}
+
+/** Selvi: tabandan sivri uca daralan, hafif kabarık gövde. */
+function cypress(H) {
+  const pts = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    pts.push(new THREE.Vector2(0.95 * Math.pow(Math.sin(Math.PI * Math.min(1, 0.15 + t * 0.85)), 0.8) * (1 - t * 0.35) + (i === 10 ? 0 : 0.02), 0.6 + t * (H - 0.6)));
+  }
+  pts[10].x = 0;
+  return colored(new THREE.LatheGeometry(pts, 9), "#ffffff");
+}
+
+// Her ağaç türü kendi referans boyunda tek parça kurulur (gövde + dallar + taç); örnekler yalnızca
+// döndürülüp orantılı ölçeklenir. Böylece taç hep gövdeye oturur.
+const REF = { cam: 11, servi: 11, cinar: 10, zeytin: 5, palmiye: 8.5 };
+const KINDS = {
+  cam: {
+    h: [9, 13], trunkR: 0.3, colors: ["#4f7a3e", "#5b8546", "#46703a"],
+    trunk: () => mergeColored([
+      branch([0, 0, 0], [0.35, 8.6, 0], 0.32, 0.2, "#7a5b45"),
+      branch([0.3, 7.6, 0], [1.9, 9.2, 0.6], 0.14, 0.07, "#7a5b45"),
+      branch([0.3, 7.9, 0], [-1.4, 9.3, -0.9], 0.14, 0.07, "#7a5b45"),
+      branch([0.33, 8.2, 0], [0.6, 9.3, 1.8], 0.12, 0.06, "#7a5b45"),
+    ]),
+    crown: () => colored(clumps("cam", 7, 2.7, 2.3, 0.42, 9.7), "#ffffff"),
+  },
+  servi: {
+    h: [9, 14], trunkR: 0.18, colors: ["#3c5e34", "#35552f", "#40633a"],
+    trunk: () => mergeColored([branch([0, 0, 0], [0, 1.6, 0], 0.17, 0.13, "#6b5040")]),
+    crown: () => cypress(REF.servi),
+  },
+  cinar: {
+    h: [8, 12], trunkR: 0.38, colors: ["#6f9d4c", "#7aa755", "#64913f", "#86ad5c"],
+    trunk: () => mergeColored([
+      branch([0, 0, 0], [0.1, 5.6, 0], 0.4, 0.26, "#8a7560"),
+      branch([0.1, 4.6, 0], [1.6, 6.6, 0.5], 0.16, 0.08, "#8a7560"),
+      branch([0.1, 4.9, 0], [-1.3, 6.8, -0.8], 0.16, 0.08, "#8a7560"),
+      branch([0.1, 5.2, 0], [0.2, 7.0, 1.5], 0.14, 0.07, "#8a7560"),
+    ]),
+    crown: () => colored(clumps("cinar", 8, 2.1, 2.2, 0.85, 7.2), "#ffffff"),
+  },
+  zeytin: {
+    h: [4, 6], trunkR: 0.25, colors: ["#8a9c6d", "#7d9163", "#93a578"],
+    trunk: () => mergeColored([
+      branch([0, 0, 0], [0.4, 1.6, 0.1], 0.26, 0.2, "#6e5a48"),
+      branch([0.4, 1.5, 0.1], [-0.2, 2.9, 0.3], 0.18, 0.12, "#6e5a48"),
+      branch([0.4, 1.6, 0.1], [1.2, 2.8, -0.3], 0.14, 0.09, "#6e5a48"),
+    ]),
+    crown: () => colored(clumps("zeytin", 6, 1.3, 1.35, 0.68, 3.4), "#ffffff"),
+  },
+  palmiye: {
+    h: [7, 10], trunkR: 0.26, colors: ["#ffffff", "#f2f6ea", "#eef4e2"],
+    trunk: () => palmTrunk(REF.palmiye, 0.9),
+    crown: () => palmCrown(REF.palmiye, 0.9, "palmiye"),
+  },
+};
 
 function treeKind(world, x, z, h, roll) {
   const d = world.sdf(x, z);
@@ -72,41 +196,40 @@ export function buildTrees(world) {
       const h = world.height(x, z);
       if (h < 1.0) continue;
       if (hash2(gx, gz, 43) > treeDensity(world, x, z, h)) continue;
-      spots.push({ x, z, y: h - 0.1, kind: treeKind(world, x, z, h, hash2(gx, gz, 46)), r: hash2(gx, gz, 44), t: hash2(gx, gz, 45) });
+      spots.push({ x, z, y: h - 0.15, kind: treeKind(world, x, z, h, hash2(gx, gz, 46)), r: hash2(gx, gz, 44), t: hash2(gx, gz, 45) });
     }
   }
   // Meydan çınarları ve sahil palmiyeleri.
-  for (const f of world.features) if (f.type === "agac") spots.push({ x: f.x, z: f.z, y: 1.3, kind: "cinar", r: 0.6, t: 0.3 });
-  const sahil = world.roads.find((r) => r.type === "sahil");
-  if (sahil) {
-    sahil.points.forEach(([x, z], i) => {
-      if (i % 2 === 0 && world.isLand(x, z + 5)) spots.push({ x, z: z + 4.5, y: Math.max(world.height(x, z + 4.5), 0.6), kind: "palmiye", r: (i % 5) / 5, t: (i % 3) / 3 });
-    });
+  for (const f of world.features) if (f.type === "agac") spots.push({ x: f.x, z: f.z, y: world.groundY(f.x, f.z) - 0.05, kind: "cinar", r: 0.6, t: 0.3 });
+  // Sahil yolu palmiyeleri: yolun kara tarafında, gezinti alanının dışında.
+  for (const [i, [x, z]] of (world.promenade ?? []).entries()) {
+    if (i % 2 !== 0) continue;
+    const pz = z - 5.2;
+    if (world.isLand(x, pz) && !world.roadIndex.at(x, pz)) spots.push({ x, z: pz, y: world.height(x, pz) - 0.1, kind: "palmiye", r: (i % 5) / 5, t: (i % 7) / 7 });
   }
 
   const group = new THREE.Group();
   const crowns = [];
   group.userData.crowns = crowns;
-  const bark = new THREE.MeshStandardMaterial({ color: "#7d6150", roughness: 1 });
+  const bark = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), sc = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const color = new THREE.Color();
   for (const [name, kind] of Object.entries(KINDS)) {
-    const list = spots.filter((t) => t.kind === name);
+    const list = spots.filter((t) => t.kind === name && world.isWalkable(t.x, t.z));
     if (!list.length) continue;
-    const [rt, rb] = kind.trunk;
-    const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(rt, rb, 1, 6).translate(0, 0.5, 0), bark, list.length);
-    const crownMat = new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: name !== "servi", transparent: true, opacity: 1 });
+    const trunk = new THREE.InstancedMesh(kind.trunk(), bark, list.length);
+    const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: name !== "servi", transparent: true, opacity: 1, side: name === "palmiye" ? THREE.DoubleSide : THREE.FrontSide });
     crowns.push(crownMat);
     const crown = new THREE.InstancedMesh(kind.crown(), crownMat, list.length);
     list.forEach((t, i) => {
       const h = kind.h[0] + t.r * (kind.h[1] - kind.h[0]);
+      const k = h / REF[name];
       q.setFromAxisAngle(up, t.t * 6.283);
-      m.compose(pos.set(t.x, t.y, t.z), q, sc.set(1 + t.r * 0.3, h * kind.trunkH, 1 + t.r * 0.3));
+      m.compose(pos.set(t.x, t.y, t.z), q, sc.set(k, k, k));
       trunk.setMatrixAt(i, m);
-      const cs = kind.crownScale ? kind.crownScale(h) : [1 + t.r * 0.35, 1 + t.r * 0.35, 1 + t.r * 0.35];
-      m.compose(pos.set(t.x, t.y + h * kind.crownY * (name === "servi" ? 1 : 1), t.z), q, sc.set(...cs));
       crown.setMatrixAt(i, m);
       crown.setColorAt(i, color.set(kind.colors[Math.floor(t.t * 97) % kind.colors.length]));
+      world.addObstacleCircle(t.x, t.z, kind.trunkR * k + 0.25);
     });
     for (const mesh of [trunk, crown]) {
       mesh.castShadow = true;

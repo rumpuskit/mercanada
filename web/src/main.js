@@ -11,6 +11,7 @@ import { buildLabels, scaleLabels } from "./world/labels.js";
 import { People } from "./world/people.js";
 import { createSky } from "./world/sky.js";
 import { Dollhouse } from "./world/interior.js";
+import { createLampLight } from "./world/lighting.js";
 import * as P from "./world/palette.js";
 import { createUI } from "./ui.js";
 import "./style.css";
@@ -47,6 +48,17 @@ renderer.shadowMap.type = THREE.PCFShadowMap;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.5, 20000);
+// Derinlik hassasiyeti: yakın ve uzak düzlem kamera uzaklığıyla birlikte ayarlanır; üst üste yakın
+// yüzeyler (yol, kaldırım, çizgi) uzaktan bakınca titremesin.
+function fitDepth(dist) {
+  const near = THREE.MathUtils.clamp(dist * 0.02, 0.2, 25);
+  const far = Math.max(8000, dist * 30);
+  if (Math.abs(camera.near - near) / near > 0.1 || camera.far !== far) {
+    camera.near = near;
+    camera.far = far;
+    camera.updateProjectionMatrix();
+  }
+}
 const controls = new MapControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
@@ -58,9 +70,14 @@ controls.zoomToCursor = true;
 
 const world = new World(population);
 const roads = buildRoads(world);
-scene.add(buildWater(), buildTerrain(world), roads, buildGrounds(world));
+const terrain = buildTerrain(world);
+const grounds = buildGrounds(world);
+scene.add(buildWater(), terrain, roads, grounds);
 const city = buildCity(world);
 const trees = buildTrees(world);
+const lampLight = createLampLight(world, world.lampSpots,
+  [terrain.material, ...roads.userData.groundMaterials, ...grounds.userData.groundMaterials],
+  { wallMaterials: city.wallMaterials });
 scene.add(city.group, trees);
 const clouds = buildClouds(world);
 const labels = buildLabels(world);
@@ -150,12 +167,10 @@ function updateWindows(minute, light) {
     windows.setColorAt(i, tmpColor);
   }
   windows.instanceColor.needsUpdate = true;
-  const lampGroup = roads.children.find((c) => c.userData.heads);
-  const lamps = lampGroup.userData.heads;
-  lampGroup.userData.pool.material.opacity = night > 0.35 ? 0.28 * night : 0;
-  tmpColor.copy(LAMP_OFF).lerp(P.WINDOW_NIGHT, night > 0.35 ? 1 : 0);
-  for (let i = 0; i < lamps.count; i++) lamps.setColorAt(i, tmpColor);
-  if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true;
+  // Lambalar güneş ufkun altına inince yanar.
+  const on = night > 0.35;
+  for (const m of roads.userData.lampHeads) m.color.copy(LAMP_OFF).lerp(P.WINDOW_NIGHT, on ? 1 : 0);
+  lampLight.setNight(on ? Math.min(1, (night - 0.35) / 0.4) : 0);
 }
 
 // --- döngü ---
@@ -186,6 +201,7 @@ function tick() {
 
   const light = sky.update(minute, controls.target);
   const dist = camera.position.distanceTo(controls.target);
+  fitDepth(dist);
   const size = THREE.MathUtils.clamp(dist * 0.8, 25, 1400);
   const sc = sky.sun.shadow.camera;
   if (sc.right !== size) {
