@@ -18,7 +18,8 @@ export class MapControls2 {
     this.maxPitch = 1.28; // ufka yakın
     this.groundY = groundY;
     this.enabled = true;
-    this.onUserMove = null;
+    this.onUserMove = null; // (tür) => …  tür: "pan" | "zoom" | "rotate"
+    this.lockTarget = false; // takipte: yakınlaştırma ve döndürme hedefin çevresinde, kaydırma takibi bırakır
     this._pointers = new Map();
     this._ray = new THREE.Raycaster();
     this._v = new THREE.Vector3();
@@ -78,7 +79,8 @@ export class MapControls2 {
   }
 
   /** P noktasına doğru yakınlaş (factor < 1) ya da uzaklaş (> 1). */
-  _zoom(factor, P = this.target) {
+  _zoom(factor, pivot = this.target) {
+    const P = pivot.clone(); // pivot hedefin kendisi olabilir; aşağıda hedef değişirken bozulmasın
     const off = this._offset();
     const dist = off.length();
     const nd = THREE.MathUtils.clamp(dist * factor, this.minDistance, this.maxDistance);
@@ -90,8 +92,8 @@ export class MapControls2 {
   }
 
   _zoomAt(cx, cy, factor) {
-    const P = this._ground(cx, cy) ?? this.target.clone();
-    this.onUserMove?.();
+    const P = this.lockTarget ? this.target.clone() : this._ground(cx, cy) ?? this.target.clone();
+    this.onUserMove?.("zoom");
     this._zoom(factor, P);
   }
 
@@ -107,6 +109,7 @@ export class MapControls2 {
     this.dom.setPointerCapture?.(e.pointerId);
     this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button, ctrl: e.ctrlKey || e.shiftKey || e.metaKey });
     this._vel.set(0, 0, 0);
+    this._dragPx = 0;
     if (this._pointers.size === 1) {
       const rotate = e.button === 2 || e.ctrlKey || e.shiftKey || e.metaKey;
       this._mode = rotate ? "rotate" : "pan";
@@ -134,8 +137,11 @@ export class MapControls2 {
     if (!p || !this.enabled) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
-    if (Math.abs(dx) + Math.abs(dy) > 0) this.onUserMove?.();
+    this._dragPx += Math.abs(dx) + Math.abs(dy);
     if (this._mode === "pan" && this._pointers.size === 1) {
+      // Dokunurken parmak titrer: birkaç pikselden kısa sürüklemeler kaydırma sayılmaz.
+      if (this._dragPx < 8) return;
+      this.onUserMove?.("pan");
       if (!this._grab) { this._grab = this._ground(e.clientX, e.clientY); return; }
       const now = this._ground(e.clientX, e.clientY);
       if (!now) return;
@@ -145,11 +151,13 @@ export class MapControls2 {
       this._vel.copy(delta);
     } else if (this._mode === "rotate" && this._pointers.size === 1) {
       const h = this.dom.clientHeight || 1;
+      if (Math.abs(dx) + Math.abs(dy) > 0) this.onUserMove?.("rotate");
       this._rotate(-dx * (Math.PI / h) * 0.9, -dy * (Math.PI / h) * 0.7);
     } else if (this._mode === "multi" && this._pointers.size === 2) {
       const prev = this._multi, cur = this._multiState();
       // Sıkıştır: yakınlaştır; çevir: döndür (parmakların ortası çevresinde); birlikte kaydır: eğ ya da kaydır.
-      const pivot = this._ground(cur.mx, cur.my) ?? this.target.clone();
+      const pivot = this.lockTarget ? this.target.clone() : this._ground(cur.mx, cur.my) ?? this.target.clone();
+      this.onUserMove?.("zoom");
       if (prev.dist > 0 && cur.dist > 0) this._zoom(prev.dist / cur.dist, pivot);
       let da = cur.angle - prev.angle;
       if (da > Math.PI) da -= 2 * Math.PI;
@@ -161,7 +169,7 @@ export class MapControls2 {
       const sameDir = Math.abs(cur.dist - prev.dist) < 3;
       if (sameDir && Math.abs(my) > Math.abs(mx) * 1.5) {
         this._rotate(0, -my * 0.006);
-      } else {
+      } else if (!this.lockTarget) {
         const g0 = this._ground(prev.mx, prev.my), g1 = this._ground(cur.mx, cur.my);
         if (g0 && g1) { const d = g0.sub(g1); d.y = 0; this._pan(d); }
       }
@@ -197,11 +205,12 @@ export class MapControls2 {
       q: () => this._rotate(0.12, 0), e: () => this._rotate(-0.12, 0),
     };
     const f = map[e.key];
-    if (f) { f(); this.onUserMove?.(); }
+    if (f) { f(); this.onUserMove?.(e.key.startsWith("Arrow") ? "pan" : e.key === "q" || e.key === "e" ? "rotate" : "zoom"); }
   }
 
   /** Her karede: bırakınca kısa süreli kayma (eylemsizlik). */
   update(dt = 1 / 60) {
+    if (this.lockTarget) this._vel.set(0, 0, 0);
     if (this._pointers.size === 0 && this._vel.lengthSq() > 1e-4) {
       this._pan(this._vel);
       this._vel.multiplyScalar(Math.pow(0.0025, dt));

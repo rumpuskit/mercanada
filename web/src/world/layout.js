@@ -262,6 +262,34 @@ export class World {
     return this.height(x, z) > 0.25;
   }
 
+  /** Nokta bir taşıt yolunun (şeritler ve kenar parkı) üstünde mi? Yaya geçitleri de dahil. */
+  inCarriage(x, z) {
+    const C = 20;
+    if (!this._carGrid) {
+      this._carGrid = new Map();
+      for (const r of this.roads) {
+        if (!(r.carriage > 0)) continue;
+        for (let i = 1; i < r.points.length; i++) {
+          const a = r.points[i - 1], b = r.points[i], h = r.carriage / 2;
+          const seg = [a, b, h];
+          for (let gx = Math.floor((Math.min(a[0], b[0]) - h) / C); gx <= Math.floor((Math.max(a[0], b[0]) + h) / C); gx++) {
+            for (let gz = Math.floor((Math.min(a[1], b[1]) - h) / C); gz <= Math.floor((Math.max(a[1], b[1]) + h) / C); gz++) {
+              const k = gx * 100003 + gz;
+              if (!this._carGrid.has(k)) this._carGrid.set(k, []);
+              this._carGrid.get(k).push(seg);
+            }
+          }
+        }
+      }
+    }
+    for (const [a, b, h] of this._carGrid.get(Math.floor(x / C) * 100003 + Math.floor(z / C)) ?? []) {
+      const ex = b[0] - a[0], ez = b[1] - a[1], L2 = ex * ex + ez * ez || 1;
+      const q = Math.max(0, Math.min(1, ((x - a[0]) * ex + (z - a[1]) * ez) / L2));
+      if (Math.hypot(a[0] + ex * q - x, a[1] + ez * q - z) < h) return true;
+    }
+    return false;
+  }
+
   /** (x, z)'ye en yakın yürünebilir nokta (spiral arama). */
   nearestWalkable(x, z, max = 6) {
     if (this.isWalkable(x, z)) return [x, z];
@@ -872,20 +900,29 @@ export class World {
         phase: h(3) * Math.PI * 2,
         yard: 2.5 + h(4) * 1.5,
         cumba: 0.15 + h(5) * 0.5,
-        mosqueWest: h(6) < 0.5,
+        // Cami hep mahallenin batı şeridinde: komşu mahallenin camisiyle sınır caddesinin iki yanında
+        // karşı karşıya gelmesin.
+        mosqueWest: true,
       });
     }
     return this._styles.get(m);
   }
 
-  /** Sokak sırası r'nin x'teki z'si (mahallenin kavis çizgisi) ve eğimi. */
+  /**
+   * Sokak sırası r'nin x'teki z'si (mahallenin kavis çizgisi) ve eğimi. Kavis mahalle sınırına doğru
+   * sönümlenir: komşu mahallelerin aynı sıradaki sokakları sınır caddesinde aynı noktada buluşur
+   * (birkaç metre arayla iki ayrı kavşak, çift ışık ve üst üste yüzey olmaz).
+   */
   rowZ(cell, r, x) {
     const st = this.mahalleStyle(cell.mahalle);
     const [ox, oz] = this.cellCenter(cell);
     const k = (2 * Math.PI) / st.period;
+    const u = Math.PI * ((x - ox) / CELL_W + 0.5);
+    const env = Math.sin(Math.max(0, Math.min(Math.PI, u))), denv = (Math.PI / CELL_W) * Math.cos(u);
+    const s = Math.sin(k * (x - ox) + st.phase), ds = k * Math.cos(k * (x - ox) + st.phase);
     return {
-      z: oz + ROW_Z0 + r * ROW_PITCH + st.amp * Math.sin(k * (x - ox) + st.phase),
-      slope: st.amp * k * Math.cos(k * (x - ox) + st.phase),
+      z: oz + ROW_Z0 + r * ROW_PITCH + st.amp * s * env,
+      slope: st.amp * (ds * env + s * denv),
     };
   }
 
@@ -1076,4 +1113,21 @@ export function playgroundItems(f) {
     const rot = Math.floor(h(30 + i) * 4) * (Math.PI / 2) + (h(40 + i) - 0.5) * 0.3;
     return { kind, x: f.x + cx * flip + (h(50 + i) - 0.5) * 1.2, z: f.z + cz * Math.min(1, f.d / 16) + (h(60 + i) - 0.5) * 0.8, w, d, rot, c: Math.floor(h(70 + i) * 5) };
   });
+}
+
+/**
+ * Apartman katının planı: ortada merdiven ve asansör çekirdeği (2,4 m), iki yanında daireler.
+ * Katta ikiden fazla daire varsa arkada ortak koridor bulunur. Hem dış cephe hem iç mekân bunu kullanır.
+ */
+export function unitLayout(b) {
+  const core = 2.4;
+  const n = b.perFloor;
+  const L = Math.ceil(n / 2);
+  const u = (b.w - core) / n;
+  const units = [];
+  for (let c = 0; c < n; c++) {
+    const x0 = c < L ? -b.w / 2 + c * u : core / 2 + (c - L) * u;
+    units.push({ col: c, x0, x1: x0 + u, cx: x0 + u / 2, side: c < L ? -1 : 1, adjacent: c === L - 1 || c === L });
+  }
+  return { core: [-core / 2, core / 2], units, corridor: n > 2, corridorDepth: 1.5 };
 }

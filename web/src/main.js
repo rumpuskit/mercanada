@@ -66,7 +66,8 @@ function fitDepth(dist) {
   }
 }
 const controls = new MapControls2(camera, canvas);
-controls.onUserMove = () => { flight = null; following = null; };
+// Kaydırınca uçuş da takip de biter; yakınlaştırıp döndürmek takibi bozmaz (hedef aracın üstünde kalır).
+controls.onUserMove = (kind) => { flight = null; if (kind === "pan") following = null; };
 
 const T0 = performance.now();
 const world = new World(population);
@@ -162,9 +163,11 @@ controls.update();
 
 // --- zaman ---
 // Zaman hızı yalnızca geliştirmede (vite dev ya da ?gelistir): yayında şehir gerçek saatle yaşar.
+// TEST_PHASE: yayın öncesi deneme sürecinde 60×/600× düğmeleri canlı sitede de görünür; açılışta false yapılacak.
+const TEST_PHASE = true;
 const dev = import.meta.env.DEV || params.has("gelistir") || params.has("denetle");
 let speed = dev ? Number(params.get("hiz")) || 1 : 1;
-if (dev) document.getElementById("speed").hidden = false;
+if (dev || TEST_PHASE) document.getElementById("speed").hidden = false;
 let simBase = nowUnix();
 let realBase = performance.now() / 1000;
 const fixed = dev && params.get("saat")?.match(/^(\d{1,2}):(\d{2})$/);
@@ -178,7 +181,7 @@ function setSpeed(next) {
 
 // --- kamera uçuşu ---
 let flight = null;
-let following = null; // takip edilen araç {key}
+let following = null; // takip edilen araç {key, t: yumuşak başlangıç 0→1}
 function flyTo(x, y, z, distance = 120, direction = null) {
   const dir = direction ? direction.clone().normalize() : camera.position.clone().sub(controls.target).normalize();
   if (!direction && dir.y < 0.45) dir.setY(0.45).normalize();
@@ -193,7 +196,8 @@ const nameTags = new NameTags(scene);
 if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents };
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
-const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => following?.key ?? null, set: (k) => { following = k ? { key: k } : null; } }, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => following?.key ?? null, set: (k) => { following = k ? { key: k, t: 0 } : null; flight = null; } }, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, followKey: () => following?.key ?? null });
 const mapUI = createMapUI({ world, camera, controls, flyTo });
 
 // Bir sakine dokununca kartını aç.
@@ -205,9 +209,13 @@ canvas.addEventListener("pointerup", (e) => {
   const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
   const index = people.pick(raycaster);
-  if (index != null) return ui.select(index, false);
+  if (index != null && !people.poses[index].inVehicle) return ui.select(index, false);
   const veh = vehicles.pick(raycaster);
   if (veh) return ui.selectVehicle(veh);
+  // Aracın içindeki sakine dokunulduysa (camdan) aracı seç; kartta sahibine/yolcuya geçilebilir.
+  const inside = index != null ? traffic.active.get(people.poses[index].vehicleKey) : null;
+  if (inside) return ui.selectVehicle({ kind: inside.kind, key: inside.key, owner: inside.owner, line: inside.line, dep: inside.dep });
+  if (index != null) return ui.select(index, false);
   const building = city.pickBuilding(raycaster);
   if (building) ui.openBuilding(building);
 });
@@ -279,7 +287,7 @@ function tick() {
   }
   for (const [slot, color, owner] of people.parked) {
     const s = traffic.slots[slot];
-    vehicles.addCar(s.x, world.surfaceY(s.x, s.z) + 0.06, s.z, s.heading, color, { lights: false, record: { kind: "car", owner, parked: true } });
+    vehicles.addCar(s.x, world.surfaceY(s.x, s.z) + 0.06, s.z, s.heading, color, { lights: false, record: { kind: "car", owner, parked: true, slot } });
   }
   for (const c of people.staticCars) vehicles.addCar(c.x, world.surfaceY(c.x, c.z) + 0.06, c.z, c.heading, 0, { taxi: c.taxi, record: { kind: "taxi" } });
 
@@ -291,14 +299,20 @@ function tick() {
     if (flight.t >= 1) flight = null;
   }
   // Takip edilen araç: hedef aracın üstünde kalır, kamera onunla birlikte kayar.
+  // İlk saniyede hedef araca yumuşakça yetişir (uzaktan bakılıyorsa biraz da yaklaşır), sonra kilitlenir.
   if (following && !flight) {
     const fv = traffic.active.get(following.key);
     if (fv) {
       const fp = fv.route.position(fv.s);
-      const d = new THREE.Vector3(fp.x - controls.target.x, 0, fp.z - controls.target.z);
+      following.t = Math.min(1, following.t + dt / 0.9);
+      const k = following.t >= 1 ? 1 : 1 - Math.exp(-dt * (4 + 30 * following.t * following.t));
+      const d = new THREE.Vector3((fp.x - controls.target.x) * k, 0, (fp.z - controls.target.z) * k);
       controls.target.add(d); camera.position.add(d);
-    } else following = null;
+      const cd = camera.position.distanceTo(controls.target);
+      if (following.t < 1 && cd > 220) controls._zoom(Math.pow(140 / cd, Math.min(1, dt * 3)));
+    } else following = null; // yolculuk bitti: kamera aracın son yerinde kalır
   }
+  controls.lockTarget = !!following;
   // Hedef adanın çevresinde kalır; yüksekliği zemini izler (kamera da birlikte kayar).
   {
     const t = controls.target;
@@ -344,8 +358,19 @@ function tick() {
     marker.position.set(x, y, z);
     pin.position.y = 2.6 + Math.sin(real * 3) * 0.15;
     ring.scale.setScalar(1 + (real % 1.2) * 0.4);
+    ring.visible = true;
   } else {
-    marker.visible = false;
+    // Seçili araç: işaret aracın üstünde (park halindeyse park yerinde).
+    const vr = ui.selectedVehicle();
+    const lv = vr?.key ? traffic.active.get(vr.key) : null;
+    const at = lv ? lv.route.position(lv.s) : vr?.slot != null ? traffic.slots[vr.slot] : null;
+    marker.visible = !!at;
+    if (at) {
+      const tall = { bus: 1.7, itfaiye: 1.5, cop: 1.5, ambulans: 1.0 }[vr.kind] ?? 0;
+      marker.position.set(at.x, world.surfaceY(at.x, at.z) + 0.06 + tall, at.z);
+      pin.position.y = 2.6 + Math.sin(real * 3) * 0.15;
+      ring.visible = false;
+    }
   }
 
   tryFollow();

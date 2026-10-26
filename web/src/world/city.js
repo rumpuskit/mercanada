@@ -2,7 +2,7 @@
 // Aynı parçalar (pencere, balkon, çatı...) tek bir InstancedMesh ile çizilir; telefonda da akıcı kalsın diye.
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { FLAT_Y, FLOOR_H, playgroundItems } from "./layout.js";
+import { FLAT_Y, FLOOR_H, playgroundItems, unitLayout } from "./layout.js";
 import * as P from "./palette.js";
 import * as T from "./textures.js";
 
@@ -205,24 +205,19 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   }
 
   if (b.kind === "konut") {
-    // Apartman: kat başına perFloor daire; her dairenin önde balkonlu (ya da düz) penceresi, arkada penceresi.
-    const bay = b.w / b.perFloor;
+    // Apartman: ortada merdiven çekirdeği, iki yanında daireler (unitLayout). Her dairenin önde balkonlu
+    // ya da düz penceresi, arkada penceresi var; çekirdeğin önünde her katta merdiven penceresi.
+    const plan = unitLayout(b);
+    const cumbaUnit = b.cumba ? plan.units[0] : null;
     for (let k = 0; k < b.daireler; k++) {
       const floor = Math.floor(k / b.perFloor), col = k % b.perFloor;
       if (floor >= floors) continue;
-      const lx = -b.w / 2 + (col + 0.5) * bay;
+      const unit = plan.units[col];
+      const fx = unit.cx;
       const ly = floor * FLOOR_H;
       const owner = { slot: b.slot0 + k };
-      const doorClash = floor === 0 && Math.abs(lx) < 1.8;
-      let fx = doorClash ? lx + (lx >= 0 ? 1.4 : -1.4) : lx;
-      let front = true;
-      if (b.cumba && floor > 0) {
-        // Cumbanın olduğu ortada ön pencere yok (cumbanın kendi penceresi var); yanlar cumbadan uzaklaşır.
-        if (Math.abs(lx) < 1.0) front = false;
-        else fx = Math.sign(lx) * Math.min(b.w / 2 - 2.0, Math.max(Math.abs(lx), 3.75));
-      }
-      if (!front) {
-        // yalnızca arka pencere
+      if (cumbaUnit === unit && floor > 0) {
+        // Cumbanın kendi penceresi var.
       } else if (b.balconies && floor > 0) {
         addWindow(b, fx - 0.7, ly + 0.25, 1, 1.0, 2.15, owner);
         addWindow(b, fx + 0.9, ly + 0.95, 1, 1.0, 1.35, owner);
@@ -235,22 +230,23 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
           B.railPanels.add(local(b, fx + e, ly + 0.55, b.d / 2 + 0.6), b.rot + Math.PI / 2, s.set(1.12, 0.9, 1));
         }
       } else {
-        addWindow(b, fx, ly + 0.95, 1, 1.3, 1.4, owner);
+        addWindow(b, fx, ly + 0.95, 1, 1.4, 1.4, owner);
       }
-      addWindow(b, lx, ly + 0.95, -1, 1.2, 1.35, owner);
+      addWindow(b, fx, ly + (plan.corridor ? 1.3 : 0.95), -1, plan.corridor ? 0.9 : 1.2, plan.corridor ? 0.9 : 1.35, owner);
     }
-    // Yan cephelerde merdiven pencereleri.
+    // Merdiven penceresi (çekirdeğin önünde, kat aralarında) ve yanlarda birer pencere.
     for (let f = 0; f < floors; f++) {
+      if (f > 0) addWindow(b, 0, f * FLOOR_H - 0.6, 1, 0.8, 1.2, { workplace: "merdiven", seed: f });
       for (const side of [-1, 1]) {
         const fake = { ...b, rot: b.rot + (side * Math.PI) / 2, w: b.d, d: b.w };
-        addWindow(fake, 0, f * FLOOR_H + 1.0, 1, 0.8, 1.1, { workplace: "merdiven", seed: f });
+        addWindow(fake, -side * 2.4, f * FLOOR_H + 1.0, 1, 0.9, 1.1, { workplace: "yan", seed: f });
       }
     }
     // Cumba: üst katlarda sokağa taşan çıkma (Türk evlerinin tipik ayrıntısı).
-    if (b.cumba) {
+    if (cumbaUnit) {
       for (let f = 1; f < floors; f++) {
-        B.walls.add(local(b, 0, f * FLOOR_H + 0.1, b.d / 2 + 0.45), b.rot, s.set(3.4, FLOOR_H - 0.25, 0.9), b.wall);
-        addWindow({ ...b, d: b.d + 1.8 }, 0, f * FLOOR_H + 0.95, 1, 2.2, 1.4, { workplace: "cumba", seed: f });
+        B.walls.add(local(b, cumbaUnit.cx, f * FLOOR_H + 0.1, b.d / 2 + 0.45), b.rot, s.set(3.4, FLOOR_H - 0.25, 0.9), b.wall);
+        addWindow({ ...b, d: b.d + 1.8 }, cumbaUnit.cx, f * FLOOR_H + 0.95, 1, 2.2, 1.4, { slot: b.slot0 + f * b.perFloor });
       }
     }
     // Giriş: kapı, saçak, basamak.

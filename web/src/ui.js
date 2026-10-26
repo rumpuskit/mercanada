@@ -153,21 +153,39 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   function render() {
     $("floorbar").hidden = !dollhouse.isOpen();
     if (dollhouse.isOpen()) $("floor-label").textContent = `${dollhouse.floor + 1}. kat`;
-    $("card-actions").replaceChildren();
+    pending = [];
     if (mode === "sakin" && selected != null) renderPerson();
     else if (mode === "bina" && dollhouse.isOpen()) renderBuilding();
     else if (mode === "arac" && vehicle) renderVehicle();
     else if (mode === "yer" && place) renderPlace();
+    flushActions();
   }
 
   const KIND_NAMES = { car: "Otomobil", taxi: "Taksi", bus: "Otobüs", ambulans: "Ambulans", itfaiye: "İtfaiye aracı", cop: "Çöp kamyonu" };
 
+  // Kart birkaç karede bir yeniden çizilir; düğmeler değişmediyse yerinde kalır (yoksa basılırken
+  // DOM'dan kopar ve dokunuş boşa gider). Yalnızca tıklama işlevleri tazelenir.
+  let pending = [];
   function action(label, onClick, primary = false) {
-    const b = document.createElement("button");
-    b.textContent = label;
-    if (primary) b.classList.add("primary");
-    b.addEventListener("click", onClick);
-    $("card-actions").append(b);
+    pending.push({ label, onClick, primary });
+  }
+
+  function flushActions() {
+    const box = $("card-actions");
+    const sig = pending.map((a) => a.label + (a.primary ? "*" : "")).join("|");
+    if (box.dataset.sig === sig) {
+      [...box.children].forEach((b, n) => { b._onClick = pending[n].onClick; });
+      return;
+    }
+    box.dataset.sig = sig;
+    box.replaceChildren(...pending.map((a) => {
+      const b = document.createElement("button");
+      b.textContent = a.label;
+      if (a.primary) b.classList.add("primary");
+      b._onClick = a.onClick;
+      b.addEventListener("click", () => b._onClick());
+      return b;
+    }));
   }
 
   function renderVehicle() {
@@ -181,20 +199,21 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       const line = traffic.lines[r.line];
       $("card-title").textContent = `${line.name} · ${r.dep + 1}. sefer`;
       const n = live ? people.busSeat.get(live) ?? 0 : 0;
-      $("card-now").textContent = live ? (live.v < 0.3 ? "Durakta / ışıkta bekliyor" : `${Math.round(live.v * 3.6)} km/sa`) : "";
+      $("card-now").textContent = live ? (live.v < 0.3 ? "Durakta / ışıkta bekliyor" : `${Math.round(live.v * 3.6)} km/sa`) : "Seferini tamamladı";
       rows.push(["Yolcu", `${n} kişi`], ["Durak", `${line.stops.length} durak, ${line.headway} dakikada bir`]);
     } else if (r.kind === "car" || r.kind === "taxi") {
       const owner = r.owner != null ? residents[r.owner] : null;
       $("card-title").textContent = r.kind === "taxi" ? "Mercanada Taksi" : owner ? `@${owner.handle} adlı sakinin arabası` : "Otomobil";
-      $("card-now").textContent = r.parked ? "Park halinde" : live ? (live.parked ? "Park etti" : live.v < 0.3 ? "Bekliyor" : `${Math.round(live.v * 3.6)} km/sa`) : "Müşteri bekliyor";
+      const done = r.key && !live; // yolculuk bitti, araç park yerinde
+      $("card-now").textContent = r.parked ? "Park halinde" : live ? (live.parked ? "Park etti" : live.v < 0.3 ? "Bekliyor" : `${Math.round(live.v * 3.6)} km/sa`) : done ? (r.kind === "taxi" ? "Yolcusunu bıraktı" : "Park etti") : "Müşteri bekliyor";
       if (owner) rows.push([r.kind === "taxi" ? "Yolcu" : "Sahibi", "@" + owner.handle, () => select(r.owner)]);
     } else {
       $("card-title").textContent = { ambulans: "Mercanada Hastanesi", itfaiye: "Mercanada İtfaiyesi", cop: "Belediye temizlik işleri" }[r.kind] ?? "";
-      $("card-now").textContent = live ? ({ out: "Göreve gidiyor", wait: "Görevde", back: "Dönüyor" }[live.phase] ?? (live.v < 0.3 ? "Konteyner boşaltıyor" : "Toplama turunda")) : "";
+      $("card-now").textContent = live ? ({ out: "Göreve gidiyor", wait: "Görevde", back: "Dönüyor" }[live.phase] ?? (live.v < 0.3 ? "Konteyner boşaltıyor" : "Toplama turunda")) : "Görevini tamamladı";
     }
     facts(rows);
-    if (live && !live.parked) {
-      const on = follow.get() === r.key;
+    const on = follow.get() === r.key;
+    if (live && (!live.parked || on)) {
       action(on ? "Takibi bırak" : "Takip et", () => { follow.set(on ? null : r.key); render(); }, !on);
     }
   }
@@ -337,6 +356,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     selectVehicle,
     close,
     selected: () => (mode === "sakin" ? selected : null),
+    selectedVehicle: () => (mode === "arac" && !$("card").hidden ? vehicle : null),
     tick(unix, minuteNow, day, times) {
       const sun = times?.rise != null ? ` · ☀ ${sim.formatMinute(times.rise)}–${sim.formatMinute(times.set)}` : "";
       $("clock").textContent = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}${sun}`;

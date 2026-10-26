@@ -84,6 +84,7 @@ export function resetPose(p) {
   p.hipL = 0; p.hipR = 0; p.kneeL = 0.05; p.kneeR = 0.05;
   p.shL = 0; p.shR = 0; p.abL = 0; p.abR = 0; p.elL = 0.12; p.elR = 0.12;
   p.props = null; p.moving = false; p.radius = 0.32; p.dog = false; p.door = null;
+  p.inVehicle = false; p.vehicleKey = null; p.waiting = false;
 }
 
 /** Yürüyüş: φ adım evresi; koşu için run = 1. Topuk vuruşu, kalça salınımı, kol sallama. */
@@ -518,6 +519,10 @@ export class People {
         if (c.signal) {
           const w = pedWait(c.node, c.group, t, c.len / v + 1);
           if (w > 0) { segs.push({ t0: t, t1: t + w, d0: d, d1: d, cross: true }); t += w; }
+        } else {
+          // Işıksız geçit: kaldırım kenarında bir an durur, sağına soluna bakar.
+          const w = 1.2 + (roll(this.residents[i].seed, "bak", Math.round(c.d)) % 10) * 0.12;
+          segs.push({ t0: t, t1: t + w, d0: d, d1: d, cross: true, look: true }); t += w;
         }
       }
       if (route.L > d) { const dt = (route.L - d) / v; segs.push({ t0: t, t1: t + dt, d0: d, d1: route.L }); t += dt; }
@@ -527,7 +532,7 @@ export class People {
       const b = build(start);
       return { kind: "walk", ...route, segs: b.segs, t0: start, t1: b.t1 };
     }
-    let t0 = end - (route.L / v + 15 * route.crossings.filter((c) => c.signal).length) / 60;
+    let t0 = end - (route.L / v + 15 * route.crossings.filter((c) => c.signal).length + 2 * route.crossings.filter((c) => !c.signal).length) / 60;
     let b = build(t0);
     for (let it = 0; it < 4 && Math.abs(b.t1 - end) > 0.02; it++) { t0 -= b.t1 - end; b = build(t0); }
     return { kind: "walk", ...route, segs: b.segs, t0, t1: b.t1 };
@@ -972,23 +977,39 @@ export class People {
   _walkState(i, leg, minute, time, p, c) {
     const t = minute * 60;
     const segs = leg.segs;
-    let d = leg.L, cross = false;
+    let d = leg.L, cross = null, spread = 0;
     if (segs.length && t < segs[segs.length - 1].t1) {
       let lo = 0, hi = segs.length - 1;
       while (lo < hi) { const m = (lo + hi) >> 1; if (segs[m].t1 <= t) lo = m + 1; else hi = m; }
       const sg = segs[lo];
       if (t <= sg.t0) d = sg.d0;
       else d = sg.d0 + (sg.d1 - sg.d0) * ((t - sg.t0) / ((sg.t1 - sg.t0) || 1));
-      cross = !!sg.cross;
+      if (sg.cross) { cross = sg; spread = sg.look ? 0 : 1; }
+      // Işık yeşile dönünce bekleme yerinden geçit çizgisine birkaç adımda süzülür.
+      else if (lo > 0 && segs[lo - 1].cross && !segs[lo - 1].look) spread = Math.max(0, 1 - (t - sg.t0) / 2.5);
     }
     if (t < leg.t0 * 60) d = 0;
     along(leg.pts, leg.lens, d, this._at);
     p.x = this._at.x; p.z = this._at.z; p.heading = this._at.heading;
+    if (spread > 0) {
+      // Işıkta bekleyenler üst üste yığılmaz: geçidin önünde (kaldırım boyunca) yana ve geriye dağılır.
+      const s = this.residents[i].seed;
+      along(leg.pts, leg.lens, Math.min(leg.L, d + 1.5), this._at2 ??= {});
+      const hx = this._at2.x - p.x, hz = this._at2.z - p.z, hl = Math.hypot(hx, hz) || 1;
+      const fx = hx / hl, fz = hz / hl;
+      const row = (s >>> 3) % 3, lat = ((s % 5) - 2) * 0.5 + (row % 2 ? 0.25 : 0), back = row * 0.55;
+      const nx = p.x + (-fz * lat - fx * back) * spread, nz = p.z + (fx * lat - fz * back) * spread;
+      if (this.world.isWalkable(nx, nz)) { p.x = nx; p.z = nz; }
+    }
     p.y = this.world.groundY(p.x, p.z);
     if (cross || d >= leg.L - 0.01) {
-      // Işıkta bekliyor (karşıya bakar) ya da varmış.
-      if (cross) { along(leg.pts, leg.lens, Math.min(leg.L, d + 1.5), this._at); p.heading = Math.atan2(this._at.x - p.x, this._at.z - p.z); }
+      // Işıkta bekliyor (karşıya bakar), ışıksız geçitte sağına soluna bakıyor ya da varmış.
+      if (cross) { along(leg.pts, leg.lens, Math.min(leg.L, d + 1.5), this._at); p.heading = Math.atan2(this._at.x - p.x, this._at.z - p.z); p.waiting = true; }
       idleGesture(p, time, i, false);
+      if (cross?.look) {
+        const u = (t - cross.t0) / ((cross.t1 - cross.t0) || 1);
+        p.headYaw = 0.75 * Math.sin(u * Math.PI * 2) * (i % 2 ? 1 : -1);
+      }
     } else {
       walkPose(p, d / (0.72 * (c.height / 1.75)) * Math.PI);
     }
@@ -1008,6 +1029,7 @@ export class People {
     p.shL = p.shR = 0.95; p.elL = p.elR = 0.7;
     p.radius = 0;
     p.inVehicle = true;
+    p.vehicleKey = veh.key;
   }
 
   /** Yolculuk anı. false: görünmüyor (içeride, araçta görünmüyor). */
@@ -1181,7 +1203,7 @@ export class People {
     }
     for (const i of shown) {
       const p = this.poses[i];
-      if (!p.moving || p.indoor || !p.radius) continue;
+      if ((!p.moving && !p.waiting) || p.indoor || !p.radius) continue;
       const gx = Math.floor(p.x), gz = Math.floor(p.z);
       let px = 0, pz = 0;
       for (let dx = -1; dx <= 1; dx++) {
@@ -1196,7 +1218,7 @@ export class People {
             // Yürüme yönüne dik, uzaklaşan yana itilir.
             const sx = Math.cos(p.heading), sz = -Math.sin(p.heading);
             const sign = ox * sx + oz * sz >= 0 ? 1 : -1;
-            const push = (min - dist) * (q.moving ? 0.5 : 1);
+            const push = (min - dist) * (q.moving || q.waiting ? 0.5 : 1);
             px += sx * sign * push; pz += sz * sign * push;
           }
         }
@@ -1226,9 +1248,13 @@ export class People {
       }
       crowd.add(i, p);
       if (p.dog && this.dogs[i] && !p.indoor) {
-        const side = 0.75;
-        const dx = Math.cos(p.heading) * side, dz = -Math.sin(p.heading) * side;
-        const x = p.x + dx + Math.sin(p.heading) * 0.5, z = p.z + dz + Math.cos(p.heading) * 0.5;
+        // Köpek sahibinin yanında; o yan taşıt yoluna düşüyorsa öbür yanda, ikisi de yolsa (geçitte) arkasında.
+        const fx = Math.sin(p.heading), fz = Math.cos(p.heading), sx = Math.cos(p.heading), sz = -Math.sin(p.heading);
+        let x = p.x + sx * 0.75 + fx * 0.5, z = p.z + sz * 0.75 + fz * 0.5;
+        if (w.inCarriage(x, z)) {
+          x = p.x - sx * 0.75 + fx * 0.5; z = p.z - sz * 0.75 + fz * 0.5;
+          if (w.inCarriage(x, z) || !w.isWalkable(x, z)) { x = p.x - fx * 0.9; z = p.z - fz * 0.9; }
+        }
         if (w.isWalkable(x, z)) crowd.addDog(x, w.groundY(x, z), z, p.heading + (p.moving ? 0 : 0.6), (p.phase ?? 0) * 1.6, DOG_COLORS[this.residents[i].seed % DOG_COLORS.length], !!p.moving, time, this.residents[i].seed % 97);
       }
     }

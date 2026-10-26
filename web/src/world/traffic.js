@@ -9,7 +9,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { stations } from "./roads.js";
 import { CELL_D, CELL_W } from "./layout.js";
 import { MinHeap } from "./heap.js";
-import { signalState } from "./signals.js";
+import { pedState, signalState } from "./signals.js";
 
 const LANE = { cadde: 2.0, sokak: 1.0, koy: 1.6, giris: 1.5 };
 const VMAX = { cadde: 12.5, sokak: 8, koy: 13, giris: 4 };
@@ -916,7 +916,7 @@ export class Vehicles {
 
 /** Trafik ışıkları: her ışıklı kavşak kolunda, dur çizgisinin sağ köşesinde direk ve üç lamba. */
 export function buildSignals(traffic, world) {
-  const items = [];
+  const items = [], peds = [];
   for (const n of traffic.nodes) {
     if (!n.signal) continue;
     for (const e of n.ends) {
@@ -928,6 +928,12 @@ export function buildSignals(traffic, world) {
       const p = add(base, mul(rr, r.width / 2 - 0.55));
       items.push({ node: n, group: e.group, x: p[0], z: p[1], heading: Math.atan2(e.dir[0], e.dir[1]), y: world.surfaceY(p[0], p[1]) + 0.18 });
       world.addObstacleCircle(p[0], p[1], 0.25);
+      // Yaya lambaları: geçidin iki ucunda, karşı kaldırıma bakar. Sağdaki araç direğinde, soldakinin
+      // kendi kısa direği var.
+      const pl = add(base, mul(rr, -(r.width / 2 - 0.55)));
+      peds.push({ node: n, group: e.group, x: p[0], z: p[1], y: world.surfaceY(p[0], p[1]) + 0.18, heading: Math.atan2(-rr[0], -rr[1]), pole: false });
+      peds.push({ node: n, group: e.group, x: pl[0], z: pl[1], y: world.surfaceY(pl[0], pl[1]) + 0.18, heading: Math.atan2(rr[0], rr[1]), pole: true });
+      world.addObstacleCircle(pl[0], pl[1], 0.2);
     }
   }
   const N = Math.max(1, items.length);
@@ -950,9 +956,33 @@ export function buildSignals(traffic, world) {
   });
   for (const mesh of [pole, head, visor]) { mesh.count = items.length; mesh.castShadow = true; }
   lamps.count = items.length * 3;
+  // Yaya lambası: iki bölmeli kutu (üstte kırmızı duran adam, altta yeşil yürüyen adam), siperlikli.
+  const P = Math.max(1, peds.length);
+  const pedPole = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.06, 0.07, 2.6, 8).translate(0, 1.3, 0), metal, P);
+  const pedHead = new THREE.InstancedMesh(mergeGeometries([
+    new THREE.BoxGeometry(0.3, 0.62, 0.2).translate(0, 2.35, 0.12),
+    new THREE.BoxGeometry(0.28, 0.03, 0.14).translate(0, 2.68, 0.25),
+    new THREE.BoxGeometry(0.28, 0.03, 0.14).translate(0, 2.37, 0.25),
+  ]), metal, P);
+  const manTex = pedFigures();
+  const pedLamps = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.22, 0.24), new THREE.MeshBasicMaterial({ map: manTex.stand, transparent: true, toneMapped: false }), P);
+  const pedWalk = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.22, 0.24), new THREE.MeshBasicMaterial({ map: manTex.walk, transparent: true, toneMapped: false }), P);
+  let np = 0;
+  peds.forEach((it, i) => {
+    q.setFromAxisAngle(up, it.heading);
+    m.compose(v.set(it.x, it.y, it.z), q, one);
+    pedHead.setMatrixAt(i, m);
+    if (it.pole) pedPole.setMatrixAt(np++, m);
+    const top = new THREE.Vector3(0, 2.5, 0.225).applyQuaternion(q), bot = new THREE.Vector3(0, 2.2, 0.225).applyQuaternion(q);
+    m.compose(v.set(it.x + top.x, it.y + top.y, it.z + top.z), q, one); pedLamps.setMatrixAt(i, m);
+    m.compose(v.set(it.x + bot.x, it.y + bot.y, it.z + bot.z), q, one); pedWalk.setMatrixAt(i, m);
+  });
+  pedPole.count = np; pedHead.count = pedLamps.count = pedWalk.count = peds.length;
+  pedPole.castShadow = pedHead.castShadow = true;
   const group = new THREE.Group();
-  group.add(pole, head, visor, lamps);
+  group.add(pole, head, visor, lamps, pedPole, pedHead, pedLamps, pedWalk);
   const RED = new THREE.Color(2.2, 0.15, 0.1), YEL = new THREE.Color(2.2, 1.4, 0.1), GRN = new THREE.Color(0.2, 2.0, 0.6), DARK = new THREE.Color(0.08, 0.08, 0.08);
+  const PRED = new THREE.Color(2.4, 0.25, 0.15), PGRN = new THREE.Color(0.3, 2.2, 1.0), PDARK = new THREE.Color(0.1, 0.1, 0.1);
   group.userData.update = (tSec) => {
     items.forEach((it, i) => {
       const st = signalState(it.node, it.group, tSec);
@@ -960,9 +990,41 @@ export function buildSignals(traffic, world) {
       lamps.setColorAt(i * 3 + 1, st === "y" ? YEL : DARK);
       lamps.setColorAt(i * 3 + 2, st === "g" ? GRN : DARK);
     });
-    if (lamps.instanceColor) lamps.instanceColor.needsUpdate = true;
+    const blink = Math.floor(tSec * 2) % 2 === 0;
+    peds.forEach((it, i) => {
+      const st = pedState(it.node, it.group, tSec);
+      pedLamps.setColorAt(i, st === "r" ? PRED : PDARK);
+      pedWalk.setColorAt(i, st === "g" || (st === "f" && blink) ? PGRN : PDARK);
+    });
+    for (const mesh of [lamps, pedLamps, pedWalk]) if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   };
   return group;
+}
+
+/** Yaya lambası figürleri (duran ve yürüyen adam), beyaz; renk örnek rengiyle verilir. */
+function pedFigures() {
+  const draw = (walk) => {
+    const c = document.createElement("canvas");
+    c.width = 64; c.height = 64;
+    const g = c.getContext("2d");
+    g.fillStyle = "#1a1a1a"; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = "#fff"; g.strokeStyle = "#fff"; g.lineCap = "round";
+    g.beginPath(); g.arc(32, 12, 6, 0, Math.PI * 2); g.fill();
+    g.lineWidth = 8;
+    g.beginPath(); g.moveTo(32, 22); g.lineTo(walk ? 30 : 32, 40); g.stroke();
+    g.lineWidth = 6;
+    if (walk) {
+      g.beginPath(); g.moveTo(30, 40); g.lineTo(20, 58); g.moveTo(30, 40); g.lineTo(40, 57); g.stroke();
+      g.beginPath(); g.moveTo(31, 25); g.lineTo(21, 36); g.moveTo(32, 25); g.lineTo(42, 33); g.stroke();
+    } else {
+      g.beginPath(); g.moveTo(29, 40); g.lineTo(28, 58); g.moveTo(35, 40); g.lineTo(36, 58); g.stroke();
+      g.beginPath(); g.moveTo(28, 25); g.lineTo(25, 41); g.moveTo(36, 25); g.lineTo(39, 41); g.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  return { stand: draw(false), walk: draw(true) };
 }
 
 /** Otobüs durakları: kaldırımın arkasında sundurma, bank ve hat tabelası. */
