@@ -198,6 +198,12 @@ def look(r: dict) -> dict:
     return result
 
 
+def shift_of(r: dict) -> str:
+    """Sakinin vardiyası: meslekte birden çok vardiya varsa kişiye göre biri (aynı kişi hep aynı vardiyada)."""
+    v = job(r)["vardiya"]
+    return v[roll(r["seed"], "vardiya") % len(v)] if isinstance(v, list) else v
+
+
 def works_on(r: dict, day: int) -> bool:
     if job(r).get("calismaz"):
         return False  # emekli
@@ -267,7 +273,7 @@ def day_plan(r: dict, day: int) -> list:
     sleep = 1350 + roll(s, "uyku", day) % 80
     if works_on(r, day) and job(r)["yer"] == "ev":
         # Evden çalışan: sabah evde masasında; çoğu öğle arasında kısa bir çıkış yapar; akşam işçiler gibi.
-        shift = catalog()["vardiyalar"][job(r)["vardiya"]]
+        shift = catalog()["vardiyalar"][shift_of(r)]
         start, end = int(shift["bas"]), int(shift["son"])
         _add(plan, start - 40 - roll(s, "uyan", day) % 40, "uyku", PLACE_HOME)
         lunch = 720 + roll(s, "ogle_saat", day) % 45
@@ -287,14 +293,15 @@ def day_plan(r: dict, day: int) -> list:
             _travel(plan, commute, outing, PLACE_HOME)
         _night_out(plan, s, day, commute, sleep)
     elif works_on(r, day):
-        shift = catalog()["vardiyalar"][job(r)["vardiya"]]
+        vardiya = shift_of(r)
+        shift = catalog()["vardiyalar"][vardiya]
         start, end = int(shift["bas"]), int(shift["son"])
-        if job(r)["vardiya"] == "erken":
+        if vardiya == "erken":
             sleep = 1290 + roll(s, "uyku", day) % 60
         # İşe 0-24 dk erken varılır, işten 0-15 dk geç çıkılır: herkes aynı otobüse/aynı dakikaya yığılmaz.
         arrive = start - roll(s, "erken_varis", day) % 25
         leave = end + roll(s, "gec_cikis", day) % 16
-        if job(r)["vardiya"] == "gec":
+        if vardiya == "gec":
             # Akşam vardiyası: sabah kalkar, işe gitmeden önce çoğu bir süre dışarı çıkar.
             wake = 510 + roll(s, "uyan", day) % 90
             _add(plan, wake, "uyku", PLACE_HOME)

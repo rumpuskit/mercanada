@@ -111,17 +111,42 @@ export function buildWorkInterior(b, f, add, spot) {
       break;
     }
     case "okul": {
-      // Sınıf: tahta, öğretmen masası, sıralar.
-      add(Math.min(6, b.w - 4), 1.2, 0.05, 0, 1.0, -hd + 0.25, "#2f4a3a");
-      add(1.4, 0.75, 0.7, -2.5, 0.06, -hd + 1.6, "#a07a58");
-      for (let r = 0; r < 3; r++) for (let c = 0; c < Math.floor((b.w - 3) / 1.6); c++) {
-        const x = -hw + 1.8 + c * 1.6, z = -hd + 3.6 + r * 1.6;
-        add(1.1, 0.05, 0.5, x, 0.68, z, "#c9a27a");
-        for (const dx of [-0.5, 0.5]) add(0.05, 0.66, 0.45, x + dx, 0.02, z, "#3c4148", 0, { shadow: false });
-        for (const dx of [-0.27, 0.27]) chair(x + dx, z + 0.55, Math.PI, "#5a7fa8");
+      // Kat: önde boydan boya koridor; arkada iki derslik ve öğretmenler odası (alçak bölmeler, kapılar).
+      // Derslikte tahta, öğretmen masası, 4×3 çift kişilik sıra; odada toplantı masası ve dolaplar.
+      const corr = 2.0, zc = hd - corr; // koridor duvarı
+      const roomW = (b.w - 0.3) / 3;
+      const xs = [-hw + 0.15, -hw + 0.15 + roomW, -hw + 0.15 + 2 * roomW, hw - 0.15];
+      const wallC = "#efe7d6";
+      for (let k = 1; k < 3; k++) add(0.12, 1.05, zc + hd - 0.15, xs[k], 0, (zc - hd + 0.15) / 2, wallC);
+      for (let k = 0; k < 3; k++) {
+        const cx = (xs[k] + xs[k + 1]) / 2;
+        add(roomW / 2 - 0.7, 1.05, 0.12, xs[k] + (roomW / 2 - 0.7) / 2, 0, zc, wallC); // kapının solu
+        add(roomW / 2 - 0.7, 1.05, 0.12, xs[k + 1] - (roomW / 2 - 0.7) / 2, 0, zc, wallC); // kapının sağı
+        if (k < 2) {
+          add(Math.min(4, roomW - 2), 1.2, 0.05, cx, 1.0, -hd + 0.25, "#2f4a3a");
+          add(1.2, 0.75, 0.6, cx - roomW / 2 + 1.4, 0.06, -hd + 1.3, "#a07a58");
+          for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+            const x = cx - 2.3 + c * 2.3, z = -hd + 3.0 + r * 1.55;
+            add(1.1, 0.05, 0.5, x, 0.68, z, "#c9a27a");
+            for (const dx of [-0.5, 0.5]) add(0.05, 0.66, 0.45, x + dx, 0.02, z, "#3c4148", 0, { shadow: false });
+            for (const dx of [-0.27, 0.27]) chair(x + dx, z + 0.55, Math.PI, "#5a7fa8");
+          }
+          S(cx + 0.4, -hd + 1.3, 0, "board");
+        } else {
+          // Öğretmenler odası: uzun masa, sandalyeler (çalışanlar oturur), dolap.
+          add(1.2, 0.05, 3.6, cx, 0.74, -0.8, "#a07a58");
+          add(0.08, 0.72, 0.08, cx, 0.02, -2.2, "#3c4148"); add(0.08, 0.72, 0.08, cx, 0.02, 0.6, "#3c4148");
+          shelf(cx, -hd + 0.4, roomW - 1, 0, false);
+          for (let r = 0; r < 3; r++) for (const s of [-1, 1]) {
+            const x = cx + s * 0.95, z = -2.0 + r * 1.2;
+            add(0.42, 0.05, 0.42, x, 0.45, z, "#6b4a35");
+            S(x, z, s > 0 ? -Math.PI / 2 : Math.PI / 2, "seat");
+          }
+        }
       }
-      S(0.5, -hd + 1.2, 0, "board");
-      S(-hw + 3, hd - 1.5, Math.PI, "walk");
+      S(-hw + 2, hd - 1.0, Math.PI / 2, "walk");
+      S(hw - 2, hd - 1.0, -Math.PI / 2, "walk");
+      // Öğrenci sandalyeleri yalnızca dersliklerde (öğretmenler odasındakiler çalışan yeri).
       break;
     }
     case "saglik": {
@@ -198,6 +223,17 @@ export function workPose(type, p, t, ph, sitPose, idleGesture, k) {
       break;
     case "shelf":
       p.shR = 1.5 + 0.4 * Math.sin(t * 1.2 + ph); p.elR = 0.4; p.headPitch = -0.2;
+      break;
+    case "seat": {
+      // Masada oturur: çay içer, kâğıt okur, sohbet eder.
+      sitPose(p, p.y + 0.5, k);
+      const sip = Math.max(0, Math.sin(t * 0.35 + ph)) ** 10;
+      idleGesture(p, t, ph, sip < 0.1);
+      p.shR = Math.max(p.shR, 0.5 + 0.9 * sip); p.elR = Math.max(p.elR, 1.2 + 1.0 * sip); p.lean = 0.15;
+      break;
+    }
+    case "stand":
+      idleGesture(p, t, ph, true);
       break;
     default:
       idleGesture(p, t, ph, true);

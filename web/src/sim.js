@@ -210,6 +210,12 @@ export function look(r) {
   return result;
 }
 
+/** Sakinin vardiyası: meslekte birden çok vardiya varsa kişiye göre biri (aynı kişi hep aynı vardiyada). */
+export function shiftOf(r) {
+  const v = job(r).vardiya;
+  return Array.isArray(v) ? v[roll(r.seed, "vardiya") % v.length] : v;
+}
+
 export function worksOn(r, day) {
   if (job(r).calismaz) return false; // emekli
   const wd = weekday(day);
@@ -277,7 +283,7 @@ export function dayPlan(r, day) {
   if (worksOn(r, day) && job(r).yer === "ev") {
     // Evden çalışan: sabah evde masasında; çoğu öğle arasında kısa bir çıkış yapar; akşam işçiler gibi.
     const j = job(r);
-    const shift = catalog.vardiyalar[j.vardiya];
+    const shift = catalog.vardiyalar[shiftOf(r)];
     add(plan, shift.bas - 40 - (roll(s, "uyan", day) % 40), "uyku", PLACE_HOME);
     const lunch = 720 + (roll(s, "ogle_saat", day) % 45);
     if (roll(s, "ogle", day) % 100 < 45) {
@@ -299,12 +305,13 @@ export function dayPlan(r, day) {
     nightOut(plan, s, day, commute, sleep);
   } else if (worksOn(r, day)) {
     const j = job(r);
-    const shift = catalog.vardiyalar[j.vardiya];
-    if (j.vardiya === "erken") sleep = 1290 + (roll(s, "uyku", day) % 60);
+    const vardiya = shiftOf(r);
+    const shift = catalog.vardiyalar[vardiya];
+    if (vardiya === "erken") sleep = 1290 + (roll(s, "uyku", day) % 60);
     // İşe 0-24 dk erken varılır, işten 0-15 dk geç çıkılır: herkes aynı otobüse/aynı dakikaya yığılmaz.
     const arrive = shift.bas - (roll(s, "erken_varis", day) % 25);
     const leave = shift.son + (roll(s, "gec_cikis", day) % 16);
-    if (j.vardiya === "gec") {
+    if (vardiya === "gec") {
       // Akşam vardiyası: sabah kalkar, işe gitmeden önce çoğu bir süre dışarı çıkar.
       const wake = 510 + (roll(s, "uyan", day) % 90);
       add(plan, wake, "uyku", PLACE_HOME);

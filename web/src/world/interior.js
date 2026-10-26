@@ -579,15 +579,16 @@ export class Dollhouse {
       if (roll(people.residents[i].seed, "kat") % b.floors !== f) continue;
       here.push(i);
     }
-    // Aynı noktaya düşenler yan yana dizilir (üst üste binmesinler).
+    // Önce o an işte olanlar yerleşir (vardiyası olmayan bir yeri doldurmasın). Noktalardan fazla kişi
+    // varsa, fazlası ön koridor şeridinde ikişer ikişer ayakta konuşur (sıra halinde dizilmezler).
+    here.sort((a, c) => (this.people.activities[c]?.ne === "is") - (this.people.activities[a]?.ne === "is") || a - c);
+    const hd = b.d / 2;
     here.forEach((i, n) => {
-      if (!spots.length) return;
-      const sp = spots[n % spots.length];
-      const lane = Math.floor(n / spots.length);
-      if (!lane) return this.workSpots.set(i, sp);
-      const off = (lane % 2 ? 1 : -1) * Math.ceil(lane / 2) * 1.3;
-      const q = sp.p.clone().add({ x: Math.cos(sp.heading) * off, y: 0, z: -Math.sin(sp.heading) * off });
-      this.workSpots.set(i, { ...sp, p: q });
+      if (n < spots.length) return this.workSpots.set(i, spots[n]);
+      const e = n - spots.length;
+      const x = -b.w / 2 + 1.5 + Math.floor(e / 2) * 2.6, z = hd - 0.9 + (e % 2 ? 0 : -0.75);
+      if (x > b.w / 2 - 1) return; // yer yok: binanın başka bir yerinde
+      this.workSpots.set(i, { p: local(b, x, 0, z).clone(), heading: b.rot + (e % 2 ? Math.PI : 0), type: "stand", y: FLAT_Y + y0 + 0.06 });
     });
     this.workName = Object.values(this.world.workplaces).flat().find((w) => w?.building === b)?.name ?? null;
   }
