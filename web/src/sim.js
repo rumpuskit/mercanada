@@ -210,10 +210,19 @@ export function look(r) {
 
 export function worksOn(r, day) {
   const wd = weekday(day);
-  if (!job(r).hafta_sonu) return wd < 5;
-  // Hafta sonu da açık iş yerlerinde çalışanların haftada iki izin günü var.
-  const off = roll(r.seed, "izin") % 7;
-  return wd !== off && wd !== (off + 3) % 7;
+  let works;
+  if (!job(r).hafta_sonu) works = wd < 5;
+  else {
+    // Hafta sonu da açık iş yerlerinde çalışanların haftada iki izin günü var.
+    const off = roll(r.seed, "izin") % 7;
+    works = wd !== off && wd !== (off + 3) % 7;
+  }
+  // Yarı zamanlı çalışanlar (yaklaşık üçte biri) haftada iki gün daha evde ya da dışarıda.
+  if (works && roll(r.seed, "yarim") % 100 < 30) {
+    const p = roll(r.seed, "yarim_gun") % 5;
+    if (wd === p || wd === (p + 2) % 5) works = false;
+  }
+  return works;
 }
 
 function end(plan) {
@@ -266,8 +275,21 @@ export function dayPlan(r, day) {
     const j = job(r);
     const shift = catalog.vardiyalar[j.vardiya];
     if (j.vardiya === "erken") sleep = 1290 + (roll(s, "uyku", day) % 60);
-    const wake = shift.bas - commute - 45 - (roll(s, "uyan", day) % 30);
-    add(plan, wake, "uyku", PLACE_HOME);
+    if (j.vardiya === "gec") {
+      // Akşam vardiyası: sabah kalkar, işe gitmeden önce çoğu bir süre dışarı çıkar.
+      const wake = 510 + (roll(s, "uyan", day) % 90);
+      add(plan, wake, "uyku", PLACE_HOME);
+      const out = wake + 60 + (roll(s, "sabah_cikis", day) % 60);
+      const len = 60 + (roll(s, "sabah_sure", day) % 60);
+      if (roll(s, "sabah", day) % 100 < 60 && out + len + commute <= shift.bas - commute - 30) {
+        add(plan, out - commute, "ev", PLACE_HOME);
+        travel(plan, commute, PLACE_HOME, "meydan");
+        add(plan, end(plan) + len, "meydan", "meydan");
+        travel(plan, commute, "meydan", PLACE_HOME);
+      }
+    } else {
+      add(plan, shift.bas - commute - 45 - (roll(s, "uyan", day) % 30), "uyku", PLACE_HOME);
+    }
     add(plan, shift.bas - commute, "ev", PLACE_HOME);
     travel(plan, commute, PLACE_HOME, PLACE_WORK);
     add(plan, shift.son, "is", PLACE_WORK);
@@ -291,6 +313,15 @@ export function dayPlan(r, day) {
     add(plan, end(plan) + 90 + (roll(s, "sure", day) % 90), "hobi", hobbyPlace);
     travel(plan, commute, hobbyPlace, PLACE_HOME);
     const evening = 1140 + (roll(s, "aksam_saat", day) % 90);
+    // Öğleden sonra çoğu yeniden çıkar: çarşıda alışveriş ve kahve, mahallede çay bahçesi, park.
+    const noon = Math.max(end(plan) + 40, 840 + (roll(s, "ogle_saat", day) % 180));
+    const noonLen = Math.min(90 + (roll(s, "ogle_sure", day) % 90), evening - 2 * commute - 20 - noon);
+    if (roll(s, "ogle", day) % 100 < 75 && noonLen >= 45) {
+      add(plan, noon - commute, "ev", PLACE_HOME);
+      travel(plan, commute, PLACE_HOME, "meydan");
+      add(plan, end(plan) + noonLen, "meydan", "meydan");
+      travel(plan, commute, "meydan", PLACE_HOME);
+    }
     if (roll(s, "aksam", day) % 100 < 55 && evening + 90 + commute <= sleep - 10) {
       add(plan, evening - commute, "ev", PLACE_HOME);
       travel(plan, commute, PLACE_HOME, "meydan");

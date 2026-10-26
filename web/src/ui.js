@@ -372,7 +372,15 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     tick(unix, minuteNow, day, times) {
       const sun = times?.rise != null ? ` · ☀ ${sim.formatMinute(times.rise)}–${sim.formatMinute(times.set)}` : "";
       $("clock").textContent = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}${sun}`;
-      $("stats").textContent = `${fmt.format(residents.length)} sakin · ${fmt.format(people.visibleCount)} dışarıda · ${world.mahalleler} mahalle`;
+      // Döküm benzetimden: işte, evde (uyuyanlar dahil) ve dışarıda (yolda, çarşıda, hobisinde).
+      let work = 0, home = 0;
+      for (const seg of people.activities) {
+        if (!seg) continue;
+        if (seg.ne === "is") work++;
+        else if (seg.ne === "ev" || seg.ne === "uyku") home++;
+      }
+      const out = residents.length - work - home;
+      $("stats").textContent = `${fmt.format(residents.length)} sakin · ${fmt.format(work)} işte · ${fmt.format(home)} evde · ${fmt.format(out)} dışarıda`;
       if (!$("card").hidden) render();
     },
   };

@@ -173,7 +173,7 @@ export class People {
 
     this.nav = new PedNav(world);
     // Araç sahipliği (yaklaşık üçte bir) ve evin önündeki sabit park yeri.
-    this.hasCar = residents.map((r) => roll(r.seed, "araba") % 100 < 33);
+    this.hasCar = residents.map((r) => roll(r.seed, "araba") % 100 < 45);
     this.carColor = residents.map((r) => roll(r.seed, "arabaRenk") % 10);
     this.homeSlot = residents.map((r, i) => (this.hasCar[i] && traffic ? traffic.takeSlot(...this.homes[i].door, -1, 1e9, 220) : null));
     this.homeSlot.forEach((slot, i) => { if (slot == null) this.hasCar[i] = false; });
@@ -429,6 +429,7 @@ export class People {
     this.dogs = this.residents.map((r) => pet(r, day) === "Köpek");
     this.travelCache.fill(null);
     this.tripStore = this.residents.map(() => new Map());
+    if (this.traffic) this.traffic.busRequests = new Map(); // yolculuklar yeniden kurulurken duraklar yeniden bildirilir
     if (this.traffic) {
       // Günlük park kayıtları sıfırlanır; evlerin önündeki sabit yerler korunur.
       this.traffic.resetBookings();
@@ -476,7 +477,9 @@ export class People {
     for (const { i, k, seg } of reqs) {
       if (cur[i] == null) continue;
       const A = this._endpoint(i, k - 1, true), B = this._endpoint(i, k + 1, false);
-      const far = Math.hypot(B[0] - A[0], B[1] - A[1]) > 550;
+      // Arabası olan, birkaç yüz metreden uzak yere çoğunlukla arabasıyla gider.
+      const dist = Math.hypot(B[0] - A[0], B[1] - A[1]);
+      const far = dist > 480 || (dist > 240 && roll(this.residents[i].seed, "arabaTercih", this.day * 16 + k) % 100 < 80);
       const fetch = seg.nereye === "ev" && cur[i] !== this.homeSlot[i];
       if (!far && !fetch) continue;
       const toSlot = seg.nereye === "ev" ? this.homeSlot[i] : this.traffic.takeSlot(B[0], B[1], seg.son - 1, this._nextTravel(i, k) + 1, 260);
@@ -548,9 +551,10 @@ export class People {
     let trip = null;
     const cp = this.carPlan?.[i]?.get(k);
     if (cp) trip = this._carTrip(i, seg, k, A, B, cp);
-    else if (this.traffic && dist > 650) {
+    else if (this.traffic && (dist > 520 || (dist > 300 && roll(s, "otobusTercih", this.day * 16 + k) % 100 < 70))) {
+      // Arabası olmayan uzak yola otobüsle (bulamazsa kimi taksiyle) gider; kısa yolu yürür.
       trip = this._busTrip(i, seg, k, A, B);
-      if (!trip && roll(s, "taksi", this.day * 16 + k) % 100 < 40) trip = this._taxiTrip(i, seg, k, A, B);
+      if (!trip && dist > 450 && roll(s, "taksi", this.day * 16 + k) % 100 < 45) trip = this._taxiTrip(i, seg, k, A, B);
     }
     trip ??= this._walkTrip(i, seg, k, A, B);
     trip.seg = k;
@@ -678,6 +682,9 @@ export class People {
     }
     if (!chosen) return null;
     const { nb, w2 } = chosen;
+    // Otobüs yalnızca binen ya da inen olan duraklarda durur: binişi ve inişi sefere bildir.
+    T.requestStop(li, nb.dep, sa.stop);
+    T.requestStop(li, nb.dep, sb.stop);
     let walk1 = this._walkLeg(i, r1, { end: nb.t - 1.0 });
     if (walk1.t0 < seg.bas) walk1 = w1;
     const wait = stA.wait;

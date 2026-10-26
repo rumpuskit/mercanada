@@ -115,6 +115,8 @@ class Route {
   }
 }
 
+const S0 = 2.2; // izleme modelinde duran araçlar arası boşluk (m)
+
 export class Traffic {
   constructor(world) {
     this.world = world;
@@ -158,6 +160,7 @@ export class Traffic {
     this.finished = new Set();
     this.services = [];
     this.serviceDay = null;
+    this.busRequests = new Map(); // "bus:hat:sefer" -> binilecek/inilecek durak sıraları
     this.simT = null;
   }
 
@@ -635,6 +638,13 @@ export class Traffic {
     }
   }
 
+  /** Bir sakin bu seferde bu duraktan binecek ya da inecek. */
+  requestStop(line, dep, stop) {
+    const key = `bus:${line}:${dep}`;
+    if (!this.busRequests.has(key)) this.busRequests.set(key, new Set());
+    this.busRequests.get(key).add(stop);
+  }
+
   _substep(dt, tSec) {
     const lanes = new Map();
     for (const v of this.active.values()) {
@@ -679,18 +689,20 @@ export class Traffic {
           }
         }
       }
-      // Otobüs durakları.
+      // Otobüs durakları: binen ya da inen yoksa durmadan geçer.
       if (v.kind === "bus") {
         const line = this.lines[v.line];
         const st = line.stops[v.served];
-        if (st) {
+        if (st && !this.busRequests.get(v.key)?.has(v.served)) {
+          if (st.s - v.s < 0.5) v.served++;
+        } else if (st) {
           const gs = st.s - v.s;
           if (gs < 0.8 && v.v < 0.6) {
             v.arrivedAt ??= tSec;
             const leave = Math.max(v.arrivedAt + 12, (v.depMin + st.offset) * 60 + BUS_DWELL);
             if (tSec >= leave) { v.served++; v.arrivedAt = null; }
             else { v.v = 0; continue; }
-          } else if (gs + v.L / 2 < gap + v.L / 2) { gap = Math.max(0.01, gs); lv = 0; }
+          } else if (gs + S0 - 0.3 < gap) { gap = Math.max(0.01, gs + S0 - 0.3); lv = 0; }
         }
       }
       // Çöp kamyonu konteyner durakları.
@@ -702,14 +714,16 @@ export class Traffic {
             v.waitUntil ??= tSec + v.dwell;
             if (tSec >= v.waitUntil) { v.served++; v.waitUntil = null; }
             else { v.v = 0; continue; }
-          } else if (gs < gap) { gap = Math.max(0.01, gs); lv = 0; }
+          } else if (gs + S0 - 0.3 < gap) { gap = Math.max(0.01, gs + S0 - 0.3); lv = 0; }
         }
       }
+      // Durak ve rota sonu "duvar" değil hedef noktadır: izleme modelinin güvenlik boşluğu (S0)
+      // eklenir ki araç tam o noktada dursun (yoksa 2 m geride kalıp hiç varamaz).
       const ge = route.len - v.s;
-      if (ge < gap) { gap = Math.max(0.01, ge + 0.6); lv = 0; }
+      if (ge + S0 < gap) { gap = Math.max(0.01, ge + S0 + 0.1); lv = 0; }
       const base = piece.kind === "lane" ? this.lanes[piece.lane].vmax : piece.kind === "conn" ? TURN_V : 3.5;
       const vmax = base * (v.emergency ? 1.25 : v.kind === "bus" || v.kind === "cop" ? 0.85 : 1);
-      const a = 1.6, b = 2.6, T = 1.3, s0 = 2.2;
+      const a = 1.6, b = 2.6, T = 1.3, s0 = S0;
       const dv = v.v - lv;
       const sStar = s0 + Math.max(0, v.v * T + (v.v * dv) / (2 * Math.sqrt(a * b)));
       let acc = a * (1 - (v.v / vmax) ** 4 - (sStar / Math.max(0.1, gap)) ** 2);

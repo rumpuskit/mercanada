@@ -197,9 +197,17 @@ def look(r: dict) -> dict:
 def works_on(r: dict, day: int) -> bool:
     wd = weekday(day)
     if not job(r)["hafta_sonu"]:
-        return wd < 5
-    off = roll(r["seed"], "izin") % 7
-    return wd != off and wd != (off + 3) % 7
+        works = wd < 5
+    else:
+        # Hafta sonu da açık iş yerlerinde çalışanların haftada iki izin günü var.
+        off = roll(r["seed"], "izin") % 7
+        works = wd != off and wd != (off + 3) % 7
+    # Yarı zamanlı çalışanlar (yaklaşık üçte biri) haftada iki gün daha evde ya da dışarıda.
+    if works and roll(r["seed"], "yarim") % 100 < 30:
+        p = roll(r["seed"], "yarim_gun") % 5
+        if wd == p or wd == (p + 2) % 5:
+            works = False
+    return works
 
 
 def _end(plan: list) -> int:
@@ -256,8 +264,19 @@ def day_plan(r: dict, day: int) -> list:
         start, end = int(shift["bas"]), int(shift["son"])
         if job(r)["vardiya"] == "erken":
             sleep = 1290 + roll(s, "uyku", day) % 60
-        wake = start - commute - 45 - roll(s, "uyan", day) % 30
-        _add(plan, wake, "uyku", PLACE_HOME)
+        if job(r)["vardiya"] == "gec":
+            # Akşam vardiyası: sabah kalkar, işe gitmeden önce çoğu bir süre dışarı çıkar.
+            wake = 510 + roll(s, "uyan", day) % 90
+            _add(plan, wake, "uyku", PLACE_HOME)
+            out = wake + 60 + roll(s, "sabah_cikis", day) % 60
+            length = 60 + roll(s, "sabah_sure", day) % 60
+            if roll(s, "sabah", day) % 100 < 60 and out + length + commute <= start - commute - 30:
+                _add(plan, out - commute, "ev", PLACE_HOME)
+                _travel(plan, commute, PLACE_HOME, "meydan")
+                _add(plan, _end(plan) + length, "meydan", "meydan")
+                _travel(plan, commute, "meydan", PLACE_HOME)
+        else:
+            _add(plan, start - commute - 45 - roll(s, "uyan", day) % 30, "uyku", PLACE_HOME)
         _add(plan, start - commute, "ev", PLACE_HOME)
         _travel(plan, commute, PLACE_HOME, PLACE_WORK)
         _add(plan, end, "is", PLACE_WORK)
@@ -280,6 +299,14 @@ def day_plan(r: dict, day: int) -> list:
         _add(plan, _end(plan) + 90 + roll(s, "sure", day) % 90, "hobi", hobby_place)
         _travel(plan, commute, hobby_place, PLACE_HOME)
         evening = 1140 + roll(s, "aksam_saat", day) % 90
+        # Öğleden sonra çoğu yeniden çıkar: çarşıda alışveriş ve kahve, mahallede çay bahçesi, park.
+        noon = max(_end(plan) + 40, 840 + roll(s, "ogle_saat", day) % 180)
+        noon_len = min(90 + roll(s, "ogle_sure", day) % 90, evening - 2 * commute - 20 - noon)
+        if roll(s, "ogle", day) % 100 < 75 and noon_len >= 45:
+            _add(plan, noon - commute, "ev", PLACE_HOME)
+            _travel(plan, commute, PLACE_HOME, "meydan")
+            _add(plan, _end(plan) + noon_len, "meydan", "meydan")
+            _travel(plan, commute, "meydan", PLACE_HOME)
         if roll(s, "aksam", day) % 100 < 55 and evening + 90 + commute <= sleep - 10:
             _add(plan, evening - commute, "ev", PLACE_HOME)
             _travel(plan, commute, PLACE_HOME, "meydan")
