@@ -12,6 +12,7 @@ import { Color } from "three";
 import { activityAt, dayPlan, hobby, job, look, pet, roll, workplace } from "../sim.js";
 import { Crowd } from "./human.js";
 import { Navigator } from "./nav.js";
+import { pointAt } from "./traffic.js";
 import * as P from "./palette.js";
 
 const UNIFORMS = {
@@ -163,7 +164,8 @@ function blendPose(p, a, b, t) {
 }
 
 export class People {
-  constructor(world, residents) {
+  constructor(world, residents, traffic) {
+    this.traffic = traffic;
     this.world = world;
     this.residents = residents;
     this.n = residents.length;
@@ -200,6 +202,11 @@ export class People {
     });
 
     this.nav = new Navigator(world);
+    // Araç sahipliği (yaklaşık üçte bir) ve evin önündeki sabit park yeri.
+    this.hasCar = residents.map((r) => roll(r.seed, "araba") % 100 < 33);
+    this.carColor = residents.map((r) => roll(r.seed, "arabaRenk") % 10);
+    this.homeSlot = residents.map((r, i) => (this.hasCar[i] && traffic ? traffic.takeSlot(...this.homes[i].door, -1, 1e9, 220) : null));
+    this.homeSlot.forEach((slot, i) => { if (slot == null) this.hasCar[i] = false; });
     this._buildPools();
     this.crowd = new Crowd(this.n);
     this.group = this.crowd.group;
@@ -358,6 +365,12 @@ export class People {
     this.plans = this.residents.map((r) => dayPlan(r, day));
     this.dogs = this.residents.map((r) => pet(r, day) === "Köpek");
     this.travelCache.fill(null);
+    this.tripStore = this.residents.map(() => new Map());
+    if (this.traffic) {
+      // Günlük park kayıtları sıfırlanır; evlerin önündeki sabit yerler korunur.
+      this.traffic.resetBookings();
+      this.homeSlot.forEach((slot) => { if (slot != null) this.traffic.slots[slot].busy.push([-1, 1e9]); });
+    }
     this._schedule();
   }
 
@@ -394,17 +407,76 @@ export class People {
     return { prefix: [], point: best ? best.p : endpoint };
   }
 
-  _trip(i, seg, k) {
-    const w = this.world;
-    const A = this._endpoint(i, k - 1, true), B = this._endpoint(i, k + 1, false);
+  /** İki nokta arası yaya yolu (kaldırımlardan); acc: yolun ağa bağlandığı yer. */
+  _walkPts(i, A, accA, B, accB, k) {
     const s = this.residents[i].seed;
     const jitter = frac(roll(s, "serit")) - 0.5;
-    const ea = this._access(i, seg.nereden, A), eb = this._access(i, seg.nereye, B);
-    const road = [...ea.prefix, ...this.nav.route(ea.point, eb.point), ...[...eb.prefix].reverse()];
+    const road = [...accA.prefix, ...this.nav.route(accA.point, accB.point), ...[...accB.prefix].reverse()];
     const side = roll(s, "kaldirim", k) % 2 ? 1 : -1;
-    const pts = sidewalkPath(w, [A, ...road, B], side, jitter);
+    const pts = sidewalkPath(this.world, [A, ...road, B], side, jitter);
     const lens = lengths(pts);
-    const L = lens[lens.length - 1];
+    return { pts, lens, L: lens[lens.length - 1] };
+  }
+
+  /** Yol üstünde olmayan bir noktanın (park yeri, durak) yaya ağına bağlandığı nokta: yol ortası. */
+  _onRoad(x, z) {
+    const loc = this.traffic.locate([x, z], 14);
+    if (!loc) return { prefix: [], point: [x, z] };
+    const e = this.traffic.edges[loc.edge];
+    const c = pointAt(e.center, e.cumC, loc.along);
+    return { prefix: [], point: [c.x, c.z] };
+  }
+
+  /** Bir sonraki yolculuğun başladığı dakika (park kaydı bu saate kadar). */
+  _nextTravel(i, k) {
+    const plan = this.plans[i];
+    for (let j = k + 1; j < plan.length; j++) if (plan[j].ne === "yol") return plan[j].bas;
+    return 1440;
+  }
+
+  /** Arabanın şu an durduğu park yeri: bugünkü son araba yolculuğunun hedefi ya da ev önü. */
+  carSlotBefore(i, k) {
+    let slot = this.homeSlot[i];
+    const store = this.tripStore[i];
+    for (let j = 0; j < k; j++) {
+      const t = store.get(j);
+      if (t?.carTo != null) slot = t.carTo;
+    }
+    return slot;
+  }
+
+  /** Yolculuğu kurar: yürüyüş, araba, otobüs ya da taksi. Önceki yolculuklar (arabanın yeri için) önce kurulur. */
+  _trip(i, seg, k) {
+    const store = this.tripStore[i];
+    if (store.has(k)) return store.get(k);
+    for (let j = 0; j < k; j++) if (this.plans[i][j].ne === "yol" && !store.has(j)) this._trip(i, this.plans[i][j], j);
+    const A = this._endpoint(i, k - 1, true), B = this._endpoint(i, k + 1, false);
+    const accA = this._access(i, seg.nereden, A), accB = this._access(i, seg.nereye, B);
+    const dist = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    const s = this.residents[i].seed;
+    let trip = null;
+    if (this.traffic && dist > 550) {
+      if (this.hasCar[i]) trip = this._carTrip(i, seg, k, A, accA, B, accB, false);
+      else {
+        trip = this._busTrip(i, seg, k, A, accA, B, accB);
+        if (!trip && roll(s, "taksi", this.day * 16 + k) % 100 < 35) trip = this._carTrip(i, seg, k, A, accA, B, accB, true);
+      }
+    }
+    trip ??= this._walkTrip(i, seg, k, A, accA, B, accB);
+    trip.seg = k;
+    trip.fromWork = seg.nereden === "is";
+    trip.doorA = seg.nereden === "ev" ? this.homes[i].building : seg.nereden === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
+    trip.doorB = seg.nereye === "ev" ? this.homes[i].building : seg.nereye === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
+    trip.hideAtA = !!trip.doorA || seg.nereden === "ev";
+    trip.hideAtB = !!trip.doorB || seg.nereye === "ev";
+    store.set(k, trip);
+    return trip;
+  }
+
+  _walkTrip(i, seg, k, A, accA, B, accB) {
+    const w = this.world;
+    const s = this.residents[i].seed;
+    const { pts, lens, L } = this._walkPts(i, A, accA, B, accB, k);
     const window = (seg.son - seg.bas) * 60;
     let v = this.speeds[i];
     let stops = [];
@@ -412,7 +484,6 @@ export class People {
       const slack = window - L / v;
       const total = Math.min(slack, 900);
       const pickStop = (f) => {
-        // Mola yeri taşıt yolunun üstüne denk gelmesin.
         let d = f * L;
         for (let tries = 0; tries < 30; tries++, d += 2) {
           along(pts, lens, Math.min(d, L - 1), this._at);
@@ -429,9 +500,99 @@ export class People {
     } else {
       v = L / window;
     }
-    const doorA = seg.nereden === "ev" ? this.homes[i].building : seg.nereden === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
-    const doorB = seg.nereye === "ev" ? this.homes[i].building : seg.nereye === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
-    return { seg: k, pts, lens, L, v, stops, fromWork: seg.nereden === "is", doorA, doorB };
+    return { mode: "yaya", legs: [{ kind: "walk", pts, lens, L, t0: seg.bas, t1: seg.son, v, stops }] };
+  }
+
+  /** Araba (kendi arabası) ya da taksi. Varış randevuya yetişecek şekilde çıkış saati ayarlanır. */
+  _carTrip(i, seg, k, A, accA, B, accB, taxi) {
+    const T = this.traffic;
+    const v = this.speeds[i];
+    let from, to, toSlot = null, pick, drop;
+    if (taxi) {
+      // Taksi: kapıya en yakın yol kenarından alır, hedefin yakınında indirir.
+      const pa = this._onRoad(...(accA.point)), pb = this._onRoad(...(accB.point));
+      from = pa.point; to = pb.point;
+      pick = pa; drop = pb;
+    } else {
+      const fromSlot = this.carSlotBefore(i, k);
+      if (fromSlot == null) return null;
+      const slotA = T.slots[fromSlot];
+      // Hedefin yakınında boş bir park yeri (gidişten bir sonraki yolculuğa kadar).
+      const arrive = seg.son;
+      toSlot = seg.nereye === "ev" ? this.homeSlot[i] : T.takeSlot(B[0], B[1], arrive - 1, this._nextTravel(i, k) + 1, 260);
+      if (toSlot == null) return null;
+      const slotB = T.slots[toSlot];
+      from = T.slotLaneEntry(fromSlot);
+      to = T.slotLaneEntry(toSlot);
+      pick = slotA.kind === "otopark" ? { prefix: [], point: slotA.lot.gate } : this._onRoad(slotA.x, slotA.z);
+      drop = slotB.kind === "otopark" ? { prefix: [], point: slotB.lot.gate } : this._onRoad(slotB.x, slotB.z);
+      pick.car = [slotA.x, slotA.z];
+      drop.car = [slotB.x, slotB.z];
+    }
+    const route = T.route(from, to);
+    if (!route) return null;
+    // Otoparkta park yerinden kapıya / kapıdan park yerine kısa manevra.
+    if (!taxi) {
+      const sa = T.slots[this.carSlotBefore(i, k)], sb = T.slots[toSlot];
+      if (sa.kind === "otopark") route.pts.unshift([sa.x, sa.z]);
+      if (sb.kind === "otopark") route.pts.push([sb.x, sb.z]);
+      route.cum = lengths(route.pts);
+      route.len = route.cum[route.cum.length - 1];
+    }
+    const carA = pick.car ?? route.pts[0], carB = drop.car ?? route.pts[route.pts.length - 1];
+    const w1 = this._walkPts(i, A, accA, carA, pick, k);
+    const w2 = this._walkPts(i, carB, drop, B, accB, k + 1);
+    const drive = route.len / 9 / 60 + 0.25;
+    const wait = taxi ? 1.5 : 0.3;
+    let tw1 = w1.L / v / 60, tw2 = w2.L / v / 60;
+    let total = tw1 + wait + drive + tw2;
+    const window = seg.son - seg.bas;
+    let scale = 1;
+    if (total > window * 0.98) { scale = (window * 0.98) / total; total *= scale; }
+    let t = Math.max(seg.bas, seg.son - total - 0.3);
+    const legs = [];
+    if (t > seg.bas) legs.push({ kind: "before", t0: seg.bas, t1: t });
+    legs.push({ kind: "walk", ...w1, t0: t, t1: (t += tw1 * scale), stops: [] });
+    legs.push({ kind: "wait", x: carA[0], z: carA[1], t0: t, t1: (t += wait * scale), taxiAt: taxi ? route : null });
+    legs.push({ kind: "drive", route, taxi, t0: t, t1: (t += drive * scale) });
+    legs.push({ kind: "walk", ...w2, t0: t, t1: (t += tw2 * scale), stops: [] });
+    if (t < seg.son) legs.push({ kind: "after", t0: t, t1: seg.son, x: B[0], z: B[1] });
+    for (const l of legs) if (l.kind === "walk") l.v = l.L / Math.max(1, (l.t1 - l.t0) * 60);
+    return { mode: taxi ? "taksi" : "araba", legs, carTo: taxi ? null : toSlot, color: this.carColor[i] };
+  }
+
+  /** Otobüs: en yakın durağa yürü, ilk otobüsü bekle, bin, in, yürü. Randevuya yetişmiyorsa null. */
+  _busTrip(i, seg, k, A, accA, B, accB) {
+    const T = this.traffic;
+    let best = null;
+    T.lines.forEach((line, li) => {
+      const sa = T.stopNearOnLine(li, A[0], A[1]), sb = T.stopNearOnLine(li, B[0], B[1]);
+      if (!sa || !sb || sa.stop === sb.stop || sa.d > 480 || sb.d > 480) return;
+      if (!best || sa.d + sb.d < best.sa.d + best.sb.d) best = { li, sa, sb, line };
+    });
+    if (!best) return null;
+    const { line, li, sa, sb } = best;
+    const stA = line.stops[sa.stop], stB = line.stops[sb.stop];
+    const v = this.speeds[i];
+    const w1 = this._walkPts(i, A, accA, stA.shelter, this._onRoad(...stA.shelter), k);
+    const w2 = this._walkPts(i, stB.curb, this._onRoad(...stB.curb), B, accB, k + 1);
+    let t = seg.bas;
+    const atStop = t + w1.L / v / 60;
+    const bus = T.nextBus(line, sa.stop, atStop + 0.2);
+    if (bus == null) return null;
+    const off = T.rideMinutes(line, sa.stop, sb.stop);
+    const alight = bus + off + 0.35;
+    const arrive = alight + w2.L / v / 60;
+    if (arrive > seg.son + 0.5) return null;
+    const legs = [
+      { kind: "walk", ...w1, t0: t, t1: atStop, stops: [] },
+      { kind: "wait", x: stA.shelter[0], z: stA.shelter[1], heading: stA.heading - Math.PI / 2, t0: atStop, t1: bus },
+      { kind: "bus", line: li, t0: bus, t1: alight },
+      { kind: "walk", ...w2, t0: alight, t1: arrive, stops: [] },
+    ];
+    if (arrive < seg.son) legs.push({ kind: "after", t0: arrive, t1: seg.son, x: B[0], z: B[1] });
+    for (const l of legs) if (l.kind === "walk") l.v = l.L / Math.max(1, (l.t1 - l.t0) * 60);
+    return { mode: "otobus", legs, line: li };
   }
 
   /** Sakinin şu an bulunduğu nokta: dışarıdaysa kendisi, içerideyse bulunduğu binanın kapısı. */
@@ -685,6 +846,7 @@ export class People {
     const crowd = this.crowd, at = this._at;
     const w = this.world;
     this.openDoors.clear();
+    this.vehicleStates = [];
     const shown = [];
     for (let i = 0; i < this.n; i++) {
       const plan = this.plans[i];
@@ -713,34 +875,64 @@ export class People {
       p.indoor = false;
 
       if (seg.ne === "yol") {
-        let trip = this.travelCache[i];
-        if (!trip || trip.seg !== k) trip = this.travelCache[i] = this._trip(i, seg, k);
-        let el = (minute - seg.bas) * 60;
-        let d = 0, stop = null, last = 0;
-        for (const st of trip.stops) {
-          const reach = (st.at - last) / trip.v;
-          if (el < reach) break;
-          el -= reach; d = st.at; last = st.at;
-          if (el < st.dur) { stop = st; el = 0; break; }
-          el -= st.dur;
-        }
-        if (!stop) d = Math.min(trip.L, d + el * trip.v);
-        along(trip.pts, trip.lens, d, at);
-        p.x = at.x; p.z = at.z; p.heading = at.heading;
-        p.y = w.groundY(at.x, at.z);
-        if (stop) {
-          p.heading += stop.kind ? Math.PI / 2 : 0;
+        const trip = this._trip(i, seg, k);
+        this.travelCache[i] = trip;
+        const leg = trip.legs.find((l) => minute < l.t1) ?? trip.legs[trip.legs.length - 1];
+        p.mode = trip.mode;
+        if (leg.kind === "before" || leg.kind === "after") {
+          // Çıkmadan önce içeride (ya da yerinde) bekler; vardıktan sonra kapıdan girer.
+          if ((leg.kind === "before" && trip.hideAtA) || (leg.kind === "after" && trip.hideAtB)) { this.visible[i] = 0; continue; }
+          const [x, z] = leg.kind === "after" ? [leg.x, leg.z] : trip.legs[1]?.pts?.[0] ?? [0, 0];
+          p.x = x; p.z = z; p.y = w.groundY(x, z); p.heading = 0;
           idleGesture(p, time, i, false);
-          if (!stop.kind) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
+        } else if (leg.kind === "walk") {
+          let el = (minute - leg.t0) * 60;
+          let d = 0, stop = null, last = 0;
+          for (const st of leg.stops) {
+            const reach = (st.at - last) / leg.v;
+            if (el < reach) break;
+            el -= reach; d = st.at; last = st.at;
+            if (el < st.dur) { stop = st; el = 0; break; }
+            el -= st.dur;
+          }
+          if (!stop) d = Math.min(leg.L, d + el * leg.v);
+          along(leg.pts, leg.lens, d, at);
+          p.x = at.x; p.z = at.z; p.heading = at.heading;
+          p.y = w.groundY(at.x, at.z);
+          if (stop) {
+            p.heading += stop.kind ? Math.PI / 2 : 0;
+            idleGesture(p, time, i, false);
+            if (!stop.kind) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
+          } else {
+            walkPose(p, d / (0.72 * (c.height / 1.75)) * Math.PI);
+          }
+          p.dog = trip.mode === "yaya";
+          p.phase = d;
+          if (leg === trip.legs.find((l) => l.kind === "walk") && trip.doorA && d < 2.5) this.openDoors.add(trip.doorA);
+          if (leg === trip.legs.findLast((l) => l.kind === "walk") && trip.doorB && leg.L - d < 2.5) this.openDoors.add(trip.doorB);
+        } else if (leg.kind === "wait") {
+          p.x = leg.x; p.z = leg.z; p.y = w.groundY(leg.x, leg.z);
+          p.heading = leg.heading ?? 0;
+          idleGesture(p, time, i, false);
+          if (roll(this.residents[i].seed, "durakTel") % 2) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
+          // Taksi son saniyelerde gelip kaldırım kenarında bekler.
+          if (leg.taxiAt && (leg.t1 - minute) * 60 < 25) {
+            const r = leg.taxiAt;
+            this.vehicleStates.push({ x: r.pts[0][0], z: r.pts[0][1], heading: Math.atan2(r.pts[1][0] - r.pts[0][0], r.pts[1][1] - r.pts[0][1]), color: 0, taxi: true });
+          }
+        } else if (leg.kind === "drive") {
+          const r = leg.route;
+          const u = (minute - leg.t0) / (leg.t1 - leg.t0);
+          const pos = pointAt(r.pts, r.cum, u * r.len);
+          this.vehicleStates.push({ x: pos.x, z: pos.z, heading: pos.heading, color: trip.color ?? 0, taxi: leg.taxi, owner: i });
+          this.visible[i] = 0;
+          continue;
         } else {
-          walkPose(p, d / (0.72 * (c.height / 1.75)) * Math.PI);
+          // Otobüste.
+          this.visible[i] = 0;
+          continue;
         }
-        p.dog = true;
         atWork = trip.fromWork;
-        p.phase = d;
-        // Kapıdan çıkarken ve girerken kapı açılır.
-        if (trip.doorA && d < 2.5) this.openDoors.add(trip.doorA);
-        if (trip.doorB && trip.L - d < 2.5) this.openDoors.add(trip.doorB);
       } else {
         if (seg.ne === "is" && !this.works[i].loc.outdoor) { this.visible[i] = 0; continue; }
         if (!this._placeState(i, k, minute, time, p)) { this.visible[i] = 0; continue; }
@@ -749,6 +941,31 @@ export class People {
       }
       p.atWork = atWork;
       shown.push(i);
+    }
+
+    // Park halindeki arabalar: sürülmeyen her araba, bugünkü son araba yolculuğunun hedefinde ya da ev önünde.
+    this.parked = [];
+    if (this.traffic) {
+      const driving = new Set(this.vehicleStates.map((v) => v.owner));
+      for (let i = 0; i < this.n; i++) {
+        if (!this.hasCar[i] || driving.has(i)) continue;
+        const plan = this.plans[i];
+        let k = 0;
+        while (k < plan.length - 1 && minute >= plan[k].son) k++;
+        // Önceki yolculuklar kurulmamışsa (ör. sayfa gün ortasında açıldıysa) şimdi kur.
+        if (!this._ensured?.[i] || this._ensured[i] < k) {
+          for (let j = 0; j < k; j++) if (plan[j].ne === "yol") this._trip(i, plan[j], j);
+          (this._ensured ??= [])[i] = k;
+        }
+        let slot = this.carSlotBefore(i, k);
+        const cur = plan[k];
+        if (cur.ne === "yol") {
+          const trip = this.tripStore[i].get(k);
+          const drive = trip?.legs.find((l) => l.kind === "drive");
+          if (drive && minute >= drive.t1 && trip.carTo != null) slot = trip.carTo;
+        }
+        if (slot != null) this.parked.push([slot, this.carColor[i]]);
+      }
     }
 
     // Yürüyenler birbirine çok yaklaşırsa yana çekilir (oturan ve duranların içinden geçilmez).

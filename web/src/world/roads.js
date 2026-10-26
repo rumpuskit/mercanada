@@ -142,8 +142,10 @@ function computeTrims(net) {
         const straight = others.length === 1 && others[0].dir[0] * end.dir[0] + others[0].dir[1] * end.dir[1] < -0.98 && others[0].edge.road.width === road.width;
         if (others.length && !straight) {
           for (const o of others) {
-            const s = Math.max(0.5, Math.abs(cross(end.dir, o.dir)));
-            t = Math.max(t, o.edge.road.width / 2 / s + (CURB_R[road.type] ?? 3));
+            // Aynı doğrultuda devam eden yol kesmez; yalnızca kesişen (açılı) yollar hesaba girer.
+            const s = Math.abs(cross(end.dir, o.dir));
+            if (s < 0.3) continue;
+            t = Math.max(t, o.edge.road.width / 2 / Math.max(0.5, s) + (CURB_R[road.type] ?? 3));
           }
         }
       } else {
@@ -465,6 +467,12 @@ export function buildGrounds(world) {
       group.add(f);
       materials.push(f.material);
     } else if (p.kind === "pazar") slab(w, d, cx, cz, T.slabs(), 5, 0.1);
+    else if (p.kind === "otopark") {
+      const m = slab(w, d, cx, cz, T.parkingLot(), 0, 0.07);
+      const uv = m.geometry.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * w) / 2.7, (uv.getY(i) * d) / 13);
+      m.material.map.wrapS = m.material.map.wrapT = THREE.RepeatWrapping;
+    }
   }
   group.userData.groundMaterials = materials;
   return group;

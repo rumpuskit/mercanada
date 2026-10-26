@@ -191,3 +191,20 @@ export function pitch() {
     ctx.strokeRect(s - m - 70, s / 2 - 90, 70, 180);
   }, false));
 }
+
+/** Otopark: asfalt üstünde beyaz park çizgileri (2,7 m aralık, 13 m sıra). */
+export function parkingLot() {
+  return (cache.lot ??= canvasTexture(256, (ctx, sz) => {
+    const rand = rng("otopark");
+    ctx.fillStyle = "#5e6167";
+    ctx.fillRect(0, 0, sz, sz);
+    for (let i = 0; i < 5000; i++) {
+      ctx.fillStyle = ["#55585e", "#686b71", "#4f5258"][Math.floor(rand() * 3)];
+      ctx.fillRect(rand() * sz, rand() * sz, 1.4, 1.4);
+    }
+    // Doku 2,7 x 13 m'lik bir sırayı kaplar: ortada şerit, iki yanda park yerleri.
+    ctx.fillStyle = "rgba(240,240,236,0.92)";
+    ctx.fillRect(0, 0, 3, sz * (5.3 / 13));
+    ctx.fillRect(0, sz * (7.7 / 13), 3, sz * (5.3 / 13));
+  }));
+}

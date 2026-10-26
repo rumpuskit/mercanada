@@ -19,7 +19,7 @@ const MEYDAN_R = 30;
 // Yol kesitleri (toplam genişlik = taşıt yolu + iki kaldırım).
 export const ROADS = {
   cadde: { width: 14, carriage: 8, surface: "asfalt" },
-  sokak: { width: 11, carriage: 6, surface: "parke" },
+  sokak: { width: 13, carriage: 8, surface: "parke" }, // iki dar şerit + iki yanda kenar parkı
   koy: { width: 6.5, carriage: 6.5, surface: "asfalt" },
   yaya: { width: 14, carriage: 0, surface: "tas" },
   sahil: { width: 7, carriage: 0, surface: "tas" },
@@ -586,12 +586,21 @@ export class World {
     this.block(90, -120, 200, -48, 0);
     this.features.push({ type: "havuz", x: 140, z: 85, w: 25, d: 12 });
     this.block(124, 76, 156, 94, 0);
-    const market = { x0: -200, z0: 50, x1: -90, z1: 100 };
+    // Otoparklar: çevre yolunun iç kenarında, çarşının iki yanında; girişleri çevre yolundan.
+    this.parkingLots = [];
+    for (const side of [-1, 1]) {
+      const lot = side < 0 ? { x0: -246, x1: -204, z0: 34, z1: 112 } : { x0: 204, x1: 246, z0: 34, z1: 112 };
+      lot.gate = [side * halfW, (lot.z0 + lot.z1) / 2];
+      this.parkingLots.push(lot);
+      this.plazas.push({ ...lot, kind: "otopark" });
+      this.block(lot.x0, lot.z0, lot.x1, lot.z1, 1);
+    }
+    const market = { x0: -190, z0: 50, x1: -90, z1: 100 };
     this.plazas.push({ ...market, kind: "pazar" });
     this.block(market.x0, market.z0, market.x1, market.z1, 0);
     for (let r = 0; r < 3; r++) {
       for (let c = 0; c < 9; c++) {
-        this.features.push({ type: "tezgah", x: market.x0 + 8 + c * 11.8, z: market.z0 + 9 + r * 16, c: (r * 9 + c) % 10 });
+        this.features.push({ type: "tezgah", x: market.x0 + 8 + c * 10.6, z: market.z0 + 9 + r * 16, c: (r * 9 + c) % 10 });
       }
     }
     this.places.pazar = { anchors: [[(market.x0 + market.x1) / 2, (market.z0 + market.z1) / 2]], spread: 45, path: [[market.x1, 0], HUB] };

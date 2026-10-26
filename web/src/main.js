@@ -16,6 +16,7 @@ import * as P from "./world/palette.js";
 import { createUI } from "./ui.js";
 import { createMapUI } from "./mapui.js";
 import { NameTags } from "./world/nametags.js";
+import { Traffic, Vehicles, buildStops } from "./world/traffic.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -84,7 +85,11 @@ scene.add(city.group, trees);
 const clouds = buildClouds(world);
 const labels = buildLabels(world);
 scene.add(clouds, labels);
-const people = new People(world, residents);
+const traffic = new Traffic(world);
+scene.add(buildStops(traffic, world));
+const vehicles = new Vehicles(Math.ceil(population * 0.4) + 80, 40);
+scene.add(vehicles.group);
+const people = new People(world, residents, traffic);
 scene.add(people.group);
 const dollhouse = new Dollhouse(world, city, people, scene);
 people.dollhouse = dollhouse;
@@ -132,6 +137,8 @@ function flyTo(x, y, z, distance = 120, direction = null) {
 }
 
 const nameTags = new NameTags(scene);
+if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents };
+const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const ui = createUI({ residents, people, world, dollhouse, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 const mapUI = createMapUI({ world, camera, controls, flyTo });
 
@@ -191,6 +198,14 @@ function tick() {
   people.setDay(day);
   people.update(minute, real);
   city.setOpenDoors(people.openDoors);
+  // Araçlar: sürülenler, park halindekiler ve otobüsler.
+  vehicles.begin();
+  for (const v of people.vehicleStates) vehicles.addCar(v.x, world.groundY(v.x, v.z), v.z, v.heading, v.color, v.taxi);
+  for (const [slot, color] of people.parked) {
+    const s = traffic.slots[slot];
+    vehicles.addCar(s.x, world.groundY(s.x, s.z), s.z, s.heading, color);
+  }
+  for (const b of traffic.buses(minute)) vehicles.addBus(b.x, world.groundY(b.x, b.z), b.z, b.heading, busColors[b.line]);
 
   if (flight) {
     flight.t = Math.min(1, flight.t + dt / 1.3);
@@ -216,6 +231,7 @@ function tick() {
   }
   if (frame % 6 === 0) updateWindows(minute, light);
   dollhouse.update(1 - light, real);
+  vehicles.end(1 - light);
   if (frame % 15 === 0) ui.tick(unix, minute, day);
   driftClouds(clouds, dt);
   fadeTrees(trees, dist);
