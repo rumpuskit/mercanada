@@ -1,4 +1,4 @@
-"""Godot ve Python simülasyonlarının aynı sonucu verdiğini doğrular.
+"""Web (JS) ve Python simülasyonlarının aynı sonucu verdiğini doğrular.
 
 Çalıştırma (proje kökünden): cd server && python3 -m unittest -v
 """
@@ -11,7 +11,7 @@ from pathlib import Path
 
 from mercanada_sim import sim
 
-GAME_DIR = Path(__file__).resolve().parents[2] / "game"
+VECTORS_JS = Path(__file__).resolve().parents[2] / "web" / "tests" / "parity_vectors.mjs"
 DAY = 20_752  # 26 Ekim 2026 (Pazartesi)
 
 
@@ -42,22 +42,19 @@ def python_vectors(day: int, handles: list[str]) -> list[dict]:
     return out
 
 
-def godot_vectors(day: int, handles: list[str]) -> list[dict]:
+def js_vectors(day: int, handles: list[str]) -> list[dict]:
     result = subprocess.run(
-        ["godot", "--headless", "--path", str(GAME_DIR), "-s", "tests/parity_vectors.gd", "--", str(day), *handles],
+        ["node", str(VECTORS_JS), str(day), *handles],
         capture_output=True, text=True, timeout=120, check=True,
     )
-    for line in result.stdout.splitlines():
-        if line.startswith("PARITY_JSON:"):
-            return json.loads(line.removeprefix("PARITY_JSON:"))
-    raise AssertionError("Godot çıktısında PARITY_JSON yok:\n" + result.stdout + result.stderr)
+    return json.loads(result.stdout)
 
 
 class ParityTest(unittest.TestCase):
-    def test_godot_matches_python(self):
+    def test_js_matches_python(self):
         handles = sample_handles(300)
         expected = python_vectors(DAY, handles)
-        actual = godot_vectors(DAY, handles)
+        actual = js_vectors(DAY, handles)
         self.assertEqual(len(actual), len(expected))
         for handle, a, e in zip(handles, actual, expected):
             self.assertEqual(a, e, handle)

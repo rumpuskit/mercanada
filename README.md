@@ -9,33 +9,34 @@ Takip etmenin dışında hiçbir özellik kullanıcıdan işlem istemez. Sakinle
 ## Yapı
 
 ```
-game/                      Godot 4.7 projesi (web, gl_compatibility)
-  export_presets.cfg       web dışa aktarımı (thread'siz, her tarayıcıda çalışır)
-  data/catalog.json        meslekler, iş yerleri, hobiler, isim listeleri (oyun ve sunucu ortak)
-  scripts/sim/             deterministik simülasyon: mhash, city_clock, address, resident_sim
-  scripts/world/           palet ve geçici ada (gerçek ada üretimi gelecek)
-  tests/                   parite çıktısı ve ekran görüntüsü scriptleri
+data/catalog.json          meslekler, iş yerleri, hobiler, isim listeleri (web ve sunucu ortak)
+web/                       tarayıcı istemcisi (Three.js + Vite), telefonda ve Instagram içinde açılır
+  src/sim.js               deterministik simülasyon: hash, saat, adres, sakinin günü
+  src/world/layout.js      adanın yerleşimi: nüfustan hücreler, mahalleler, çarşı, kıyı, yollar
+  src/world/*.js           arazi, binalar, ağaçlar, sakinler, gökyüzü, levhalar
+  src/ui.js                saat, hız, "Kendini bul" araması ve sakin kartı
+  tests/parity_vectors.mjs parite testi için JS çıktısı
 server/
-  mercanada_sim/sim.py     simülasyonun Python karşılığı (Godot ile bit bit aynı)
+  mercanada_sim/sim.py     simülasyonun Python karşılığı (web ile bit bit aynı)
   schema.sql               Postgres şeması (sakinler, aktarimlar, istekler)
   import_followers.py      Instagram takipçi dışa aktarımını şehre işler
-  tests/test_parity.py     Godot ve Python aynı sonucu veriyor mu?
+  tests/test_parity.py     JS ve Python aynı sonucu veriyor mu?
 ```
 
 ## Komutlar
 
 ```sh
-# Oyunu aç (1-4 tuşları: zaman hızı)
-godot --path game
+# Geliştirme sunucusu (http://localhost:5173)
+cd web && npm install && npm run dev
 
-# Parite ve plan testleri
+# Adres çubuğu seçenekleri: ?nufus=12000 (örnek nüfus), ?saat=21:30 (sabit saat, hiz ile),
+# ?hiz=60 (zaman hızı), ?bul=sakin_0042 (sakini bulup göster)
+
+# Parite ve plan testleri (Node gerekir)
 cd server && python3 -m unittest -v
 
-# Belirli bir saatte ekran görüntüsü
-godot --path game -s tests/screenshot.gd -- /tmp/ada.png 18:30
-
 # Sunucuya yükle ($SUNUCU: ssh takma adı; sadece /opt/mercanada)
-rsync -a --delete --exclude __pycache__ --relative server/ game/data/catalog.json $SUNUCU:/opt/mercanada/app/
+rsync -a --delete --exclude __pycache__ --relative server/ data/catalog.json $SUNUCU:/opt/mercanada/app/
 ssh $SUNUCU 'chown -R mercanada:mercanada /opt/mercanada/app'
 
 # Takipçi dışa aktarımını işle (sunucuda)
@@ -48,12 +49,8 @@ Sunucuda başka servisler de çalışıyor. Mercanada sadece `mercanada` Linux k
 
 ## Yayın
 
-`main` dalına her push'ta GitHub Actions parite testlerini çalıştırır, oyunu web için dışa aktarır ve GitHub Pages'a yayınlar: https://ada.rumpuskit.com. Yerelde dışa aktarmak için:
-
-```sh
-godot --headless --path game --export-release "Web" export/web/index.html
-```
+`main` dalına her push'ta GitHub Actions parite testlerini çalıştırır, web istemcisini derler ve GitHub Pages'a yayınlar: https://ada.rumpuskit.com (Cloudflare üzerinden).
 
 ## Simülasyon kuralı değişirse
 
-`game/scripts/sim/*.gd` ile `server/mercanada_sim/sim.py` birlikte değişir ve parite testi çalıştırılır. Kural değişikliği bütün sakinlerin hayatını geriye dönük olarak değiştirir. Yayından sonra bunu bilinçli bir "şehir olayı" olarak yap.
+`web/src/sim.js` ile `server/mercanada_sim/sim.py` birlikte değişir ve parite testi çalıştırılır. Kural değişikliği bütün sakinlerin hayatını geriye dönük olarak değiştirir. Yayından sonra bunu bilinçli bir "şehir olayı" olarak yap.

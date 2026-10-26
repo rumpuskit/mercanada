@@ -1,0 +1,267 @@
+:root {
+  --ink: #2f3b52;
+  --muted: #6b7890;
+  --glass: rgba(255, 255, 255, 0.82);
+  --line: rgba(47, 59, 82, 0.1);
+  --accent: #e0607a;
+  --bg: #7ec4ea;
+  --shadow: 0 6px 24px rgba(30, 50, 80, 0.16);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #eef2fa;
+    --muted: #aab4c8;
+    --glass: rgba(28, 36, 58, 0.78);
+    --line: rgba(255, 255, 255, 0.12);
+    --bg: #1b2440;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ink: #eef2fa;
+  --muted: #aab4c8;
+  --glass: rgba(28, 36, 58, 0.78);
+  --line: rgba(255, 255, 255, 0.12);
+  --bg: #1b2440;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Nunito", system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.panel,
+#hud,
+#speed,
+#card,
+#search,
+#preview {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--line);
+}
+
+#hud {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: 12px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  max-width: calc(100vw - 24px - 150px);
+}
+
+#hud .brand {
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.2px;
+}
+
+#hud .line {
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+#speed {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: 12px;
+  display: flex;
+  border-radius: 999px;
+  padding: 3px;
+}
+
+#speed button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: 700 13px "Nunito", system-ui, sans-serif;
+  padding: 7px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+#speed button.on {
+  background: var(--accent);
+  color: white;
+}
+
+#preview {
+  position: fixed;
+  top: calc(max(12px, env(safe-area-inset-top)) + 46px);
+  right: 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+#search {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(16px, env(safe-area-inset-bottom));
+  width: min(440px, calc(100vw - 32px));
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 999px;
+}
+
+#search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 700 16px "Nunito", system-ui, sans-serif;
+  padding: 8px 12px;
+  outline: none;
+}
+
+#search input::placeholder {
+  color: var(--muted);
+}
+
+#search button {
+  border: 0;
+  background: var(--accent);
+  color: white;
+  font: 800 15px "Nunito", system-ui, sans-serif;
+  padding: 8px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+#card {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px);
+  width: min(440px, calc(100vw - 32px));
+  border-radius: 20px;
+  padding: 14px 16px 12px;
+}
+
+#card[hidden] {
+  display: none;
+}
+
+#card-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 24px;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+#card .handle {
+  font-weight: 800;
+  font-size: 18px;
+}
+
+#card .title {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+#card .now {
+  margin: 8px 0 6px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: rgba(224, 96, 122, 0.12);
+  font-weight: 800;
+  font-size: 15px;
+}
+
+#card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 0;
+  font-size: 13.5px;
+}
+
+#card dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+#card dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+#loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: white;
+  font-weight: 800;
+  font-size: 18px;
+  transition: opacity 0.5s;
+}
+
+#loading.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (max-width: 520px) {
+  #preview {
+    top: auto;
+    right: auto;
+    left: 12px;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 60px);
+  }
+  #card:not([hidden]) ~ #preview {
+    display: none;
+  }
+  #hud .brand {
+    font-size: 16px;
+  }
+  #hud .line {
+    font-size: 12.5px;
+  }
+  #speed button {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+}

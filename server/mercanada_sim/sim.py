@@ -1,6 +1,6 @@
 """Mercanada simülasyonunun Python karşılığı.
 
-game/scripts/sim/*.gd ile bit bit aynı sonucu vermeli; kural değişirse ikisi birlikte değişir
+web/src/sim.js ile bit bit aynı sonucu vermeli; kural değişirse ikisi birlikte değişir
 ve tests/test_parity.py çalıştırılır. Sakin sözlüğü: {handle, seed, slot, arrived_day, overrides?}.
 """
 
@@ -14,7 +14,7 @@ TZ_OFFSET = 3 * 3600
 PLACE_HOME = "ev"
 PLACE_WORK = "is"
 
-CATALOG_PATH = Path(__file__).resolve().parents[2] / "game" / "data" / "catalog.json"
+CATALOG_PATH = Path(__file__).resolve().parents[2] / "data" / "catalog.json"
 
 
 @cache
