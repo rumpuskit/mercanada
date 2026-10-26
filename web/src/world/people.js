@@ -198,8 +198,8 @@ export class People {
     for (const s of w.seats) add("seat:" + s.place, s);
     for (const s of w.places.iskele.spots) add("fish", s);
     // İskele dolunca kıyıdan da balık tutulur: sahil yolunun deniz kenarında, 7 m arayla.
-    for (let x = -165; x <= 20; x += 7) {
-      if (Math.abs(x - w.places.iskele.spots[0].x) < 6 || Math.abs(x) < 9) continue;
+    for (let x = -300; x <= 25; x += 3.5) {
+      if (Math.abs(x - w.places.iskele.spots[0].x) < 6 || Math.abs(x) < 9 || Math.abs(x + 218) < 22) continue; // iskeleler ve balıkçı koyu hariç
       const [cx, cz] = w.coastPoint(x, 60, 0, 1, 1.6);
       if (w.isWalkable(cx, cz) && w.height(cx, cz) > 0.2) add("fish", { x: cx, z: cz, heading: 0 });
     }
@@ -255,6 +255,7 @@ export class People {
       const pl = w.places[place];
       if (!pl) continue;
       pl.anchors.forEach(([ax, az], i) => {
+        if (place === "fener" && i % 4) return; // fenerin dibi kalabalık olmasın: seyir noktalarının dörtte biri
         for (let g = 0; g < 3; g++) {
           const a = g * 2.1 + i, r = 3 + g * 2.5;
           const [x, z] = w.nearestWalkable(ax + Math.cos(a) * r, az + Math.sin(a) * r, 5);
@@ -596,7 +597,8 @@ export class People {
     // Anakaradan dönenler vapur iskeleye yanaştığında iner: yolculuk o an başlar.
     const ferry = this.works[i].wp.kind === "anakara";
     if (ferry && seg.nereden === "is") {
-      const arr = nextArrival(seg.bas);
+      // Yolcular vapurdan birkaç dakika içinde sırayla iner (hepsi aynı anda aynı noktadan çıkmaz).
+      const arr = nextArrival(seg.bas) + (this.residents[i].seed % 40) / 10;
       if (arr < seg.son - 4) seg = { ...seg, bas: arr };
     }
     const A = this._endpoint(i, k - 1, true), B = this._endpoint(i, k + 1, false);
@@ -616,8 +618,10 @@ export class People {
     trip.fromWork = seg.nereden === "is";
     trip.doorA = seg.nereden === "ev" ? this.homes[i].building : seg.nereden === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
     trip.doorB = seg.nereye === "ev" ? this.homes[i].building : seg.nereye === "is" && !this.works[i].loc.outdoor ? this.works[i].loc.building : null;
-    trip.hideAtA = !!trip.doorA || seg.nereden === "ev";
-    trip.hideAtB = !!trip.doorB || seg.nereye === "ev";
+    // Binası olmayan kapalı iş yeri (vapurla anakara): orada beklerken görünmez (vapurdadır).
+    const away = !this.works[i].loc.outdoor && !this.works[i].loc.building;
+    trip.hideAtA = !!trip.doorA || seg.nereden === "ev" || (seg.nereden === "is" && away);
+    trip.hideAtB = !!trip.doorB || seg.nereye === "ev" || (seg.nereye === "is" && away);
     // Başta ve sonda kalan süre: önceki yerde oyalanır / vardığı yerde beklemeye başlar.
     const first = trip.legs[0], last = trip.legs[trip.legs.length - 1];
     const segBas = this.plans[i][k].bas; // vapur için kaydırılmış olabilir: önceki yerde bekleme gerçek başlangıçtan
@@ -1197,7 +1201,8 @@ export class People {
       stand(g.x, g.z, g.heading);
     } else {
       // Yerde boş köşe kalmadı: tek noktaya yığılmak yerine yerin çevresinde ağır ağır dolaşır.
-      const key = (this._placeOf(i, k) ?? seg.yer).replace("hobi:", "");
+      let key = (this._placeOf(i, k) ?? seg.yer).replace("hobi:", "");
+      if (key === "iskele") key = "sahil_yolu"; // balık tutacak yer bulamayan sahilde yürür
       const loop = this._strollLoop(key);
       if (loop) {
         const d = (sec * 0.75 + frac(roll(s, "gezinti", k)) * loop.L) % loop.L;
@@ -1233,25 +1238,29 @@ export class People {
       const cx = place.anchors.reduce((a, q) => a + q[0], 0) / place.anchors.length;
       const cz = place.anchors.reduce((a, q) => a + q[1], 0) / place.anchors.length;
       const spreadR = Math.max(...place.anchors.map((q) => Math.hypot(q[0] - cx, q[1] - cz)));
-      const R = Math.max(14, spreadR + 10, (place.spread ?? 0) * 2);
-      const pts = [];
-      for (let k = 0; k < 24; k++) {
-        const a = (k / 24) * Math.PI * 2;
-        const [x, z] = w.nearestWalkable(cx + Math.cos(a) * R, cz + Math.sin(a) * R, 8);
-        if (!w.isWalkable(x, z) || w.height(x, z) < 0.3) continue;
-        const prev = pts[pts.length - 1];
-        if (prev) {
-          const L = Math.hypot(x - prev[0], z - prev[1]);
-          let ok = L > 1.5;
-          for (let u = 0.5; ok && u < L; u += 0.8) ok = w.isWalkable(prev[0] + ((x - prev[0]) * u) / L, prev[1] + ((z - prev[1]) * u) / L);
-          if (!ok) continue;
+      const R0 = Math.max(14, spreadR + 10, Math.min(30, (place.spread ?? 0) * 0.8));
+      // Önce geniş, olmazsa daha dar halkalar denenir (meydan gibi engelli yerlerde de bir halka bulunsun).
+      for (const R of [R0, R0 * 0.75, R0 * 0.55, 14, 11]) {
+        const pts = [];
+        for (let k = 0; k < 24; k++) {
+          const a = (k / 24) * Math.PI * 2;
+          const [x, z] = w.nearestWalkable(cx + Math.cos(a) * R, cz + Math.sin(a) * R, 3);
+          if (!w.isWalkable(x, z) || w.height(x, z) < 0.3) continue;
+          const prev = pts[pts.length - 1];
+          if (prev) {
+            const L = Math.hypot(x - prev[0], z - prev[1]);
+            let ok = L > 1.5;
+            for (let u = 0.5; ok && u < L; u += 0.8) ok = w.isWalkable(prev[0] + ((x - prev[0]) * u) / L, prev[1] + ((z - prev[1]) * u) / L);
+            if (!ok) continue;
+          }
+          pts.push([x, z]);
         }
-        pts.push([x, z]);
-      }
-      if (pts.length >= 6) {
-        pts.push(pts[0]);
-        const lens = lengths(pts);
-        loop = { pts, lens, L: lens[lens.length - 1] };
+        if (pts.length >= 10) {
+          pts.push(pts[0]);
+          const lens = lengths(pts);
+          loop = { pts, lens, L: lens[lens.length - 1] };
+          break;
+        }
       }
     }
     // Pazar: iki koridor boyunca dolaşılır.
