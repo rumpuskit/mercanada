@@ -132,8 +132,8 @@ export function addressText(slot) {
 
 export const PLACE_HOME = "ev";
 export const PLACE_WORK = "is";
-const OUTING_LATEST_HOBBY = 1140; // 19:00
-const OUTING_LATEST_MEYDAN = 1230; // 20:30
+const OUTING_LATEST_HOBBY = 1200; // 20:00
+const OUTING_LATEST_MEYDAN = 1290; // 21:30
 
 function pickWeighted(items, r) {
   const total = items.reduce((sum, item) => sum + item.agirlik, 0);
@@ -233,13 +233,25 @@ function travel(plan, commute, from, to) {
 /** İş çıkışı: %40 hobi, %25 meydan, gerisi doğrudan ev (""). */
 function eveningPlace(s, day, hobbyPlace) {
   const x = roll(s, "aksam", day) % 100;
-  if (x < 20) return hobbyPlace;
-  if (x < 35) return "meydan";
+  if (x < 25) return hobbyPlace;
+  if (x < 55) return "meydan";
   return "";
 }
 
 function activityOf(place) {
   return place.startsWith("hobi:") ? "hobi" : place;
+}
+
+/** Akşam yemeğinden sonra bir kısmı yeniden çıkar (çarşı ya da mahalle çay bahçesi). */
+function nightOut(plan, s, day, commute, sleep) {
+  if (roll(s, "gece", day) % 100 >= 35) return;
+  const start = Math.max(end(plan) + 45, 1230 + (roll(s, "gece_saat", day) % 60));
+  const duration = 60 + (roll(s, "gece_sure", day) % 60);
+  if (start + duration + commute > sleep - 10) return;
+  add(plan, start - commute, "ev", PLACE_HOME);
+  travel(plan, commute, PLACE_HOME, "meydan");
+  add(plan, end(plan) + duration, "meydan", "meydan");
+  travel(plan, commute, "meydan", PLACE_HOME);
 }
 
 /** Günün planı: dakika aralıklarından oluşan kesintisiz liste (0-1440). */
@@ -260,8 +272,8 @@ export function dayPlan(r, day) {
     travel(plan, commute, PLACE_HOME, PLACE_WORK);
     add(plan, shift.son, "is", PLACE_WORK);
     const outing = eveningPlace(s, day, hobbyPlace);
-    const duration = 45 + (roll(s, "sure", day) % 60);
-    // Hobiler hava kararmadan (19:00), meydan buluşmaları 20:30'dan önce başlar.
+    const duration = 60 + (roll(s, "sure", day) % 120);
+    // Hobiler 20:00'den, meydan buluşmaları 21:30'dan önce başlar.
     const latest = outing.startsWith("hobi:") ? OUTING_LATEST_HOBBY : OUTING_LATEST_MEYDAN;
     if (outing !== "" && shift.son + commute <= latest && shift.son + 3 * commute + duration <= sleep - 10) {
       travel(plan, commute, PLACE_WORK, outing);
@@ -270,6 +282,7 @@ export function dayPlan(r, day) {
     } else {
       travel(plan, commute, PLACE_WORK, PLACE_HOME);
     }
+    nightOut(plan, s, day, commute, sleep);
   } else {
     const wake = 450 + (roll(s, "uyan", day) % 120);
     add(plan, wake, "uyku", PLACE_HOME);
@@ -277,11 +290,11 @@ export function dayPlan(r, day) {
     travel(plan, commute, PLACE_HOME, hobbyPlace);
     add(plan, end(plan) + 90 + (roll(s, "sure", day) % 90), "hobi", hobbyPlace);
     travel(plan, commute, hobbyPlace, PLACE_HOME);
-    const evening = 1110 + (roll(s, "aksam_saat", day) % 60);
-    if (roll(s, "aksam", day) % 100 < 30 && evening + 45 + commute <= sleep - 10) {
+    const evening = 1140 + (roll(s, "aksam_saat", day) % 90);
+    if (roll(s, "aksam", day) % 100 < 55 && evening + 90 + commute <= sleep - 10) {
       add(plan, evening - commute, "ev", PLACE_HOME);
       travel(plan, commute, PLACE_HOME, "meydan");
-      add(plan, end(plan) + 45 + (roll(s, "meydan_sure", day) % 60), "meydan", "meydan");
+      add(plan, Math.min(end(plan) + 90 + (roll(s, "meydan_sure", day) % 90), sleep - 10 - commute), "meydan", "meydan");
       travel(plan, commute, "meydan", PLACE_HOME);
     }
   }

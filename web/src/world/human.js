@@ -100,7 +100,8 @@ const PROPS = {
   olta: () => merge([tint(new THREE.CylinderGeometry(0.012, 0.022, 3.4, 5).translate(0, 1.7, 0), "#3a3a3a"), tint(new THREE.CylinderGeometry(0.035, 0.035, 0.06, 8).rotateZ(Math.PI / 2).translate(0.04, 0.35, 0), "#c0c0c0")]),
   kitap: () => merge([tint(new THREE.BoxGeometry(0.16, 0.22, 0.03), "#ffffff")]),
   telefon: () => merge([tint(new THREE.BoxGeometry(0.07, 0.14, 0.012), "#1c1c22")]),
-  fotograf: () => merge([tint(new THREE.BoxGeometry(0.13, 0.09, 0.07), "#222226"), tint(new THREE.CylinderGeometry(0.03, 0.03, 0.06, 8).rotateX(Math.PI / 2).translate(0, 0, 0.06), "#111114")]),
+  fotograf: () => merge([tint(new THREE.BoxGeometry(0.15, 0.1, 0.08), "#222226"), tint(new THREE.CylinderGeometry(0.035, 0.035, 0.08, 10).rotateX(Math.PI / 2).translate(0, 0, 0.07), "#111114"), tint(new THREE.BoxGeometry(0.04, 0.03, 0.02).translate(-0.04, 0.06, 0), "#c0c0c0")]),
+  durbun: () => merge([tint(new THREE.CylinderGeometry(0.03, 0.035, 0.16, 8).rotateX(Math.PI / 2).translate(-0.04, 0, 0), "#1c1c22"), tint(new THREE.CylinderGeometry(0.03, 0.035, 0.16, 8).rotateX(Math.PI / 2).translate(0.04, 0, 0), "#1c1c22"), tint(new THREE.BoxGeometry(0.05, 0.03, 0.05), "#2a2a30")]),
   gitar: () => merge([
     tint(new THREE.CylinderGeometry(0.17, 0.17, 0.09, 12).rotateX(Math.PI / 2).translate(0, -0.12, 0), "#b9783f"),
     tint(new THREE.CylinderGeometry(0.13, 0.13, 0.09, 12).rotateX(Math.PI / 2).translate(0, 0.1, 0), "#b9783f"),
@@ -228,6 +229,7 @@ export class Crowd {
    * hipL/R (uyluk öne), kneeL/R (diz bükümü), shL/R (kol öne), abL/R (kol yana), elL/R (dirsek), props.
    */
   add(index, p) {
+    if (this.count >= this.capacity) return;
     const d = this.count++;
     this.drawToIndex[d] = index;
     const [root, torso, head, thigh, shin, upper, fore, hand, tmp, propM] = this._m;
@@ -299,6 +301,7 @@ export class Crowd {
         case "kitap": this._prop("kitap", this._joint(propM, handR, -0.08, -0.06, 0.06, -1.1)); break;
         case "telefon": this._prop("telefon", this._joint(propM, handR, 0, -0.07, 0.03, -1.3)); break;
         case "fotograf": this._prop("fotograf", this._joint(propM, handR, -0.08, -0.06, 0.04, -1.57)); break;
+        case "durbun": this._prop("durbun", this._joint(propM, handR, -0.09, -0.07, 0.05, -1.57)); break;
         case "gitar": this._prop("gitar", this._joint(propM, torso, 0.02, 1.12, 0.17, 0, 0, 1.15)); break;
         case "kasa": this._prop("kasa", this._joint(propM, torso, 0, 1.12, 0.32)); break;
         case "sovale": this._prop("sovale", this._joint(propM, root, 0.1, 0, 0.75, 0, Math.PI)); break;

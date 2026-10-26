@@ -125,6 +125,18 @@ export function buildNetwork(roads) {
   }
   const net = { nodes: [...nodes.values()], edges };
   computeTrims(net);
+  // Düğüm kimlikleri ve trafik ışıkları: en az üç cadde/sokak kolu olan gerçek kavşaklar ışıklıdır.
+  // Kollar iki gruba ayrılır (doğu-batı ve kuzey-güney); gruplar sırayla yeşil yanar.
+  net.nodes.forEach((n, i) => {
+    n.id = i;
+    n.ends.forEach((e, j) => {
+      e.index = j;
+      e.group = Math.abs(e.dir[0]) >= Math.abs(e.dir[1]) ? 0 : 1;
+    });
+    const major = n.ends.filter((e) => e.edge.road.type === "cadde" || e.edge.road.type === "sokak");
+    n.signal = major.length >= 3 && major.some((e) => e.trim > 0);
+    n.offset = (i * 37) % 60;
+  });
   return net;
 }
 
@@ -137,8 +149,11 @@ function computeTrims(net) {
     for (const end of node.ends) {
       const road = end.edge.road;
       let t = 0;
-      if (isCar(road)) {
-        const others = cars.filter((o) => o !== end);
+      if (road.type === "giris") {
+        // Otopark ve garaj girişleri ana yolun kaldırım dış kenarında biter (kaldırım kesilmez).
+        for (const o of cars) if (o !== end && o.edge.road.type !== "giris") t = Math.max(t, o.edge.road.width / 2);
+      } else if (isCar(road)) {
+        const others = cars.filter((o) => o !== end && o.edge.road.type !== "giris");
         const straight = others.length === 1 && others[0].dir[0] * end.dir[0] + others[0].dir[1] * end.dir[1] < -0.98 && others[0].edge.road.width === road.width;
         if (others.length && !straight) {
           for (const o of others) {
@@ -376,6 +391,16 @@ export function buildRoads(world) {
 
   // Projektörler kendi direkleriyle çizilir; yalnızca ışık haritasına girer.
   for (const l of world.lamps) lampSpots.push({ ...l, y: world.groundY(l.x, l.z), deco: true, hidden: !!l.flood });
+  // Çöp kutuları: her üçüncü lambanın yanında.
+  lampSpots.forEach((l, i) => {
+    if (!l.hidden) world.addObstacleCircle(l.x, l.z, 0.2);
+    if (i % 3 !== 1 || l.hidden) return;
+    const ax = Math.cos(l.dir) * 1.3, az = -Math.sin(l.dir) * 1.3;
+    const x = l.x + ax, z = l.z + az;
+    if (!world.isLand(x, z)) return;
+    world.features.push({ type: "cop_kutusu", x, z, rot: l.dir });
+    world.addObstacleCircle(x, z, 0.3);
+  });
   world.lampSpots = lampSpots;
 
   const mat = (map, opts = {}) => new THREE.MeshStandardMaterial({ map, roughness: 0.92, ...opts });

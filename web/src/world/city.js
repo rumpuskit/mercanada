@@ -1,6 +1,7 @@
 // Binalar ve kent eşyası. Ölçüler gerçektir (metre).
 // Aynı parçalar (pencere, balkon, çatı...) tek bir InstancedMesh ile çizilir; telefonda da akıcı kalsın diye.
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { FLAT_Y, FLOOR_H } from "./layout.js";
 import * as P from "./palette.js";
 import * as T from "./textures.js";
@@ -259,6 +260,16 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     B.awnings.add(local(b, 0, 3.0, b.d / 2 + 0.9), b.rot, s.set(b.w - 1.6, 0.12, 1.9), st.awning);
     B.awnings.add(local(b, 0, 2.75, b.d / 2 + 1.85), b.rot, s.set(b.w - 1.6, 0.35, 0.06), st.awning);
     B.signs.add(local(b, 0, 3.25, b.d / 2 + 0.1), b.rot, s.set(Math.min(b.w - 2, 7), 0.7, 0.12), st.awning);
+  } else if (st.garage) {
+    // Garaj kapıları (itfaiye, belediye garajı) ve yanında yaya kapısı.
+    const n = Math.max(1, Math.floor((b.w - 4) / 5.5));
+    for (let k = 0; k < n; k++) {
+      const lx = -b.w / 2 + 2.5 + k * 5.5 + 2.2;
+      B.signs.add(local(b, lx, 0.15, b.d / 2 + 0.04), b.rot, s.set(4.2, 3.6, 0.08), st.garage);
+      for (let r = 1; r < 6; r++) B.trims.add(local(b, lx, 0.15 + r * 0.6, b.d / 2 + 0.09), b.rot, s.set(4.2, 0.05, 0.04), "#f2f2ef");
+    }
+    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.4, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
+    B.signs.add(local(b, 0, 4.4, b.d / 2 + 0.1), b.rot, s.set(Math.min(b.w - 2, 9), 0.9, 0.12), st.garage);
   } else if (!st.glass) {
     const dw = b.w > 20 ? 2.6 : 1.6;
     b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(dw, 2.5, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: dw, h: 2.5 };
@@ -391,6 +402,17 @@ function buildFeatures(world) {
   const tableLegs = new Batch(new THREE.CylinderGeometry(0.04, 0.04, 0.72, 6).translate(0, 0.36, 0), metal, { shadow: false });
   const chairs = new Batch(new THREE.BoxGeometry(0.42, 0.05, 0.42).translate(0, 0.45, 0), wood);
   const chairBacks = new Batch(new THREE.BoxGeometry(0.42, 0.45, 0.04).translate(0, 0.7, -0.2), wood);
+  // Sandalye ayakları (dört ince ayak, tek parça).
+  const chairLegs = new Batch(mergeGeometries([[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]].map(([x, z]) => new THREE.CylinderGeometry(0.018, 0.018, 0.44, 5).translate(x, 0.22, z))), metal, { shadow: false });
+  const chairBackLegs = new Batch(mergeGeometries([-0.18, 0.18].map((x) => new THREE.CylinderGeometry(0.018, 0.018, 0.5, 5).translate(x, 0.72, -0.2))), metal, { shadow: false });
+  // Çöp kutusu (kaldırımda) ve konteyner (park şeridinde).
+  const bins = new Batch(mergeGeometries([new THREE.CylinderGeometry(0.24, 0.22, 0.8, 10).translate(0, 0.4, 0), new THREE.CylinderGeometry(0.27, 0.27, 0.06, 10).translate(0, 0.82, 0)]), std("#4a6b4a", { metalness: 0.4, roughness: 0.5 }));
+  const binPoles = new Batch(new THREE.CylinderGeometry(0.04, 0.04, 1.0, 6).translate(0, 0.5, -0.3), metal, { shadow: false });
+  const containers = new Batch(mergeGeometries([
+    new THREE.BoxGeometry(1.35, 1.1, 1.1).translate(0, 0.55, 0),
+    new THREE.BoxGeometry(1.42, 0.1, 1.18).rotateX(-0.08).translate(0, 1.15, -0.02),
+    ...[[-0.55, -0.42], [0.55, -0.42], [-0.55, 0.42], [0.55, 0.42]].map(([x, z]) => new THREE.CylinderGeometry(0.08, 0.08, 0.1, 8).rotateZ(Math.PI / 2).translate(x, 0.08, z)),
+  ]), std("#5f6a73", { metalness: 0.35, roughness: 0.55 }));
   const benchAt = (x, z, rot) => {
     const y = world.groundY(x, z);
     for (const batch of [benchSeat, benchBack, benchLegs]) batch.add(v.set(x, y, z), rot, s.set(1, 1, 1));
@@ -417,8 +439,23 @@ function buildFeatures(world) {
         tableLegs.add(v.set(f.x, world.groundY(f.x, f.z), f.z), 0, s.set(1, 1, 1));
         break;
       case "sandalye":
-        for (const batch of [chairs, chairBacks]) batch.add(v.set(f.x, world.groundY(f.x, f.z), f.z), f.rot, s.set(1, 1, 1));
+        for (const batch of [chairs, chairBacks, chairLegs, chairBackLegs]) batch.add(v.set(f.x, world.groundY(f.x, f.z), f.z), f.rot, s.set(1, 1, 1));
         break;
+      case "cop_kutusu":
+        bins.add(v.set(f.x, world.groundY(f.x, f.z), f.z), f.rot ?? 0, s.set(1, 1, 1));
+        binPoles.add(v.set(f.x, world.groundY(f.x, f.z), f.z), f.rot ?? 0, s.set(1, 1, 1));
+        break;
+      case "konteyner":
+        containers.add(v.set(f.x, world.surfaceY(f.x, f.z) + 0.06, f.z), (f.rot ?? 0) + Math.PI / 2, s.set(1, 1, 1));
+        break;
+      case "tabela_h": {
+        const y0 = world.groundY(f.x, f.z);
+        add(new THREE.CylinderGeometry(0.08, 0.08, 4, 8), metal, f.x, y0 + 2, f.z);
+        add(new THREE.BoxGeometry(0.15, 1.6, 1.6), std("#2f6fb5"), f.x, y0 + 4.5, f.z, Math.PI / 2);
+        add(new THREE.BoxGeometry(0.17, 1.0, 0.25), white, f.x, y0 + 4.5, f.z, Math.PI / 2, false);
+        add(new THREE.BoxGeometry(0.17, 0.25, 0.8), white, f.x, y0 + 4.5, f.z, Math.PI / 2, false);
+        break;
+      }
       case "gol": {
         add(new THREE.CylinderGeometry(f.r + 0.6, f.r + 0.8, 0.5, 28), stone, f.x, FLAT_Y + 0.15, f.z);
         add(new THREE.CylinderGeometry(f.r, f.r, 0.1, 28), water, f.x, FLAT_Y + 0.38, f.z, 0, false);
@@ -552,7 +589,7 @@ function buildFeatures(world) {
       }
     }
   }
-  for (const batch of [benchSeat, benchBack, benchLegs, tables, tableLegs, chairs, chairBacks]) group.add(batch.build());
+  for (const batch of [benchSeat, benchBack, benchLegs, tables, tableLegs, chairs, chairBacks, chairLegs, chairBackLegs, bins, binPoles, containers]) group.add(batch.build());
   group.userData.fenerLamps = fenerLamps;
   return group;
 }

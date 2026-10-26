@@ -16,7 +16,7 @@ import * as P from "./world/palette.js";
 import { createUI } from "./ui.js";
 import { createMapUI } from "./mapui.js";
 import { NameTags } from "./world/nametags.js";
-import { Traffic, Vehicles, buildStops } from "./world/traffic.js";
+import { Traffic, Vehicles, buildSignals, buildStops } from "./world/traffic.js";
 import { buildHarbor } from "./world/harbor.js";
 import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
@@ -85,6 +85,12 @@ const grounds = buildGrounds(world);
 const water = buildWater(world);
 const harbor = buildHarbor(world);
 scene.add(water, terrain, roads, grounds, harbor);
+const T6 = performance.now();
+const traffic = new Traffic(world);
+const T7 = performance.now();
+scene.add(buildStops(traffic, world));
+const signals = buildSignals(traffic, world);
+scene.add(signals);
 const city = buildCity(world);
 const T4 = performance.now();
 const trees = buildTrees(world);
@@ -96,11 +102,7 @@ scene.add(city.group, trees);
 const clouds = buildClouds(world);
 const labels = buildLabels(world);
 scene.add(clouds, labels);
-const T6 = performance.now();
-const traffic = new Traffic(world);
-const T7 = performance.now();
-scene.add(buildStops(traffic, world));
-const vehicles = new Vehicles(Math.ceil(population * 0.4) + 80, 40);
+const vehicles = new Vehicles(Math.ceil(population * 0.4) + 80);
 scene.add(vehicles.group);
 const people = new People(world, residents, traffic);
 const stories = new Stories(people);
@@ -131,7 +133,7 @@ function soundEnv(dist, light, minute) {
     if (dx * dx + dz * dz < 35 * 35) near++;
   }
   let traffic = 0;
-  for (const v of people.vehicleStates) if (Math.hypot(v.x - t.x, v.z - t.z) < 70) traffic++;
+  for (const v of trafficRef.active.values()) if (!v.parked) { const q = v.route.position(v.s); if (Math.hypot(q.x - t.x, q.z - t.z) < 70) traffic++; }
   const cell = world.cellByKey.get(`${Math.round(t.x / 560)},${Math.round(t.z / 270)}`);
   const inPark = world.parks.some((q) => t.x > q.x0 - 20 && t.x < q.x1 + 20 && t.z > q.z0 - 20 && t.z < q.z1 + 20) || world.plazas.some((q) => q.kind === "park" && t.x > q.x0 && t.x < q.x1 && t.z > q.z0 && t.z < q.z1);
   return {
@@ -192,6 +194,7 @@ function flyTo(x, y, z, distance = 120, direction = null) {
 const nameTags = new NameTags(scene);
 if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents };
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
+const trafficRef = traffic;
 const ui = createUI({ residents, people, world, dollhouse, stories, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 const mapUI = createMapUI({ world, camera, controls, flyTo });
 
@@ -240,6 +243,7 @@ function updateWindows(minute, light, sunDeg) {
 // --- döngü ---
 let frame = 0;
 let lastReal = performance.now() / 1000;
+let lastSim = null;
 const bounds = world.bounds;
 function tick() {
   const real = performance.now() / 1000;
@@ -248,6 +252,8 @@ function tick() {
   const unix = simNow();
   const day = sim.dayOf(unix);
   const minute = sim.minuteOf(unix);
+  const simDtSec = lastSim == null ? 0 : unix - lastSim;
+  lastSim = unix;
   const U0 = performance.now();
   people.setDay(day);
   const U1 = performance.now();
@@ -257,13 +263,25 @@ function tick() {
   ball.visible = !!people.ball;
   if (people.ball) ball.position.set(people.ball[0], world.groundY(people.ball[0], people.ball[1]) + people.ball[2], people.ball[1]);
   // Araçlar: sürülenler, park halindekiler ve otobüsler.
+  // Trafik benzetimi (sakinlerin araç yolculukları people.update içinde istenir).
+  traffic.step(simDtSec, minute, day);
+  signals.userData.update(minute * 60);
+  // Araçlar: yoldakiler, park halindekiler (farlar sönük) ve bekleyen taksiler.
   vehicles.begin();
-  for (const v of people.vehicleStates) vehicles.addCar(v.x, world.groundY(v.x, v.z), v.z, v.heading, v.color, v.taxi);
-  for (const [slot, color] of people.parked) {
-    const s = traffic.slots[slot];
-    vehicles.addCar(s.x, world.groundY(s.x, s.z), s.z, s.heading, color);
+  const vp = {};
+  for (const v of traffic.active.values()) {
+    v.route.position(v.s, vp);
+    const y = world.surfaceY(vp.x, vp.z) + 0.06;
+    const record = { kind: v.kind, key: v.key, owner: v.owner, line: v.line, dep: v.dep };
+    if (v.kind === "car" || v.kind === "taxi") vehicles.addCar(vp.x, y, vp.z, vp.heading, v.color ?? 0, { taxi: v.kind === "taxi", lights: !v.parked, brake: v.braking, record });
+    else if (v.kind === "bus") vehicles.add("bus", vp.x, y, vp.z, vp.heading, { color: busColors[v.line], brake: v.braking || v.v < 0.3, record });
+    else vehicles.add(v.kind, vp.x, y, vp.z, vp.heading, { brake: v.braking, flash: v.emergency && v.phase !== "back" ? real : v.kind === "cop" ? real : null, record });
   }
-  for (const b of traffic.buses(minute)) vehicles.addBus(b.x, world.groundY(b.x, b.z), b.z, b.heading, busColors[b.line]);
+  for (const [slot, color, owner] of people.parked) {
+    const s = traffic.slots[slot];
+    vehicles.addCar(s.x, world.surfaceY(s.x, s.z) + 0.06, s.z, s.heading, color, { lights: false, record: { kind: "car", owner, parked: true } });
+  }
+  for (const c of people.staticCars) vehicles.addCar(c.x, world.surfaceY(c.x, c.z) + 0.06, c.z, c.heading, 0, { taxi: c.taxi, record: { kind: "taxi" } });
 
   if (flight) {
     flight.t = Math.min(1, flight.t + dt / 1.3);
@@ -290,7 +308,7 @@ function tick() {
   }
   if (frame % 6 === 0) updateWindows(minute, light, skyState.sunDeg);
   dollhouse.update(1 - light, real);
-  vehicles.end(1 - light);
+  vehicles.end();
   if (frame % 15 === 0) ui.tick(unix, minute, day, skyState.times);
   if (frame % 8 === 0 && ambience.enabled) ambience.update(soundEnv(dist, light, minute));
   driftClouds(clouds, dt);
