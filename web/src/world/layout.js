@@ -671,6 +671,7 @@ export class World {
       this._addWorkplace("saglik", 0, { door, path: [door, [halfW, hz], [halfW, 0], HUB], anchor: door, spread: 2, building: b });
       this.hospital = { building: b, bay: [hx + 5, hz], door };
       this.features.push({ type: "tabela_h", x: hx + 4, z: hz - 9 });
+      this.features.push({ type: "hastane_on", x: hx, z: hz, roofY: 4 * FLOOR_H, bx: hx - 10 });
     }
     const market = { x0: -190, z0: 50, x1: -90, z1: 100 };
     this.plazas.push({ ...market, kind: "pazar" });

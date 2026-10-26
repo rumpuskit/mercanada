@@ -304,8 +304,8 @@ export function buildRoads(world) {
         M.mark.quad(P(a, -0.07, ga + H.marking), P(b, -0.07, gb + H.marking), P(b, 0.07, gb + H.marking), P(a, 0.07, ga + H.marking), [0, 0], [0, 1], [1, 1], [1, 0]);
       }
     }
-    // Sokak lambaları: iki yanda şaşırtmalı; kavşak ve kapı önlerinde yok.
-    if (isCar(road) || road.type === "yaya" || road.type === "sahil") {
+    // Sokak lambaları: iki yanda şaşırtmalı; kavşak ve kapı önlerinde, kısa giriş yollarında yok.
+    if ((isCar(road) && road.type !== "giris") || road.type === "yaya" || road.type === "sahil") {
       const total = st[st.length - 1].d;
       const step = road.type === "yaya" ? 22 : road.type === "sahil" ? 24 : 30;
       const sides = road.type === "sahil" ? [1] : [-1, 1];

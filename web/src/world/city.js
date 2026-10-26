@@ -694,6 +694,50 @@ function buildFeatures(world) {
         add(new THREE.BoxGeometry(0.17, 0.25, 0.8), white, f.x, y0 + 4.5, f.z, Math.PI / 2, false);
         break;
       }
+      case "hastane_on": {
+        // Hastanenin önü (cephe x = f.x, doğuya bakar): sütunlu acil saçağı ve "ACİL" bandı, cam sürgülü
+        // kapı, boyalı ambulans yerleri, saksılar ve banklar; çatıda helikopter pisti.
+        const y0 = FLAT_Y;
+        const label = (text, w, h, bg, fg) => {
+          const cv = document.createElement("canvas");
+          cv.width = 256; cv.height = Math.round((256 * h) / w);
+          const g = cv.getContext("2d");
+          g.fillStyle = bg; g.fillRect(0, 0, cv.width, cv.height);
+          g.fillStyle = fg; g.font = `800 ${Math.round(cv.height * 0.7)}px Nunito, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle";
+          g.fillText(text, cv.width / 2, cv.height / 2 + 2);
+          const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+          return new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 });
+        };
+        add(new THREE.BoxGeometry(7, 0.35, 12), white, f.x + 3.5, y0 + 4.2, f.z);
+        // Bant saçağın ön kenarında, boyu z ekseninde (yazı +x yüzünde okunur).
+        add(new THREE.BoxGeometry(0.1, 0.8, 12), label("ACİL", 12, 0.8, "#d8342b", "#ffffff"), f.x + 7.05, y0 + 3.85, f.z, 0, false);
+        for (const dz of [-5.5, 5.5]) add(new THREE.CylinderGeometry(0.2, 0.2, 4.1, 10), white, f.x + 6.5, y0 + 2.05, f.z + dz);
+        add(new THREE.BoxGeometry(0.08, 2.6, 4), new THREE.MeshStandardMaterial({ color: "#a9cbe0", roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.6 }), f.x + 0.12, y0 + 1.3, f.z, 0, false);
+        add(new THREE.BoxGeometry(0.1, 0.12, 4.2), metal, f.x + 0.14, y0 + 2.65, f.z, 0, false);
+        // Ambulans park yerleri (giriş yolunun iki yanında), sarı tarama.
+        const paint = std("#f4f1ea", { roughness: 0.9 }), yellow = std("#e8c22e", { roughness: 0.9 });
+        for (const dz of [-6, 6]) {
+          const cz = f.z + dz;
+          for (const [x, z, w, d] of [[f.x + 9, cz - 1.75, 9, 0.12], [f.x + 9, cz + 1.75, 9, 0.12], [f.x + 4.5, cz, 0.12, 3.5]]) add(new THREE.BoxGeometry(w, 0.02, d), paint, x, y0 + 0.22, z, 0, false);
+          const tag = add(new THREE.PlaneGeometry(3.2, 0.9), label("AMBULANS", 3.2, 0.9, "#00000000", "#f4f1ea"), f.x + 10, y0 + 0.235, cz, 0, false);
+          tag.rotation.x = -Math.PI / 2; tag.rotation.z = Math.PI / 2; tag.material.transparent = true;
+        }
+        for (let k = 0; k < 6; k++) add(new THREE.BoxGeometry(0.4, 0.02, 3), yellow, f.x + 15 + k * 0.9, y0 + 0.22, f.z - 10, 0.6, false);
+        // Saksılar (bitkili) ve banklar, plaza kenarında.
+        for (const [dx, dz] of [[2, -11], [2, 11], [16, -12.5], [16, 12.5]]) {
+          add(new THREE.CylinderGeometry(0.7, 0.6, 0.7, 12), std("#cfc8bc"), f.x + dx, y0 + 0.55, f.z + dz);
+          add(new THREE.SphereGeometry(0.75, 10, 8), std("#5f8f4f"), f.x + dx, y0 + 1.3, f.z + dz);
+        }
+        for (const dz of [-9, 9]) {
+          add(new THREE.BoxGeometry(0.45, 0.08, 1.8), wood, f.x + 2.2, y0 + 0.65, f.z + dz);
+          add(new THREE.BoxGeometry(0.06, 0.45, 1.8), wood, f.x + 1.98, y0 + 0.9, f.z + dz);
+        }
+        // Çatı: helikopter pisti.
+        const pad = add(new THREE.CylinderGeometry(6, 6, 0.12, 32), label("H", 6, 6, "#4b5b52", "#ffffff"), f.bx, y0 + f.roofY + 0.1, f.z, 0, false);
+        pad.rotation.y = Math.PI / 2;
+        add(new THREE.TorusGeometry(5.2, 0.12, 6, 40).rotateX(Math.PI / 2), paint, f.bx, y0 + f.roofY + 0.18, f.z, 0, false);
+        break;
+      }
       case "gol": {
         add(new THREE.CylinderGeometry(f.r + 0.6, f.r + 0.8, 0.5, 28), stone, f.x, FLAT_Y + 0.15, f.z);
         add(new THREE.CylinderGeometry(f.r, f.r, 0.1, 28), water, f.x, FLAT_Y + 0.38, f.z, 0, false);
