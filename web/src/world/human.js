@@ -31,45 +31,67 @@ function merge(parts) {
 }
 
 const W = "#ffffff";
+const HY = NECK_Y + 0.155; // baş merkezi
+
+// Low-poly beden: az bölümlü, köşeli parçalar. Renk instance'tan gelir (beyaz köşeler), yüz ayrıntıları sabit.
 const GEO = {
   head: () => merge([
-    tint(new THREE.CylinderGeometry(0.047, 0.055, 0.12, 7).translate(0, NECK_Y + 0.03, 0), W),
-    tint(new THREE.SphereGeometry(0.104, 12, 9).scale(1, 1.18, 1.06).translate(0, NECK_Y + 0.15, 0.006), W),
-    tint(new THREE.ConeGeometry(0.019, 0.05, 4).rotateX(Math.PI / 2).translate(0, NECK_Y + 0.135, 0.116), "#eeeeee"),
-    tint(new THREE.SphereGeometry(0.025, 5, 4).scale(0.5, 1, 0.8).translate(-0.103, NECK_Y + 0.15, 0), "#eeeeee"),
-    tint(new THREE.SphereGeometry(0.025, 5, 4).scale(0.5, 1, 0.8).translate(0.103, NECK_Y + 0.15, 0), "#eeeeee"),
-    ...[-0.037, 0.037].map((x) => tint(new THREE.SphereGeometry(0.013, 5, 4).translate(x, NECK_Y + 0.168, 0.098), "#1d1d24")),
-    tint(new THREE.BoxGeometry(0.04, 0.008, 0.01).translate(0, NECK_Y + 0.098, 0.104), "#9a5a50"),
+    tint(new THREE.CylinderGeometry(0.046, 0.054, 0.12, 6).translate(0, NECK_Y + 0.03, 0), W),
+    tint(new THREE.IcosahedronGeometry(0.106, 1).scale(0.98, 1.16, 1.04).translate(0, HY, 0.004), W),
+    tint(new THREE.ConeGeometry(0.02, 0.052, 4).rotateX(Math.PI / 2).translate(0, HY - 0.02, 0.112), "#ececec"),
+    tint(new THREE.BoxGeometry(0.03, 0.048, 0.03).translate(-0.104, HY - 0.005, 0), "#e6e6e6"),
+    tint(new THREE.BoxGeometry(0.03, 0.048, 0.03).translate(0.104, HY - 0.005, 0), "#e6e6e6"),
+    ...[-0.038, 0.038].map((x) => tint(new THREE.BoxGeometry(0.024, 0.022, 0.012).translate(x, HY + 0.014, 0.1), "#1b1b22")),
+    ...[-0.038, 0.038].map((x) => tint(new THREE.BoxGeometry(0.038, 0.009, 0.012).rotateZ(x > 0 ? -0.12 : 0.12).translate(x, HY + 0.042, 0.1), "#3a2b22")),
+    tint(new THREE.BoxGeometry(0.042, 0.009, 0.012).translate(0, HY - 0.06, 0.1), "#8f4f48"),
   ]),
   torso: () => merge([
-    tint(new THREE.CylinderGeometry(0.195, 0.155, 0.34, 10).scale(1, 1, 0.58).translate(0, 1.27, 0), W),
-    tint(new THREE.CylinderGeometry(0.155, 0.165, 0.16, 10).scale(1, 1, 0.62).translate(0, 1.03, 0), W),
-    tint(new THREE.SphereGeometry(0.195, 10, 4, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.32, 0.58).translate(0, 1.44, 0), W),
+    // Göğüs omuzlarda geniş, bele doğru daralır; önden arkaya basık.
+    tint(new THREE.CylinderGeometry(0.2, 0.152, 0.36, 7).scale(1, 1, 0.56).translate(0, 1.27, 0), W),
+    tint(new THREE.CylinderGeometry(0.152, 0.162, 0.15, 7).scale(1, 1, 0.6).translate(0, 1.03, 0), W),
+    tint(new THREE.SphereGeometry(0.2, 7, 3, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.3, 0.56).translate(0, 1.45, 0), W),
+    // Yaka.
+    tint(new THREE.CylinderGeometry(0.062, 0.075, 0.03, 6).translate(0, 1.5, 0.004), "#f4f4f4"),
   ]),
-  hips: () => merge([tint(new THREE.CylinderGeometry(0.165, 0.158, 0.17, 10).scale(1, 1, 0.66).translate(0, HIP_Y + 0.04, 0), W)]),
-  thigh: () => merge([tint(new THREE.CylinderGeometry(0.078, 0.056, THIGH, 8).translate(0, -THIGH / 2, 0), W)]),
+  hips: () => merge([
+    tint(new THREE.CylinderGeometry(0.164, 0.156, 0.17, 7).scale(1, 1, 0.66).translate(0, HIP_Y + 0.04, 0), W),
+    tint(new THREE.CylinderGeometry(0.166, 0.166, 0.035, 7).scale(1, 1, 0.66).translate(0, HIP_Y + 0.12, 0), "#3a3330"),
+  ]),
+  thigh: () => merge([tint(new THREE.CylinderGeometry(0.078, 0.056, THIGH, 6).translate(0, -THIGH / 2, 0), W)]),
   shin: () => merge([
-    tint(new THREE.CylinderGeometry(0.055, 0.042, 0.42, 8).translate(0, -0.21, 0), W),
-    tint(new THREE.BoxGeometry(0.095, 0.07, 0.24).translate(0, -0.44, 0.045), "#2b2b31"),
+    tint(new THREE.CylinderGeometry(0.055, 0.042, 0.42, 6).translate(0, -0.21, 0), W),
+    tint(new THREE.BoxGeometry(0.096, 0.072, 0.25).translate(0, -0.44, 0.048), "#2b2b31"),
   ]),
-  upperArm: () => merge([tint(new THREE.CylinderGeometry(0.048, 0.04, UPPER_ARM, 7).translate(0, -UPPER_ARM / 2, 0), W)]),
-  forearm: () => merge([tint(new THREE.CylinderGeometry(0.039, 0.032, FOREARM, 7).translate(0, -FOREARM / 2, 0), W)]),
-  hand: () => merge([tint(new THREE.SphereGeometry(0.042, 6, 5).scale(0.75, 1.15, 0.55).translate(0, -0.04, 0), W)]),
+  upperArm: () => merge([tint(new THREE.CylinderGeometry(0.049, 0.04, UPPER_ARM, 6).translate(0, -UPPER_ARM / 2, 0), W)]),
+  forearm: () => merge([tint(new THREE.CylinderGeometry(0.039, 0.032, FOREARM, 6).translate(0, -FOREARM / 2, 0), W)]),
+  hand: () => merge([tint(new THREE.IcosahedronGeometry(0.042, 0).scale(0.75, 1.2, 0.55).translate(0, -0.04, 0), W)]),
+};
+
+// Giysi ve aksesuar: etek (kalçaya), sakal ve gözlük (başa) bağlı.
+const EXTRAS = {
+  skirt: () => merge([tint(new THREE.CylinderGeometry(0.168, 0.3, 0.52, 8).scale(1, 1, 0.78).translate(0, HIP_Y - 0.17, 0), W)]),
+  beard: () => merge([
+    tint(new THREE.IcosahedronGeometry(0.1, 1).scale(1.0, 0.75, 0.9).translate(0, HY - 0.07, 0.03), W),
+  ]),
+  glasses: () => merge([
+    ...[-0.038, 0.038].map((x) => tint(new THREE.TorusGeometry(0.024, 0.005, 3, 8).translate(x, HY + 0.014, 0.108), "#222228")),
+    tint(new THREE.BoxGeometry(0.03, 0.005, 0.005).translate(0, HY + 0.016, 0.11), "#222228"),
+  ]),
 };
 
 /** Saç biçimleri (görünüş.sac); null: kel. Baş kemiğine bağlıdır. */
 function hairGeometries() {
-  const y = NECK_Y + 0.155;
-  const cap = (theta = 0.52, r = 0.112) => tint(new THREE.SphereGeometry(r, 12, 7, 0, Math.PI * 2, 0, Math.PI * theta).scale(1, 1.18, 1.08).translate(0, y, -0.012), W);
+  const cap = (theta = 0.52, r = 0.114, segs = 9) => tint(new THREE.SphereGeometry(r, segs, 5, 0, Math.PI * 2, 0, Math.PI * theta).scale(1, 1.16, 1.07).translate(0, HY + 0.004, -0.012), W);
   return [
-    merge([cap()]), // kısa
-    merge([cap(0.44, 0.108)]), // asker tıraşı
-    merge([cap(0.6), tint(new THREE.BoxGeometry(0.2, 0.3, 0.06).translate(0, y - 0.12, -0.08), W)]), // uzun
-    merge([cap(), tint(new THREE.SphereGeometry(0.056, 8, 6).translate(0, y + 0.12, -0.07), W)]), // topuz
-    merge([cap(), tint(new THREE.CylinderGeometry(0.034, 0.016, 0.24, 6).rotateX(0.35).translate(0, y - 0.07, -0.13), W)]), // at kuyruğu
-    merge([tint(new THREE.IcosahedronGeometry(0.133, 1).scale(1, 0.95, 1).translate(0, y + 0.035, -0.018), W)]), // kıvırcık
+    merge([cap(), tint(new THREE.BoxGeometry(0.17, 0.04, 0.05).rotateX(0.5).translate(0.01, HY + 0.085, 0.085), W)]), // kısa, kahküllü
+    merge([cap(0.45, 0.109)]), // asker tıraşı
+    merge([cap(0.6), tint(new THREE.BoxGeometry(0.21, 0.3, 0.06).translate(0, HY - 0.12, -0.085), W),
+      tint(new THREE.BoxGeometry(0.035, 0.22, 0.07).translate(-0.1, HY - 0.08, -0.01), W), tint(new THREE.BoxGeometry(0.035, 0.22, 0.07).translate(0.1, HY - 0.08, -0.01), W)]), // uzun düz
+    merge([cap(), tint(new THREE.IcosahedronGeometry(0.058, 0).translate(0, HY + 0.12, -0.075), W)]), // topuz
+    merge([cap(), tint(new THREE.CylinderGeometry(0.036, 0.016, 0.26, 5).rotateX(0.35).translate(0, HY - 0.07, -0.135), W)]), // at kuyruğu
+    merge([tint(new THREE.IcosahedronGeometry(0.142, 1).scale(1.02, 0.95, 1).translate(0, HY + 0.04, -0.02), W)]), // kıvırcık
     null, // kel
-    merge([cap(0.68, 0.115)]), // küt
+    merge([cap(0.68, 0.117), tint(new THREE.BoxGeometry(0.2, 0.05, 0.05).rotateX(0.35).translate(0, HY + 0.075, 0.09), W)]), // küt
   ];
 }
 
@@ -134,7 +156,7 @@ const AZ = new THREE.Vector3(0, 0, 1);
 export class Crowd {
   constructor(capacity) {
     this.capacity = capacity;
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 });
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, flatShading: true });
     const make = (geo, shadow, n = capacity) => {
       const m = new THREE.InstancedMesh(geo, mat, n);
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -152,6 +174,7 @@ export class Crowd {
     }
     this.parts = parts.map((p) => this[p]);
     this.hair = hairGeometries().map((g) => (g ? make(g, false) : null));
+    this.extras = Object.fromEntries(Object.entries(EXTRAS).map(([k, f]) => [k, make(f(), k === "skirt")]));
     const propCap = Math.max(16, Math.ceil(capacity / 3));
     this.props = Object.fromEntries(Object.entries(PROPS).map(([k, f]) => [k, make(f(), k === "bisiklet" || k === "sovale", propCap)]));
     const dog = dogGeometries();
@@ -159,7 +182,7 @@ export class Crowd {
     this.dogBody = make(dog.body, true, dogCap);
     this.dogLegs = make(dog.leg, false, dogCap * 4);
     this.group = new THREE.Group();
-    for (const m of [...this.parts, ...this.hair, ...Object.values(this.props), this.dogBody, this.dogLegs]) if (m) this.group.add(m);
+    for (const m of [...this.parts, ...this.hair, ...Object.values(this.extras), ...Object.values(this.props), this.dogBody, this.dogLegs]) if (m) this.group.add(m);
     this.drawToIndex = new Int32Array(capacity);
 
     this._m = Array.from({ length: 12 }, () => new THREE.Matrix4());
@@ -174,6 +197,7 @@ export class Crowd {
   begin() {
     this.count = 0;
     this.hairCounts = this.hair.map(() => 0);
+    this.extraCounts = { skirt: 0, beard: 0, glasses: 0 };
     this.propCounts = Object.fromEntries(Object.keys(this.props).map((k) => [k, 0]));
     this.dogCount = 0;
   }
@@ -244,9 +268,19 @@ export class Crowd {
       [this.head, p.skin], [this.handL, p.skin], [this.handR, p.skin],
       [this.torso, p.top], [this.upperArmL, p.top], [this.upperArmR, p.top],
       [this.forearmL, p.sleeves ? p.top : p.skin], [this.forearmR, p.sleeves ? p.top : p.skin],
-      [this.hips, p.bottom], [this.thighL, p.bottom], [this.thighR, p.bottom],
-      [this.shinL, p.shorts ? p.skin : p.bottom], [this.shinR, p.shorts ? p.skin : p.bottom],
+      [this.hips, p.bottom], [this.thighL, p.skirt ? p.skin : p.bottom], [this.thighR, p.skirt ? p.skin : p.bottom],
+      [this.shinL, p.shorts || p.skirt ? p.skin : p.bottom], [this.shinR, p.shorts || p.skirt ? p.skin : p.bottom],
     ]) mesh.setColorAt(d, color);
+
+    const extra = (name, matrix, color) => {
+      const mesh = this.extras[name];
+      const n = this.extraCounts[name]++;
+      mesh.setMatrixAt(n, matrix);
+      if (color) mesh.setColorAt(n, color);
+    };
+    if (p.skirt) extra("skirt", root, p.bottom);
+    if (p.beard) extra("beard", head, p.hairColor);
+    if (p.glasses) extra("glasses", head);
 
     const hair = this.hair[p.style];
     if (hair) {
@@ -314,6 +348,11 @@ export class Crowd {
   end() {
     for (const m of this.parts) {
       m.count = this.count;
+      m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+    for (const [k, m] of Object.entries(this.extras)) {
+      m.count = this.extraCounts[k];
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }

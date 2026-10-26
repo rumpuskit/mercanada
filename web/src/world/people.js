@@ -109,7 +109,7 @@ export function idleGesture(p, t, phase, talk) {
     p.shR = 0.35 + 0.5 * g; p.elR = 0.6 + 0.9 * g; p.abR = 0.05 * g;
     p.shL = 0.1 * g; p.elL = 0.3;
   }
-  p.kneeL = 0.06 + 0.06 * Math.max(0, Math.sin(t * 0.25 + phase));
+  if (p.hipL < 1) p.kneeL = 0.06 + 0.06 * Math.max(0, Math.sin(t * 0.25 + phase)); // otururken dizler bükülü kalır
 }
 
 export class People {
@@ -137,6 +137,9 @@ export class People {
         skin: P.SKIN[l.ten % P.SKIN.length], hairColor: P.HAIR[l.sac_renk % P.HAIR.length],
         top: P.CLOTHES[l.ust % P.CLOTHES.length], bottom: P.BOTTOMS[l.alt % P.BOTTOMS.length],
         sleeves: roll(r.seed, "kol") % 3 !== 0,
+        skirt: roll(r.seed, "etek") % 5 === 0,
+        beard: roll(r.seed, "sakal") % 5 === 0,
+        glasses: roll(r.seed, "gozluk") % 6 === 0,
         uniform: uniform ? new Color(uniform) : null,
       };
     });
@@ -534,6 +537,7 @@ export class People {
           this.visible[i] = 1;
           this.positions[i * 3] = p.x; this.positions[i * 3 + 1] = p.y; this.positions[i * 3 + 2] = p.z;
           p.style = c.style; p.skin = c.skin; p.hairColor = c.hairColor; p.top = c.top; p.bottom = c.bottom;
+          p.skirt = c.skirt; p.beard = c.beard; p.glasses = c.glasses;
           crowd.add(i, p);
           continue;
         }
@@ -586,6 +590,7 @@ export class People {
       this.visible[i] = 1;
       this.positions[i * 3] = p.x; this.positions[i * 3 + 1] = p.y; this.positions[i * 3 + 2] = p.z;
       p.style = c.style; p.skin = c.skin; p.hairColor = c.hairColor;
+      p.skirt = c.skirt && !(atWork && c.uniform) && !p.props?.includes("bisiklet"); p.beard = c.beard; p.glasses = c.glasses;
       p.top = atWork && c.uniform ? c.uniform : c.top;
       p.bottom = c.bottom;
       crowd.add(i, p);

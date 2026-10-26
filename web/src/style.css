@@ -301,6 +301,9 @@ body {
 }
 
 @media (max-width: 520px) {
+  #floorbar {
+    top: calc(max(12px, env(safe-area-inset-top)) + 104px);
+  }
   #card {
     padding: 10px 12px 8px;
   }
