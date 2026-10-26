@@ -11,10 +11,18 @@ const PLACE_NAMES = {
 const fmt = new Intl.NumberFormat("tr-TR");
 const $ = (id) => document.getElementById(id);
 
-export function createUI({ residents, people, world, dollhouse, setSpeed, flyTo, speed, today, minute }) {
+export function createUI({ residents, people, world, dollhouse, stories, setSpeed, flyTo, speed, today, minute }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
   let selected = null;
   let mode = null; // "sakin" | "bina"
+  let tab = "simdi";
+  for (const btn of document.querySelectorAll("#card-tabs button")) {
+    btn.addEventListener("click", () => {
+      tab = btn.dataset.tab;
+      for (const b of document.querySelectorAll("#card-tabs button")) b.classList.toggle("on", b === btn);
+      render();
+    });
+  }
 
   for (const btn of document.querySelectorAll("#speed button")) {
     btn.classList.toggle("on", Number(btn.dataset.speed) === speed);
@@ -56,23 +64,59 @@ export function createUI({ residents, people, world, dollhouse, setSpeed, flyTo,
     }));
   }
 
+  const link = (j) => ["@" + residents[j].handle, () => select(j)];
+
   function renderPerson() {
     const r = residents[selected];
     const day = today();
     const t = sim.tenure(r, day);
-    const pet = sim.pet(r, day);
     $("card-handle").textContent = "@" + r.handle;
     $("card-title").textContent = `${sim.title(r, day)} · ${people.works[selected].loc.name}`;
     $("card-now").textContent = nowText(selected);
+    $("card-tabs").hidden = false;
+    $("card-traits").replaceChildren();
+    if (tab === "bugun") {
+      const homeLabel = (k) => {
+        const seg = people.plans[selected][k];
+        const act = homeActivity(r.seed, seg, seg.bas + 1, day, people.hobbies[selected].id);
+        return "Evde · " + HOME_LABELS[act].toLocaleLowerCase("tr");
+      };
+      const placeName = (yer) => placeLabel(selected, yer);
+      facts(stories.today(selected, placeName, homeLabel));
+      return;
+    }
+    if (tab === "hikaye") {
+      $("card-traits").replaceChildren(...stories.traits(selected).map((x) => {
+        const span = document.createElement("span");
+        span.textContent = x;
+        return span;
+      }));
+      const rows = [];
+      const f = stories.friend[selected];
+      if (f >= 0) rows.push(["Can dostu", ...link(f)]);
+      const pet = stories.petName(selected);
+      if (pet) rows.push(["Evcil", `${pet.kind} · ${pet.name}`]);
+      const nb = stories.neighbors(selected).slice(0, 3);
+      nb.forEach((j, n) => rows.push([n === 0 ? "Komşular" : "", ...link(j)]));
+      const cw = stories.coworkers(selected).slice(0, 3);
+      cw.forEach((j, n) => rows.push([n === 0 ? "İş arkadaşları" : "", ...link(j)]));
+      for (const e of stories.timeline(selected).slice(0, 8)) rows.push([e.date, e.text]);
+      facts(rows);
+      return;
+    }
+    const pet = sim.pet(r, day);
     facts([
       ["Adres", sim.addressText(r.slot)],
       ["Hobi", people.hobbies[selected].ad],
       ["Evcil", pet || "Henüz yok"],
       ["Adada", t === 0 ? "Bugün geldi" : `${fmt.format(t)} gündür`],
+      ["Ulaşım", people.hasCar[selected] ? "Kendi arabası" : "Otobüs ve yürüyüş"],
     ]);
   }
 
   function renderBuilding() {
+    $("card-tabs").hidden = true;
+    $("card-traits").replaceChildren();
     const b = dollhouse.building;
     const p = sim.addressParts(b.slot0);
     $("card-handle").textContent = `${sim.sokakName(p.mahalle, p.sokak)} No ${p.bina * 2 + 1}`;
@@ -166,6 +210,8 @@ export function createUI({ residents, people, world, dollhouse, setSpeed, flyTo,
       $("card-title").textContent = "Bu kullanıcı adı henüz adada değil.";
       $("card-now").textContent = "Mercanada'yı takip et; ertesi sabah ilk vapurla gelirsin.";
       $("card-facts").replaceChildren();
+      $("card-tabs").hidden = true;
+      $("card-traits").replaceChildren();
       return;
     }
     select(i);

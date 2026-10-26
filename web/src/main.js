@@ -18,6 +18,7 @@ import { createMapUI } from "./mapui.js";
 import { NameTags } from "./world/nametags.js";
 import { Traffic, Vehicles, buildStops } from "./world/traffic.js";
 import { buildHarbor } from "./world/harbor.js";
+import { Stories } from "./world/story.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -72,15 +73,21 @@ controls.minDistance = 6;
 controls.maxDistance = 3200;
 controls.zoomToCursor = true;
 
+const T0 = performance.now();
 const world = new World(population);
+const T1 = performance.now();
 const roads = buildRoads(world);
+const T2 = performance.now();
 const terrain = buildTerrain(world);
+const T3 = performance.now();
 const grounds = buildGrounds(world);
 const water = buildWater(world);
 const harbor = buildHarbor(world);
 scene.add(water, terrain, roads, grounds, harbor);
 const city = buildCity(world);
+const T4 = performance.now();
 const trees = buildTrees(world);
+const T5 = performance.now();
 const lampLight = createLampLight(world, world.lampSpots,
   [terrain.material, ...roads.userData.groundMaterials, ...grounds.userData.groundMaterials],
   { wallMaterials: city.wallMaterials });
@@ -88,11 +95,17 @@ scene.add(city.group, trees);
 const clouds = buildClouds(world);
 const labels = buildLabels(world);
 scene.add(clouds, labels);
+const T6 = performance.now();
 const traffic = new Traffic(world);
+const T7 = performance.now();
 scene.add(buildStops(traffic, world));
 const vehicles = new Vehicles(Math.ceil(population * 0.4) + 80, 40);
 scene.add(vehicles.group);
 const people = new People(world, residents, traffic);
+const stories = new Stories(people);
+people.stories = stories;
+const T8 = performance.now();
+if (params.has("denetle")) console.info(`süreler: dünya ${Math.round(T1 - T0)} yollar ${Math.round(T2 - T1)} arazi ${Math.round(T3 - T2)} şehir ${Math.round(T4 - T3)} ağaçlar ${Math.round(T5 - T4)} trafik ${Math.round(T7 - T6)} insanlar ${Math.round(T8 - T7)}`);
 scene.add(people.group);
 const dollhouse = new Dollhouse(world, city, people, scene);
 people.dollhouse = dollhouse;
@@ -142,7 +155,7 @@ function flyTo(x, y, z, distance = 120, direction = null) {
 const nameTags = new NameTags(scene);
 if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents };
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
-const ui = createUI({ residents, people, world, dollhouse, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+const ui = createUI({ residents, people, world, dollhouse, stories, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 const mapUI = createMapUI({ world, camera, controls, flyTo });
 
 // Bir sakine dokununca kartını aç.
@@ -198,8 +211,11 @@ function tick() {
   const unix = simNow();
   const day = sim.dayOf(unix);
   const minute = sim.minuteOf(unix);
+  const U0 = performance.now();
   people.setDay(day);
+  const U1 = performance.now();
   people.update(minute, real);
+  if (frame < 3 && params.has("denetle")) console.info(`kare ${frame}: gün ${Math.round(U1 - U0)} ms, güncelleme ${Math.round(performance.now() - U1)} ms`);
   city.setOpenDoors(people.openDoors);
   // Araçlar: sürülenler, park halindekiler ve otobüsler.
   vehicles.begin();

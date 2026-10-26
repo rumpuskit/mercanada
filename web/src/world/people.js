@@ -323,6 +323,10 @@ export class People {
       if (pool?.length) {
         const start = roll(s, "yer" + mode, this.day) % pool.length;
         let item = null;
+        // En yakın arkadaşı aynı anda aynı yerdeyse onun masasına otur.
+        const f = this.stories?.friend[i] ?? -1;
+        const fRole = f >= 0 ? this.roles[f]?.find((r, kk) => r?.item?.table && r.mode === mode && this.plans[f][kk].bas < seg.son && this.plans[f][kk].son > seg.bas) : null;
+        if (fRole) item = pool.find((c) => c !== fRole.item && c.table && c.table[0] === fRole.item.table[0] && c.table[1] === fRole.item.table[1] && free(c.busy, seg.bas - 2, seg.son + 2)) ?? null;
         for (let n = 0; n < pool.length && !item; n++) {
           const cand = pool[(start + n) % pool.length];
           if (free(cand.busy, seg.bas - 2, seg.son + 2)) item = cand;
@@ -341,7 +345,11 @@ export class People {
         const key = mode.slice(6);
         const groups = this.groupPools[key];
         if (groups?.length) {
-          const g0 = roll(s, "grup", this.day + k) % groups.length;
+          let g0 = roll(s, "grup", this.day + k) % groups.length;
+          // Arkadaşının grubu varsa önce ona katılmayı dener.
+          const f = this.stories?.friend[i] ?? -1;
+          const fRole = f >= 0 ? this.roles[f]?.find((r, kk) => r?.groupRef && r.mode === mode && this.plans[f][kk].bas < seg.son && this.plans[f][kk].son > seg.bas) : null;
+          if (fRole) g0 = groups.indexOf(fRole.groupRef);
           for (let n = 0; n < groups.length && !role.group; n++) {
             const g = groups[(g0 + n) % groups.length];
             const slot = g.slots.findIndex((busy) => free(busy, seg.bas - 1, seg.son + 1));
@@ -351,6 +359,7 @@ export class People {
               const r = 0.5 + 0.13 * g.cap;
               const [x, z] = this.world.nearestWalkable(g.x + Math.cos(a) * r, g.z + Math.sin(a) * r, 2);
               role.group = { x, z, heading: Math.atan2(g.x - x, g.z - z) };
+              role.groupRef = g;
             }
           }
         }
