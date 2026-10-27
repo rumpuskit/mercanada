@@ -5,7 +5,7 @@ import * as sim from "./sim.js";
 import { World } from "./world/layout.js";
 import { buildTerrain, buildWater } from "./world/terrain.js";
 import { buildGrounds, buildRoads } from "./world/roads.js";
-import { buildCity } from "./world/city.js";
+import { buildCity, buildSites } from "./world/city.js";
 import { buildClouds, buildTrees, driftClouds, fadeTrees } from "./world/nature.js";
 import { buildLabels, scaleLabels } from "./world/labels.js";
 import { People } from "./world/people.js";
@@ -36,9 +36,13 @@ const nowUnix = () => Date.now() / 1000;
 // ?bekleyen=N iskelede N bekleyen gösterir.
 const today = sim.dayOf(nowUnix());
 const sample = Number(params.get("nufus"));
-const { residents, waiting, listError } = sample > 0 ? sampleTown(Math.min(60000, sample)) : await loadResidents();
+const { residents, waiting, listError, peak = 0 } = sample > 0 ? sampleTown(Math.min(60000, sample)) : await loadResidents();
 // Ada, en büyük sıra numarasına kadar kurulur: ayrılanların boş kalan evleri de durur (yeni gelen yerleşir).
 const population = residents.reduce((m, r) => Math.max(m, r.slot + 1), 0);
+// Gelişim düzeyi: adanın ulaştığı en yüksek nüfus (ayrılanlar yüzünden açılmış yer kapanmaz). Neyin açık
+// olduğu (iş yerleri, yollar, parklar) buna göre; ?gelisim=N adayı o düzeyde gösterir (deneme ve video).
+const level = Number(params.get("gelisim")) || Math.max(population, peak);
+sim.setTown(level);
 
 function sampleTown(n) {
   const residents = Array.from({ length: n }, (_, i) => {
@@ -54,6 +58,7 @@ async function loadResidents() {
       handle: handle ?? `gizli.komsu.${slot}`, seed, slot, arrived_day, ...(overrides ? { overrides } : {}), ...(handle ? {} : { hidden: true }),
     })),
     waiting: Number(params.get("bekleyen")) || data.bekleyen || 0,
+    peak: data.zirve ?? 0,
   });
   try {
     const ctl = new AbortController();
@@ -134,9 +139,9 @@ const T5 = performance.now();
 const lampLight = createLampLight(world, world.lampSpots,
   [terrain.material, ...roads.userData.groundMaterials, ...grounds.userData.groundMaterials, ...(harbor.userData.groundMaterials ?? [])],
   { wallMaterials: city.wallMaterials });
-scene.add(city.group, trees);
+scene.add(city.group, trees, buildSites(world));
 const bayram = buildBayram(world);
-scene.add(bayram.group);
+scene.add(bayram.group, bayram.mast);
 const clouds = buildClouds(world);
 const labels = buildLabels(world);
 scene.add(clouds, labels);

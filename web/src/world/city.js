@@ -656,10 +656,10 @@ function buildFeatures(world) {
           arcs.push(m);
         }
         fountains.push({ curtains, jet, arcs, pool });
-        // Çevresinde sekiz çiçek tarhı (yürüyüş halkasının dışında, bankların arasında).
-        for (let k = 0; k < 8; k++) {
-          const a = (k / 8) * Math.PI * 2;
-          const px = f.x + Math.cos(a) * 18.5, pz = f.z + Math.sin(a) * 18.5;
+        // Çevresinde sekiz çiçek tarhı (yürüyüş halkasının dışında, bankların arasında; meydan
+        // düzenlenince gelir).
+        for (const [px, pz] of world.flowerBeds ?? []) {
+          const k = Math.round((Math.atan2(pz - f.z, px - f.x) / (Math.PI * 2)) * 8 + 8) % 8;
           add(new THREE.CylinderGeometry(1.5, 1.6, 0.4, 12), rimMat, px, y + 0.2, pz);
           add(new THREE.CylinderGeometry(1.35, 1.35, 0.1, 12), std("#5b4636"), px, y + 0.4, pz, 0, false);
           for (let j = 0; j < 9; j++) {
@@ -1179,5 +1179,53 @@ function buildFeatures(world) {
       fo.arcs.forEach((a, i) => { a.scale.y = 0.94 + 0.06 * Math.sin(t * 3.7 + i); });
     }
   };
+  return group;
+}
+
+/**
+ * Sıradaki gelişim adımının binaları: yarı saydam taslak, turuncu kenar çizgileri ve çevresinde şantiye
+ * çiti. Ada büyüdükçe yerini gerçek bina alır; ziyaretçi neyin geleceğini haritada görür.
+ */
+export function buildSites(world) {
+  const group = new THREE.Group();
+  const fill = new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: 0.2, depthWrite: false });
+  const edge = new THREE.LineBasicMaterial({ color: "#e8892a", transparent: true, opacity: 0.85 });
+  const posts = [], rails = [];
+  for (const b of world.sites ?? []) {
+    const h = (b.floors ?? 1) * FLOOR_H;
+    const geo = new THREE.BoxGeometry(b.w, h, b.d).translate(0, h / 2, 0);
+    for (const m of [new THREE.Mesh(geo, fill), new THREE.LineSegments(new THREE.EdgesGeometry(geo), edge)]) {
+      m.position.set(b.x, FLAT_Y, b.z);
+      m.rotation.y = b.rot;
+      m.renderOrder = 2;
+      group.add(m);
+    }
+    // Çit: binanın 1,5 m dışında, 2,5 m arayla direkler ve üstlerinde bant.
+    const c = Math.cos(b.rot), s = Math.sin(b.rot);
+    const hw = b.w / 2 + 1.5, hd = b.d / 2 + 1.5;
+    const corners = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]];
+    for (let k = 0; k < 4; k++) {
+      const [ax, az] = corners[k], [bx, bz] = corners[(k + 1) % 4];
+      const L = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.round(L / 2.5));
+      for (let i = 0; i < n; i++) {
+        const lx = ax + ((bx - ax) * i) / n, lz = az + ((bz - az) * i) / n;
+        const x = b.x + lx * c + lz * s, z = b.z - lx * s + lz * c;
+        posts.push([x, world.groundY(x, z), z]);
+      }
+      const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+      rails.push({ x: b.x + mx * c + mz * s, z: b.z - mx * s + mz * c, len: L, rot: b.rot + (k % 2 ? Math.PI / 2 : 0) });
+    }
+  }
+  const mat = new THREE.MeshStandardMaterial({ color: "#e8892a", roughness: 0.7 });
+  if (posts.length) {
+    const m = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 1.1, 0.12).translate(0, 0.55, 0), mat, posts.length);
+    const m4 = new THREE.Matrix4();
+    posts.forEach(([x, y, z], i) => m.setMatrixAt(i, m4.makeTranslation(x, y, z)));
+    group.add(m);
+    const r = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.18, 0.04), new THREE.MeshStandardMaterial({ color: "#f4f1ea", roughness: 0.6 }), rails.length);
+    const q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), sc = new THREE.Vector3();
+    rails.forEach((o, i) => r.setMatrixAt(i, m4.compose(p.set(o.x, world.groundY(o.x, o.z) + 0.9, o.z), q.setFromAxisAngle(UP, o.rot), sc.set(o.len, 1, 1))));
+    group.add(r);
+  }
   return group;
 }

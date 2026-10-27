@@ -4,7 +4,12 @@
 // Dünya hücrelere bölünür (CELL_W x CELL_D). Ortada çarşı (merkez), doğusunda tepe ve fener, batısında
 // tarlalar ve plaj sabittir. Mahalleler kuzeye ve yanlara, merkeze olan uzaklık sırasıyla eklenir; her
 // yeni mahalle adanın kıyısını genişletir. Koordinatlar: x doğu, z güney, y yukarı.
-import { addressParts, cap, cat, mahalleName, sokakName } from "../sim.js";
+//
+// Gelişim: ada her zaman tam haliyle hesaplanır (her şeyin yeri sabittir), ama yalnızca açılmış parçalar
+// kurulur. Her bina, yol, alan ve süs bir gelişim anahtarıyla etiketlenir (sim.js stageOf); düzey o
+// anahtarın nüfusuna ulaşmamışsa ayıklanır. Boş adada yalnız vapur iskelesi, patikalar, çeşmeli meydan,
+// tepe ve fener vardır; evler sakinler geldikçe, gerisi gelişim tablosuna göre açılır.
+import { addressParts, cap, cat, isOpen, mahalleName, sokakName, stageOf, townLevel } from "../sim.js";
 import { fbm, hash2 } from "./noise.js";
 import { buildNetwork, H as LAYER, stations } from "./roads.js";
 
@@ -63,6 +68,14 @@ const HOUSE_WALLS = ["#f4efe6", "#f3e3c8", "#e9d3c0", "#dfe7e4", "#f1d7cf", "#e8
 const HOUSE_ROOFS = ["#b5563f", "#a85a44", "#c06a4c", "#8c4b3a", "#9e5a48"];
 
 const OUTDOOR_KINDS = new Set(["liman", "balikci_koyu", "tersane", "tarla", "plaj", "fener"]);
+
+// Gelişim anahtarıyla etiketlenen listeler.
+const TAGGED = ["buildings", "roads", "plazas", "features", "labels", "seats", "lamps", "piers", "parks"];
+// Tek nesne olarak tutulan yerler ve açıldıkları anahtar.
+const REFS = {
+  carsiWalks: "carsi_yol", pitch: "saha", hospital: "saglik:0", port: "liman:0", tersane: "tersane:0",
+  koy: "balikci_koyu:0", promenade: "sahil_yolu", fireStation: "itfaiye", depot: "garaj",
+};
 
 // Yol yüksekliği için yumuşatma çekirdeği (12 m çapında, ağırlıklı).
 const KERNEL = (() => {
@@ -136,6 +149,7 @@ function rectSdf(x, z, r) {
 export class World {
   constructor(population) {
     this.population = population;
+    this.level = townLevel(); // gelişim düzeyi: en yüksek nüfus (main.js sim.setTown ile verir)
     this.mahalleler = mahalleCount(population);
     this.cells = [
       { cx: 0, cz: 0, type: "merkez" },
@@ -174,13 +188,18 @@ export class World {
     this._groundCache = new Map();
     this.cols = new Map(); // x -> [[z0, z1]...]
     this.rows = new Map(); // z -> [[x0, x1]...]: hücre sınırlarındaki doğu-batı caddeleri, birleştirilerek çizilir
+    this._key = null;      // şu an kurulan parçanın gelişim anahtarı
+    this._blockOps = [];   // ağaç yasağı işlemleri (açılan parçalarınki sonradan uygulanır)
+    this._staged = false;
 
     this._layoutCenter();
     this._layoutCoast();
     this._layoutNature();
     for (const cell of this.cells) if (cell.type === "mahalle") this._layoutMahalle(cell);
     this._emitRows();
+    this._applyStage();
     this.network = buildNetwork(this.roads);
+    if (!this.vehicles) for (const n of this.network.nodes) n.signal = false; // araç yokken trafik ışığı da yok
     this.roadIndex = new RoadIndex(this.roads);
     this._gradeRoads();
     for (const seat of this.seats) seat.top = this.groundY(seat.x, seat.z) + seat.h;
@@ -191,6 +210,91 @@ export class World {
 
   get flatY() {
     return FLAT_Y;
+  }
+
+  // --- gelişim ---
+
+  /** Anahtar açık mı? (anahtarsız parçalar hep açıktır) */
+  has(key) {
+    return key == null || isOpen(key);
+  }
+
+  /** fn içinde eklenen her şeyi anahtarla etiketler (iç içe çağrıda içteki anahtar kalır). */
+  _tag(key, fn) {
+    const prev = this._key;
+    this._key = key;
+    const snap = TAGGED.map((n) => this[n].length);
+    fn();
+    TAGGED.forEach((n, i) => {
+      const list = this[n];
+      for (let j = snap[i]; j < list.length; j++) if (list[j]._k === undefined) list[j]._k = key;
+    });
+    this._key = prev;
+  }
+
+  _place(name, place) {
+    place._k = this._key;
+    this.places[name] = place;
+    return place;
+  }
+
+  /**
+   * Açılmamış parçaları ayıklar ve bir sonraki gelişim adımını (yer, ad, eksik nüfus) hazırlar.
+   * Ayıklanan binalar "sites" olur: harita sıradaki yapının yerini gösterir.
+   */
+  _applyStage() {
+    const all = this.buildings;
+    const before = Object.fromEntries(TAGGED.map((n) => [n, this[n]]));
+    for (const n of TAGGED) this[n] = this[n].filter((x) => this.has(x._k));
+    for (const [name, pl] of Object.entries(this.places)) {
+      if (!this.has(pl._k)) { delete this.places[name]; continue; }
+      if (pl.anchorKeys) {
+        pl.anchors = pl.anchors.filter((_, i) => this.has(pl.anchorKeys[i]));
+        if (!pl.anchors.length) delete this.places[name];
+      }
+    }
+    for (const list of Object.values(this.workplaces)) list.forEach((w, i) => { if (w && !this.has(w._k)) list[i] = null; });
+    for (const [name, key] of Object.entries(REFS)) if (!this.has(key)) this[name] = null;
+    if (!this.has("meydan_duzen")) this.flowerBeds = [];
+    this.schools = (this.schools ?? []).filter((s) => this.has(s._k));
+    this.parkingLots = this.has("cevre_yolu") ? this.parkingLots : [];
+    this.vehicles = this.has("cevre_yolu"); // özel araç, taksi, otobüs, hizmet araçları
+    this._staged = true;
+    for (const [op, x0, z0, x1, z1, pad, key] of this._blockOps) if (this.has(key)) (op ? this.block : this.unblock).call(this, x0, z0, x1, z1, pad);
+    this._blockOps = null;
+
+    // Sıradaki adım: kilitli anahtarlar içinde en küçük eşik.
+    let next = Infinity;
+    const keys = new Set();
+    for (const b of all) if (b._k != null && !this.has(b._k)) keys.add(b._k);
+    for (const st of cat().gelisim) for (const k of st.acar) if (!this.has(k)) keys.add(k);
+    for (const k of keys) next = Math.min(next, stageOf(k));
+    this.sites = [];
+    this.nextStage = null;
+    if (next < Infinity) {
+      this._before = before;
+      const open = [...keys].filter((k) => stageOf(k) === next);
+      this.sites = all.filter((b) => open.includes(b._k));
+      const entry = cat().gelisim.find((st) => st.nufus === next);
+      this.nextStage = { nufus: next, keys: open, name: entry?.ad ?? stageName(open[0]), at: this._stageSpot(open) };
+      this._before = null;
+      const at = this.nextStage.at;
+      if (at) this.labels.push({ text: `🏗️ ${this.nextStage.name} · ${next}. sakinde`, x: at[0], z: at[1], h: 22, site: true });
+    }
+  }
+
+  /** Bir gelişim adımının haritadaki yeri (binası varsa binası, yoksa ilk parçası). */
+  _stageSpot(keys) {
+    const b = this.sites[0];
+    if (b) return [b.x, b.z];
+    for (const n of ["plazas", "features", "roads", "seats"]) {
+      const it = this._before[n].find((x) => keys.includes(x._k));
+      if (!it) continue;
+      if (it.points) return it.points[Math.floor(it.points.length / 2)];
+      if (it.x0 != null) return [(it.x0 + it.x1) / 2, (it.z0 + it.z1) / 2];
+      return [it.x, it.z];
+    }
+    return keys.includes("carsi_yol") ? [0, -80] : null;
   }
 
   // --- tesviye: eğimli arazide yollar yumuşak bir eğimi izler, altlarındaki arazi yola göre kazılır/doldurulur ---
@@ -322,6 +426,7 @@ export class World {
         case "sezlong": this.addObstacleRect(f.x, f.z, 0.8, 2, f.rot); break;
         case "cankurtaran": this.addObstacleRect(f.x, f.z, 2.2, 2.2); break;
         case "fener": this.addObstacleCircle(f.x, f.z, 4.6); break;
+        case "gonder": this.addObstacleCircle(f.x, f.z, 0.6); break;
         case "minare": this.addObstacleCircle(f.x, f.z, 1.8); break;
         case "sadirvan": this.addObstacleCircle(f.x, f.z, 2.9); break;
         case "oyun": for (const o of playgroundItems(f)) this.addObstacleRect(o.x, o.z, o.w, o.d, o.rot); break;
@@ -348,16 +453,23 @@ export class World {
   /** Kuzey-güney yönündeki sınır caddeleri (aynı hatta olanlar birleştirilir). */
   addCol(x, z0, z1) {
     if (!this.cols.has(x)) this.cols.set(x, []);
-    this.cols.get(x).push([Math.min(z0, z1), Math.max(z0, z1)]);
+    this.cols.get(x).push([Math.min(z0, z1), Math.max(z0, z1), this._key]);
   }
 
   /** Aynı hat üzerindeki cadde parçalarını birleştirir (üst üste binen yollar olmasın). */
   addRow(z, x0, x1) {
     if (!this.rows.has(z)) this.rows.set(z, []);
-    this.rows.get(z).push([Math.min(x0, x1), Math.max(x0, x1)]);
+    this.rows.get(z).push([Math.min(x0, x1), Math.max(x0, x1), this._key]);
   }
 
   _emitRows() {
+    // Açılmamış parçalar çizilmez.
+    for (const map of [this.cols, this.rows]) {
+      for (const [k, list] of map) {
+        const open = list.filter((q) => this.has(q[2]));
+        if (open.length) map.set(k, open); else map.delete(k);
+      }
+    }
     for (const [x, list] of this.cols) {
       list.sort((a, b) => a[0] - b[0]);
       let [a, b] = list[0];
@@ -493,8 +605,16 @@ export class World {
   }
 
   block(x0, z0, x1, z1, pad = 2) {
+    if (!this._staged) { this._blockOps.push([1, x0, z0, x1, z1, pad, this._key]); return; }
     for (let x = Math.floor((x0 - pad) / 4); x <= Math.floor((x1 + pad) / 4); x++) {
       for (let z = Math.floor((z0 - pad) / 4); z <= Math.floor((z1 + pad) / 4); z++) this.blocked.add(x * 100003 + z);
+    }
+  }
+
+  unblock(x0, z0, x1, z1) {
+    if (!this._staged) { this._blockOps.push([0, x0, z0, x1, z1, 0, this._key]); return; }
+    for (let gx = Math.floor(x0 / 4); gx <= Math.floor(x1 / 4); gx++) {
+      for (let gz = Math.floor(z0 / 4); gz <= Math.floor(z1 / 4); gz++) this.blocked.delete(gx * 100003 + gz);
     }
   }
 
@@ -527,26 +647,34 @@ export class World {
     const halfW = CELL_W / 2, halfD = CELL_D / 2;
     this.plazas.push({ x: 0, z: 0, r: R + 2, kind: "meydan" });
     this.block(-R - 3, -R - 3, R + 3, R + 3, 0);
+    // Çeşme ve bayrak direği adanın en eski yapılarıdır (boş adada da vardır).
     this.features.push({ type: "cesme", x: 0, z: 0 });
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
-      this.addBench(Math.cos(a) * 15, Math.sin(a) * 15, Math.atan2(-Math.cos(a), -Math.sin(a)), "meydan");
-      this.features.push({ type: "agac", x: Math.cos(a) * 22, z: Math.sin(a) * 22 });
-      this.flowerBeds = (this.flowerBeds ?? []).concat([[Math.cos(i / 8 * Math.PI * 2) * 18.5, Math.sin(i / 8 * Math.PI * 2) * 18.5]]);
-    }
-    this.places.meydan = { anchors: [[0, 0]], spread: R - 6, path: [HUB] };
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      this.lamps.push({ x: Math.cos(a) * (R - 1), z: Math.sin(a) * (R - 1), dir: Math.atan2(-Math.cos(a), -Math.sin(a)) });
-    }
+    this.features.push({ type: "gonder", x: 0, z: -25.5 });
+    this._tag("meydan_duzen", () => {
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+        this.addBench(Math.cos(a) * 15, Math.sin(a) * 15, Math.atan2(-Math.cos(a), -Math.sin(a)), "meydan");
+        this.features.push({ type: "agac", x: Math.cos(a) * 22, z: Math.sin(a) * 22 });
+        this.flowerBeds = (this.flowerBeds ?? []).concat([[Math.cos(i / 8 * Math.PI * 2) * 18.5, Math.sin(i / 8 * Math.PI * 2) * 18.5]]);
+      }
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        this.lamps.push({ x: Math.cos(a) * (R - 1), z: Math.sin(a) * (R - 1), dir: Math.atan2(-Math.cos(a), -Math.sin(a)) });
+      }
+    });
+    this._place("meydan", { anchors: [[0, 0]], spread: R - 6, path: [HUB] });
 
     // Çarşı yayalaştırılmıştır: meydana yalnızca yaya caddeleri açılır, araçlar çevre yolundan dolaşır.
+    // Taş döşenene kadar (gelişim "carsi_yol") bunlar toprak patikadır; binaların yeri değişmez.
     const av = ROADS.yaya.width;
-    this.addRoad([[0, -R], [0, -halfD]], "yaya");
-    this.addRoad([[R, 0], [halfW, 0]], "yaya");
-    this.addRoad([[-R, 0], [-halfW, 0]], "yaya");
-    this.addRow(-halfD, -halfW, halfW);
-    this._layoutRing();
+    const ped = this.has("carsi_yol") ? "yaya" : "patika";
+    this.addRoad([[0, -R], [0, -halfD]], ped);
+    this.addRoad([[R, 0], [halfW, 0]], ped);
+    this.addRoad([[-R, 0], [-halfW, 0]], ped);
+    this._tag("cevre_yolu", () => {
+      this.addRow(-halfD, -halfW, halfW);
+      this._layoutRing();
+    });
 
     // Cepheler: caddelerin iki yanı. Her bina, meydana en yakın boş cepheye yerleşir.
     const fronts = [];
@@ -554,7 +682,7 @@ export class World {
       const street = { x: { 1: "Gündoğusu Caddesi", "-1": "Günbatısı Caddesi" }, z: { "-1": "Çınar Caddesi", 1: "Liman Caddesi" } }[axis][sign];
       for (const side of [-1, 1]) fronts.push({ axis, sign, side, cursor: R + 12, end, street, no: side < 0 ? 1 : 2 });
     }
-    CENTER_ORDER.forEach(([kind, index]) => {
+    CENTER_ORDER.forEach(([kind, index]) => this._tag(`${kind}:${index}`, () => {
       const style = STYLES[kind];
       const front = fronts.filter((f) => f.cursor + style.w <= f.end).sort((a, b) => a.cursor - b.cursor)[0];
       const t = front.cursor + style.w / 2;
@@ -581,7 +709,7 @@ export class World {
       });
       const path = [street, HUB];
       if (kind === "kahvehane") {
-        this.places.kahvehane = { anchors: [door], spread: 3, path, building: b };
+        this._place("kahvehane", { anchors: [door], spread: 3, path, building: b });
         const outside = front.axis === "x" ? [door[0], front.side * (av / 2 + 1)] : [front.side * (av / 2 + 1), door[1]];
         this.addTables(outside[0], outside[1], 3, front.axis, -front.side, "kahvehane");
       } else {
@@ -589,9 +717,10 @@ export class World {
         const outside = front.axis === "x" ? [door[0], front.side * (av / 2 + 1)] : [front.side * (av / 2 + 1), door[1]];
         if (kind === "kafe" || kind === "firin") this.addTables(outside[0], outside[1], kind === "kafe" ? 3 : 2, front.axis, -front.side, "kafe");
       }
-    });
+    }));
 
-    // Cephelerin kalanı: altı dükkân, üstü konut çarşı binaları.
+    // Cephelerin kalanı: altı dükkân, üstü konut çarşı binaları. Meydana yakın olandan uzağa doğru açılır.
+    const fillers = [];
     let filler = 0;
     for (const front of fronts) {
       while (true) {
@@ -606,20 +735,35 @@ export class World {
           ? [front.sign * t, front.side * off, front.side < 0 ? 0 : Math.PI]
           : [front.side * off, front.sign * t, front.side < 0 ? Math.PI / 2 : -Math.PI / 2];
         const awning = ["#2f4a6d", "#b8423c", "#3e8a86", "#d9a441", "#6f7d4a", "#8a5a7a"][Math.floor(hash2(key, 2, 9) * 6)];
-        this.addBuilding({
+        fillers.push([t, this.addBuilding({
           kind: "carsi", x, z, rot, w, d, floors: 2 + Math.floor(hash2(key, 3, 9) * 3), roofType: hash2(key, 4, 9) < 0.6 ? "hip" : "flat",
           address: `${front.street} No ${(front.no += 2) - 2}, Çarşı`,
           wall: HOUSE_WALLS[Math.floor(hash2(key, 5, 9) * HOUSE_WALLS.length)], roof: HOUSE_ROOFS[Math.floor(hash2(key, 6, 9) * HOUSE_ROOFS.length)],
           style: { shop: true, awning }, workplace: true,
-        });
+        })]);
       }
     }
+    fillers.sort((a, b) => a[0] - b[0] || a[1].x - b[1].x || a[1].z - b[1].z).forEach(([, b], i) => { b._k = `carsi:${i}`; });
     this.carsiWalks = [
       [[-halfW + 15, -4.9], [-R - 4, -4.9]], [[R + 4, -4.9], [halfW - 15, -4.9]],
       [[-halfW + 15, 4.9], [-R - 4, 4.9]], [[R + 4, 4.9], [halfW - 15, 4.9]],
       [[-4.9, -halfD + 10], [-4.9, -R - 4]], [[4.9, -halfD + 10], [4.9, -R - 4]],
     ];
 
+    this._tag("park", () => this._layoutCenterPark());
+    this._tag("saha", () => this._layoutPitch());
+    this._tag("otel:0", () => {
+      this.features.push({ type: "havuz", x: 140, z: 85, w: 25, d: 12 });
+      this.block(140 - 12.5 - 10, 85 - 6 - 10, 140 + 12.5 + 10, 85 + 6 + 10, 0); // havuz, güvertesi ve ağaç taçları için pay
+    });
+    this._tag("cevre_yolu", () => this._layoutParking());
+    this._tag("saglik:0", () => this._layoutHospital());
+    this._tag("pazar", () => this._layoutMarket());
+    this._tag("carsi_yol", () => this.labels.push({ text: "Çarşı", x: 0, z: 0, h: 45 }));
+  }
+
+  _layoutCenterPark() {
+    const halfW = CELL_W / 2, halfD = CELL_D / 2;
     // Park (kuzeybatı): çimen, havuz, yürüyüş yolları, banklar.
     const park = { x0: -halfW + 20, z0: -halfD + 12, x1: -45, z1: -42 };
     this.plazas.push({ ...park, kind: "park" });
@@ -630,12 +774,14 @@ export class World {
     this.addRoad([[pcx, park.z0 + 4], [pcx, pcz - 18]], "patika");
     for (let i = 0; i < 6; i++) this.addBench(pcx - 50 + i * 20, pcz + 24, Math.PI, "park");
     for (let i = 0; i < 4; i++) this.addBench(pcx - 30 + i * 20, pcz - 24, 0, "park");
-    this.places.park = {
+    this._place("park", {
       anchors: [[pcx + 30, pcz + 20], [pcx - 40, pcz - 20], [pcx - 60, pcz + 15], [pcx + 50, pcz - 25]], spread: 10,
       path: [[park.x1 + 30, pcz], [0, pcz], HUB],
-    };
+    });
+  }
 
-    // Kuzeydoğu: futbol sahası; güneydoğu: otel bahçesi ve havuz; güneybatı: pazar yeri.
+  /** Kuzeydoğu: futbol sahası (güneydoğuda otel bahçesi ve havuz, güneybatıda pazar yeri). */
+  _layoutPitch() {
     this.plazas.push({ x0: 90, z0: -120, x1: 200, z1: -48, kind: "saha" });
     // Futbol: tribünler (iki uzun kenar), kaleler, ışık direkleri; seyirci oturakları.
     this.pitch = { x0: 90, z0: -120, x1: 200, z1: -48, cx: 145, cz: -84 };
@@ -657,10 +803,12 @@ export class World {
       this.lamps.push({ x: mx, z: mz, dir: Math.atan2(145 - mx, -84 - mz), r: 48, flood: true, stadium: true });
     }
     this.addRoad([[145, -CELL_D / 2], [145, -124.5]], "patika");
-    this.places.saha = { anchors: [[145, -84]], spread: 20, path: [[145, -CELL_D / 2]] };
+    this._place("saha", { anchors: [[145, -84]], spread: 20, path: [[145, -CELL_D / 2]] });
     this.block(88, -127, 202, -41, 0); // saha, tribünler ve arka duvarları (ağaç dikilmez)
-    this.features.push({ type: "havuz", x: 140, z: 85, w: 25, d: 12 });
-    this.block(140 - 12.5 - 10, 85 - 6 - 10, 140 + 12.5 + 10, 85 + 6 + 10, 0); // havuz, güvertesi ve ağaç taçları için pay
+  }
+
+  _layoutParking() {
+    const halfW = CELL_W / 2;
     // Otoparklar: çevre yolunun iç kenarında, çarşının iki yanında; girişleri çevre yolundan.
     this.parkingLots = [];
     for (const side of [-1, 1]) {
@@ -676,6 +824,10 @@ export class World {
       this.plazas.push({ ...lot, kind: "otopark" });
       this.block(lot.x0, lot.z0, lot.x1, lot.z1, 1);
     }
+  }
+
+  _layoutHospital() {
+    const halfW = CELL_W / 2;
     // Hastane: kuzeydoğu köşede, çevre yoluna bakar; önünde ambulans alanı ve giriş yolu.
     {
       const hx = halfW - 30, hz = -95;
@@ -688,6 +840,9 @@ export class World {
       this.features.push({ type: "tabela_h", x: hx + 4, z: hz - 9 });
       this.features.push({ type: "hastane_on", x: hx, z: hz, roofY: 4 * FLOOR_H, bx: hx - 10 });
     }
+  }
+
+  _layoutMarket() {
     const market = { x0: -190, z0: 50, x1: -90, z1: 100 };
     this.plazas.push({ ...market, kind: "pazar" });
     this.block(market.x0, market.z0, market.x1, market.z1, 0);
@@ -705,8 +860,7 @@ export class World {
       }
     }
     const aisleAnchors = aisles.flatMap((az) => [-30, 0, 30].map((dx) => [(market.x0 + market.x1) / 2 + dx, az]));
-    this.places.pazar = { anchors: aisleAnchors, spread: 6, path: [[market.x1, 0], HUB], aisles: aisles.map((az) => [market.x0 + 10, market.x1 - 10, az]) };
-    this.labels.push({ text: "Çarşı", x: 0, z: 0, h: 45 });
+    this._place("pazar", { anchors: aisleAnchors, spread: 6, path: [[market.x1, 0], HUB], aisles: aisles.map((az) => [market.x0 + 10, market.x1 - 10, az]) });
   }
 
   /** Sahil bulvarının z'si: kıyıdan 36 m içeride; geniş pencerede iki kez yumuşatılmış, eğimi sınırlı. */
@@ -758,7 +912,7 @@ export class World {
 
   _addWorkplace(kind, index, entry) {
     const names = cat().isyerleri[kind];
-    (this.workplaces[kind] ??= [])[index] = { name: names[index % names.length], outdoor: OUTDOOR_KINDS.has(kind), ...entry };
+    (this.workplaces[kind] ??= [])[index] = { name: names[index % names.length], outdoor: OUTDOOR_KINDS.has(kind), ...entry, _k: this._key };
   }
 
   /**
@@ -823,15 +977,16 @@ export class World {
     const promenade = [];
     // Doğuda yük limanının çitine kadar (x = 30).
     for (let x = -170; x <= 30; x += 10) promenade.push([x, coast(x)[1] - 8]);
-    this.addRoad(promenade, "sahil");
+    this._tag("sahil_yolu", () => this.addRoad(promenade, "sahil"));
     const promAt = (x) => promenade[Math.max(0, Math.min(promenade.length - 1, Math.round((x + 170) / 10)))];
     const avZ0 = this.avenueZ(0);
     const toHub = (x) => [...this.avenuePath(x, 0), [0, avZ0], HUB];
 
     // Liman: meydandan inen yaya caddesi bulvarı geçip 80 m'lik iskeleye ulaşır; vapur yanaşmış.
     const [, lz] = coast(0);
-    this.addRoad([[0, MEYDAN_R], [0, avZ0]], "yaya");
-    this.addRoad([[0, avZ0], [0, lz - 3]], "yaya");
+    const ped = this.has("carsi_yol") ? "yaya" : "patika";
+    this.addRoad([[0, MEYDAN_R], [0, avZ0]], ped);
+    this.addRoad([[0, avZ0], [0, lz - 3]], ped);
     this.features.push({ type: "iskele", x: 0, z: lz - 4, len: 80, w: 10 });
     this.ferryPier = { x0: -5, x1: 5, z0: lz - 4, z1: lz + 76, top: 1.53 };
     this.piers.push(this.ferryPier);
@@ -843,10 +998,21 @@ export class World {
     // Evden çalışanlar ve emekliler: iş yerleri evleridir (adreste mahalle görünür).
     this._addWorkplace("ev", 0, { door: null, path: [HUB], anchor: HUB, spread: 0, home: true });
     this.labels.push({ text: "Vapur İskelesi", x: 0, z: lz + 20, h: 22 });
-    this._layoutPort(toHub);
+    this._tag("liman:0", () => this._layoutPort(toHub));
+    this._tag("balik_iskelesi", () => this._layoutFishingPier(promenade, promAt, avZ0));
+    this._tag("tersane:0", () => this._layoutShipyard(toHub));
+    this._tag("balikci_koyu:0", () => this._layoutCove(toHub));
 
-    // Balık tutma iskelesi.
+    const mid = promAt(0);
+    this._tag("sahil_yolu", () => this._place("sahil_yolu", { anchors: promenade.filter((_, i) => i % 4 === 0), spread: 1.5, path: [mid, [0, avZ0], HUB] }));
+    this.promenade = promenade;
+  }
+
+  _layoutFishingPier(promenade, promAt, avZ0) {
+    const coast = (x) => this.coastPoint(x, 60, 0, 1);
+    // Balık tutma iskelesi. Sahil yolu döşenene kadar iskeleye, onun güzergâhında bir patikadan gidilir.
     const [ix, iz] = coast(-90);
+    if (!this.has("sahil_yolu")) this.addRoad(promenade.filter(([x]) => x >= ix - 6 && x <= 0), "patika");
     this.features.push({ type: "iskele", x: ix, z: iz - 3, len: 36, w: 3 });
     this.piers.push({ x0: ix - 1.5, x1: ix + 1.5, z0: iz - 3, z1: iz + 33, top: 1.53 });
     const pi = promAt(ix);
@@ -856,8 +1022,11 @@ export class World {
       const side = k % 2 ? 1 : -1;
       fishing.push({ x: ix + side * 1.05, z: iz + 12 + k * 3.4, heading: side * Math.PI / 2 });
     }
-    this.places.iskele = { anchors: fishing.map((f) => [f.x, f.z]), spots: fishing, spread: 0, path: [[ix, iz - 3], pi, ...promTo0(ix), [0, avZ0], HUB] };
+    this._place("iskele", { anchors: fishing.map((f) => [f.x, f.z]), spots: fishing, spread: 0, path: [[ix, iz - 3], pi, ...promTo0(ix), [0, avZ0], HUB] });
+  }
 
+  _layoutShipyard(toHub) {
+    const coast = (x) => this.coastPoint(x, 60, 0, 1);
     // Tersane: gezinti yolunun bittiği doğu kıyısında, deniz tarafında.
     const [tx, tz] = coast(198);
     this.addBuilding({ kind: "tersane", x: tx, z: tz - 13, rot: 0, w: 30, d: 18, floors: 3, roofType: "gable", wall: "#c9d2dc", roof: "#6f7f92", workplace: true, industrial: true, style: { door: "#2f5d8a", sign: "#2f5d8a" }, address: "Tersane Yolu No 1, Doğu Kıyısı" });
@@ -891,7 +1060,10 @@ export class World {
     S.posts = posts;
     const tDoor = [tx, tz - 23];
     this._addWorkplace("tersane", 0, { door: tDoor, innerDoor: [tx + 15 - 1.6, tz - 13 + 9 + 0.6], path: [tDoor, [tx, this.avenueZ(tx)], ...toHub(tx)], anchor: [tx, S.boat.z], spread: 5 });
+  }
 
+  _layoutCove(toHub) {
+    const coast = (x) => this.coastPoint(x, 60, 0, 1);
     // Balıkçı koyu: gezinti yolunun batısında kulübeler ve tekneler.
     const [bx, bz] = coast(-218);
     for (let i = 0; i < 3; i++) {
@@ -926,13 +1098,11 @@ export class World {
     K.posts = kposts;
     this.koy = K;
     const bDoor = [bx, bz - 15];
+    // Çevre yolu gelene kadar koya meydanın batı yolundan inen bir patika.
+    if (!this.has("cevre_yolu")) this.addRoad([bDoor, [bx, 0]], "patika");
     cat().isyerleri.balikci_koyu.forEach((_, i) => this._addWorkplace("balikci_koyu", i, {
       door: bDoor, innerDoor: [jx, jz + jlen - 1], path: [bDoor, [bx, this.avenueZ(bx)], ...toHub(bx)], anchor: [bx, bz + 1], spread: 7,
     }));
-
-    const mid = promAt(0);
-    this.places.sahil_yolu = { anchors: promenade.filter((_, i) => i % 4 === 0), spread: 1.5, path: [mid, [0, avZ0], HUB] };
-    this.promenade = promenade;
   }
 
   // --- doğa: tepe ve fener (doğu), tarlalar ve plaj (batı) ---
@@ -945,7 +1115,7 @@ export class World {
     this.addRoad(trail, "patika");
     this.addBench(hx + 3, hz + 4, 0, "tepe");
     this.addBench(hx - 4, hz + 5, 0.3, "tepe");
-    this.places.tepe = { anchors: [top], spread: 7, path: [...trail].reverse().concat([HUB]) };
+    this._place("tepe", { anchors: [top], spread: 7, path: [...trail].reverse().concat([HUB]) });
     this.labels.push({ text: "Tepe", x: hx, z: hz, h: 30 });
 
     const [fx, fz] = this.coastPoint(hx, hz, 0.75, 0.66, 8);
@@ -968,7 +1138,7 @@ export class World {
         views.push({ x: vx, z: vz, heading: Math.atan2(vx - hx, vz - hz) });
       }
     }
-    this.places.fener = { anchors: views.map((v) => [v.x, v.z]), spots: views, spread: 0, path: fenerPath };
+    this._place("fener", { anchors: views.map((v) => [v.x, v.z]), spots: views, spread: 0, path: fenerPath });
     this.fener = { x: fx, z: fz, door: [fx - Math.cos(Math.atan2(fz - hz, fx - hx)) * 4.8, fz - Math.sin(Math.atan2(fz - hz, fx - hx)) * 4.8] };
     // Bekçi evi: fenerin kara tarafında, kapısı fenere bakar.
     {
@@ -981,19 +1151,22 @@ export class World {
     // Batı: köy yolu, iki çiftlik ve plaj.
     const kx = -CELL_W;
     // İtfaiye istasyonu ve belediye garajı (çöp kamyonu): köy yolunun kuzeyinde, çevre yolunun hemen batısında.
-    {
-      const fx = -halfW - 56, gx = -halfW - 26;
-      const fs = this.addBuilding({ kind: "itfaiye", x: fx, z: -20, rot: 0, w: 24, d: 14, floors: 2, roofType: "flat", wall: "#e9e2d6", roof: "#c9c4bb", style: { garage: "#b8231f", tower: false }, address: "İtfaiye Yolu No 1" });
-      this.plazas.push({ x0: fx - 12, z0: -13, x1: fx + 12, z1: -3.5, kind: "avlu" });
-      this.addRoad([[fx, -9.5], [fx, 0]], "giris");
-      this.fireStation = { building: fs, bay: [fx, -8] };
+    const sx = -halfW - 56, gx = -halfW - 26;
+    this._tag("itfaiye", () => {
+      const fs = this.addBuilding({ kind: "itfaiye", x: sx, z: -20, rot: 0, w: 24, d: 14, floors: 2, roofType: "flat", wall: "#e9e2d6", roof: "#c9c4bb", style: { garage: "#b8231f", tower: false }, address: "İtfaiye Yolu No 1" });
+      this.plazas.push({ x0: sx - 12, z0: -13, x1: sx + 12, z1: -3.5, kind: "avlu" });
+      this.addRoad([[sx, -9.5], [sx, 0]], "giris");
+      this.fireStation = { building: fs, bay: [sx, -8] };
+    });
+    this._tag("garaj", () => {
       const dp = this.addBuilding({ kind: "garaj", x: gx, z: -20, rot: 0, w: 18, d: 14, floors: 1, roofType: "gable", wall: "#d9dde2", roof: "#6f7f92", style: { garage: "#4f8a3e" }, address: "Garaj Sokağı No 2" });
       this.plazas.push({ x0: gx - 9, z0: -13, x1: gx + 9, z1: -3.5, kind: "avlu" });
       this.addRoad([[gx, -9.5], [gx, 0]], "giris");
       this.depot = { building: dp, bay: [gx, -8] };
-    }
-    this.addRoad([[-halfW, 0], [kx - 120, 0]], "koy");
-    cat().isyerleri.tarla.forEach((name, i) => {
+    });
+    // Köy yolu ilk zeytinlikle açılır; itfaiye ve garaj da ona bağlanır (açılış sırası bunu gözetir).
+    this._tag("tarla:0", () => this.addRoad([[-halfW, 0], [kx - 120, 0]], "koy"));
+    cat().isyerleri.tarla.forEach((name, i) => this._tag(`tarla:${i}`, () => {
       const x0 = kx - 200 + i * 190, z0 = -125;
       for (let f = 0; f < 4; f++) {
         const fx0 = x0 + (f % 2) * 88, fz0 = z0 + Math.floor(f / 2) * 54;
@@ -1003,21 +1176,25 @@ export class World {
       const barn = this.addBuilding({ kind: "ahir", x: x0 + 85, z: -14, rot: 0, w: 18, d: 12, floors: 2, roofType: "gable", wall: "#b5563f", roof: "#6d6a66", workplace: true, industrial: true, style: { door: "#7a3a2a" }, address: `${name}, Köy Yolu` });
       const door = [barn.x, -7.5];
       this._addWorkplace("tarla", i, { door, path: [door, [barn.x, 0], [-halfW, 0], HUB], anchor: [x0 + 85, z0 + 51], spread: 40 });
-    });
+    }));
 
     const [px, pz] = this.coastPoint(kx - 30, 10, -0.2, 1, 14);
     const beach = [];
     for (let i = -4; i <= 4; i++) beach.push(this.coastPoint(kx - 30 + i * 16, 10, -0.2, 1, 12));
-    beach.forEach(([x, z], i) => {
-      this.features.push({ type: "semsiye", x, z, c: i % 10 });
-      this.features.push({ type: "sezlong", x: x + 2.2, z: z + 1, rot: 0.1 });
-    });
     const toBeach = [[kx - 30, 0], [px, pz - 14]];
-    this.addRoad(toBeach, "patika");
     const beachPath = [[px, pz - 14], [kx - 30, 0], [-halfW, 0], HUB];
-    this.places.plaj = { anchors: beach.map(([x, z]) => [x, z + 4]), spread: 5, path: beachPath };
-    this._addWorkplace("plaj", 0, { door: [px, pz], path: beachPath, anchor: [px, pz + 2], spread: 3 });
-    this.features.push({ type: "cankurtaran", x: px, z: pz - 2 });
+    // Kumsal baştan vardır; şemsiyeler, şezlonglar ve cankurtaran kulesi gelişimle gelir. Köy yolu
+    // açılana kadar kumsala meydandan giden patikadan inilir.
+    this.addRoad(this.has("tarla:0") ? toBeach : [[-halfW, 0], [kx - 30, 0], [px, pz - 14]], "patika");
+    this._place("plaj", { anchors: beach.map(([x, z]) => [x, z + 4]), spread: 5, path: beachPath });
+    this._tag("plaj:0", () => {
+      beach.forEach(([x, z], i) => {
+        this.features.push({ type: "semsiye", x, z, c: i % 10 });
+        this.features.push({ type: "sezlong", x: x + 2.2, z: z + 1, rot: 0.1 });
+      });
+      this._addWorkplace("plaj", 0, { door: [px, pz], path: beachPath, anchor: [px, pz + 2], spread: 3 });
+      this.features.push({ type: "cankurtaran", x: px, z: pz - 2 });
+    });
     this.labels.push({ text: "Plaj", x: px, z: pz, h: 18 });
   }
 
@@ -1031,7 +1208,7 @@ export class World {
     return cell.cz * CELL_D + (cell.cz === 0 ? -CELL_D / 2 : CELL_D / 2);
   }
 
-  /** Mahallenin karakteri (tohumdan): sokak kavisi, ön bahçe derinliği, cumba sıklığı, yan şeritteki yerler. */
+  /** Mahallenin karakteri (tohumdan): sokak kavisi, ön bahçe derinliği, cumba sıklığı. */
   mahalleStyle(m) {
     this._styles ??= new Map();
     if (!this._styles.has(m)) {
@@ -1043,9 +1220,6 @@ export class World {
         phase: h(3) * Math.PI * 2,
         yard: 2.5 + h(4) * 1.5,
         cumba: 0.15 + h(5) * 0.5,
-        // Cami hep mahallenin batı şeridinde: komşu mahallenin camisiyle sınır caddesinin iki yanında
-        // karşı karşıya gelmesin.
-        mosqueWest: true,
       });
     }
     return this._styles.get(m);
@@ -1069,35 +1243,58 @@ export class World {
     };
   }
 
+  /**
+   * Mahallenin sokak yerleri (sıra r, sütun c), mahalle girişine yakından uzağa: ilk sakinler merkeze en
+   * yakın sokağa yerleşir, mahalle oradan dışa doğru büyür. Sokak numarası (adres) bu sıradır.
+   */
+  _sokakOrder(cell) {
+    this._orders ??= new Map();
+    const key = `${cell.cx},${cell.cz}`;
+    if (!this._orders.has(key)) {
+      const entryZ = this._entryZ(cell);
+      const list = [];
+      for (let r = 0; r < cap("sokak_per_mahalle") / SOKAK_COLS.length; r++) {
+        for (let c = 0; c < SOKAK_COLS.length; c++) {
+          const side = Math.abs(SOKAK_COLS[c][0] + SOKAK_COLS[c][1]) / 2;
+          list.push({ r, c, d: Math.hypot(side, cell.cz * CELL_D + ROW_Z0 + r * ROW_PITCH - entryZ) });
+        }
+      }
+      list.sort((a, b) => a.d - b.d || a.c - b.c);
+      this._orders.set(key, list);
+    }
+    return this._orders.get(key);
+  }
+
   _layoutMahalle(cell) {
     const [ox, oz] = this.cellCenter(cell);
     const halfD = CELL_D / 2, halfW = CELL_W / 2;
     const entryZ = this._entryZ(cell);
     const style = this.mahalleStyle(cell.mahalle);
-    this.addRoad([[ox, oz - halfD], [ox, oz + halfD]], "cadde");
-    // Mahalle girişinden merkeze: hücre sınırındaki doğu-batı caddesi, oradan x = 0 hattındaki
-    // mahalle caddeleriyle çevre yoluna (bu hücreler her zaman daha önce kurulur).
-    if (ox !== 0) this.addRow(entryZ, ox, 0);
+    const cars = this.has("cevre_yolu");
     // Çevre caddeleri: mahallenin dört kenarı; sokaklar bunlara bağlanır, komşu mahalleler paylaşır.
-    this.addRow(oz - halfD, ox - halfW, ox + halfW);
-    this.addRow(oz + halfD, ox - halfW, ox + halfW);
-    this.addCol(ox - halfW, oz - halfD, oz + halfD);
-    this.addCol(ox + halfW, oz - halfD, oz + halfD);
+    // Mahalle girişinden merkeze: hücre sınırındaki doğu-batı caddesi, oradan x = 0 hattındaki mahalle
+    // caddeleriyle çevre yoluna (bu hücreler her zaman daha önce kurulur). Hepsi araçlarla birlikte gelir.
+    this._tag("cevre_yolu", () => {
+      if (ox !== 0) this.addRow(entryZ, ox, 0);
+      this.addRow(oz - halfD, ox - halfW, ox + halfW);
+      this.addRow(oz + halfD, ox - halfW, ox + halfW);
+      this.addCol(ox - halfW, oz - halfD, oz + halfD);
+      this.addCol(ox + halfW, oz - halfD, oz + halfD);
+    });
 
-    const rows = cap("sokak_per_mahalle") / SOKAK_COLS.length;
-    for (let r = 0; r < rows; r++) {
-      const pts = [];
-      for (let x = ox - halfW; x <= ox + halfW + 0.1; x += 20) pts.push([x, this.rowZ(cell, r, x).z]);
-      this.addRoad(pts, "sokak");
-    }
     const perBina = cap("daire_per_bina");
     const binaPerSokak = cap("bina_per_sokak");
     const first = cell.mahalle * perMahalle();
+    const order = this._sokakOrder(cell);
+    const built = new Map(); // sokak sırası -> kurulu binaların x'leri
     for (let s = 0; s < cap("sokak_per_mahalle"); s++) {
       for (let b = 0; b < binaPerSokak; b++) {
         const slot0 = first + (s * binaPerSokak + b) * perBina;
         if (slot0 >= this.population) continue;
         const home = this.homeOf(slot0);
+        const r = order[s].r;
+        if (!built.has(r)) built.set(r, []);
+        built.get(r).push(home.bx);
         const key = cell.mahalle * 1000 + s * 10 + b;
         const floors = 3 + Math.floor(hash2(key, 1, 5) * 3);
         const perFloor = Math.ceil(perBina / floors);
@@ -1110,40 +1307,78 @@ export class World {
           balconies: hash2(key, 6, 5) < 0.7,
           cumba: hash2(key, 7, 5) < style.cumba,
           slot0, daireler: perBina,
-          address: `${sokakName(home.parts.mahalle, home.parts.sokak)} No ${home.parts.bina * 2 + 1}, ${mahalleName(home.parts.mahalle)}`,
+          address: `${sokakName(home.parts.mahalle, home.parts.sokak)} No ${home.parts.bina + 1}, ${mahalleName(home.parts.mahalle)}`,
         });
         this.buildingBySlot0.set(slot0, this.buildings[this.buildings.length - 1]);
       }
     }
+
+    // Sokaklar: evi olan ya da açılmış bir mahalle yerine (cami, çay bahçesi...) giden sıralar. Araçlar
+    // gelene kadar sokak evlerin önüne (ya da o yere) kadar uzanır; sonra iki uçta çevre caddelerine
+    // bağlanır. Mahalle caddesi de en uzak sokağa kadar gider.
+    const reach = new Map(); // sokak sırası -> şeride uzanacağı yanlar
+    for (const a of this._amenityPlan(cell)) {
+      if (!this.has(a.key)) continue;
+      if (!reach.has(a.row)) reach.set(a.row, new Set());
+      reach.get(a.row).add(a.side);
+    }
+    let far = null;
+    for (const r of new Set([...built.keys(), ...reach.keys()])) {
+      if (far == null || Math.abs(this.rowZ(cell, r, ox).z - entryZ) > Math.abs(this.rowZ(cell, far, ox).z - entryZ)) far = r;
+      const xs = built.get(r) ?? [ox];
+      const xa = cars || reach.get(r)?.has(-1) ? ox - halfW : Math.min(ox, Math.min(...xs) - LOT / 2 - 3);
+      const xb = cars || reach.get(r)?.has(1) ? ox + halfW : Math.max(ox, Math.max(...xs) + LOT / 2 + 3);
+      const pts = [[xa, this.rowZ(cell, r, xa).z]];
+      for (let x = ox - halfW; x <= ox + halfW + 0.1; x += 20) if (x > xa + 0.5 && x < xb - 0.5) pts.push([x, this.rowZ(cell, r, x).z]);
+      pts.push([xb, this.rowZ(cell, r, xb).z]);
+      this.addRoad(pts, "sokak");
+    }
+    if (cars) this.addRoad([[ox, oz - halfD], [ox, oz + halfD]], "cadde");
+    else if (far != null) this.addRoad([[ox, entryZ], [ox, this.rowZ(cell, far, ox).z]], "cadde");
     this._layoutAmenities(cell);
-    this.labels.push({ text: mahalleName(cell.mahalle), x: ox, z: oz, h: 45 });
+    if (built.size) this.labels.push({ text: mahalleName(cell.mahalle), x: ox, z: oz, h: 45 });
   }
 
   /**
    * Mahallenin iki yanındaki şeritlerde, sokak araları: cami (avlu ve şadırvanla), çay bahçesi,
    * çocuk parkı, basketbol sahası, küçük park. Akşam dışarı çıkan sakinlerin yarısı buraya gelir.
    */
+  /**
+   * Mahalle yerlerinin şeritlerdeki dizilişi: her şeritte girişe en yakın sokak arasından uzağa, önce
+   * açılanlar girişe yakın. Cami hep batı şeridinde (komşu mahallenin camisiyle sınır caddesinin iki
+   * yanında karşı karşıya gelmesin); okul (okul sayısı kadar mahallede) doğuda. row: yerin girişe
+   * yakın kenarındaki sokak (araçlar gelmeden önce o sokak şeride kadar uzatılır).
+   */
+  _amenityPlan(cell) {
+    const m = cell.mahalle;
+    const south = this._entryZ(cell) > cell.cz * CELL_D;
+    const sides = { "-1": ["cami", "cay", "oyun", "park"], "1": [m < cat().isyerleri.okul.length ? "okul" : "park", "cay", "oyun", "basket"] };
+    const out = [];
+    for (const side of [-1, 1]) {
+      sides[side].forEach((kind, i) => {
+        const r = south ? 3 - i : i; // sokak arası: r ile r + 1
+        out.push({ side, kind, r, row: south ? r + 1 : r, key: `${kind === "park" ? "mpark" : kind}:${m}` });
+      });
+    }
+    return out;
+  }
+
   _layoutAmenities(cell) {
     const [ox, oz] = this.cellCenter(cell);
     const halfW = CELL_W / 2;
     const m = cell.mahalle;
     const style = this.mahalleStyle(m);
     const place = "mahalle:" + m;
-    const anchors = [];
+    const anchors = [], anchorKeys = [];
     const stripX = (side) => ox + side * (halfW - 7 - 13.5);
     // Sokak araları: r ile r+1 arası (r = 0..3).
     const gap = (r, x) => {
       const a = this.rowZ(cell, r, x).z + ROADS.sokak.width / 2 + 1, b = this.rowZ(cell, r + 1, x).z - ROADS.sokak.width / 2 - 1;
       return { z: (a + b) / 2, h: b - a };
     };
-    const plan = style.mosqueWest
-      ? { "-1": ["cami", "park", "cay", "oyun"], "1": ["cay", "basket", "park", "oyun"] }
-      : { "-1": ["oyun", "cay", "park", "basket"], "1": ["park", "cami", "cay", "oyun"] };
-    // Mahalle okulu: doğu şeridinde, bahçeli (okul sayısı kadar mahallede).
-    if (m < cat().isyerleri.okul.length) plan["1"][2] = "okul";
-    for (const side of [-1, 1]) {
+    for (const { side, kind, r, key } of this._amenityPlan(cell)) {
       const x = stripX(side);
-      plan[String(side)].forEach((kind, r) => {
+      this._tag(key, () => {
         const g = gap(r, x);
         const cz = g.z;
         this.block(x - 13, cz - g.h / 2, x + 13, cz + g.h / 2, 0);
@@ -1171,7 +1406,7 @@ export class World {
             const door = [x, bz + 5.5 - 0.35];
             const gate = [x, yard.z1 + 1];
             this._addWorkplace("okul", m, { door, path: [door, gate, HUB], anchor: door, spread: 2, building: b });
-            (this.schools ??= []).push({ ...yard, x, building: b });
+            (this.schools ??= []).push({ ...yard, x, building: b, _k: this._key });
             break;
           }
           case "cay": {
@@ -1188,6 +1423,7 @@ export class World {
               }
             }
             anchors.push([x, cz]);
+            anchorKeys.push(this._key);
             break;
           }
           case "oyun": {
@@ -1206,18 +1442,17 @@ export class World {
           }
           default: {
             // Küçük park: ağaçlar (blok kaldırılır) ve banklar.
-            for (let gx = Math.floor((x - 13) / 4); gx <= Math.floor((x + 13) / 4); gx++) {
-              for (let gz = Math.floor((cz - g.h / 2) / 4); gz <= Math.floor((cz + g.h / 2) / 4); gz++) this.blocked.delete(gx * 100003 + gz);
-            }
+            this.unblock(x - 13, cz - g.h / 2, x + 13, cz + g.h / 2);
             this.parks.push({ x0: x - 12, z0: cz - g.h / 2, x1: x + 12, z1: cz + g.h / 2 });
             this.addBench(x, cz, 0, place);
             anchors.push([x, cz + 3]);
+            anchorKeys.push(this._key);
           }
         }
       });
     }
     const pathPoint = [stripX(-1), this.rowZ(cell, 2, stripX(-1)).z];
-    this.places[place] = { anchors, spread: 4, path: [pathPoint], mahalle: m };
+    this._place(place, { anchors, anchorKeys, spread: 4, path: [pathPoint], mahalle: m });
   }
 
   /** Bir sakinin evi: bina konumu ve yönü, kapı ve meydana giden yol. */
@@ -1229,10 +1464,12 @@ export class World {
     })();
     const style = this.mahalleStyle(p.mahalle);
     const [ox, oz] = this.cellCenter(cell);
-    const half = cap("bina_per_sokak") / 2;
-    const r = Math.floor(p.sokak / SOKAK_COLS.length), c = p.sokak % SOKAK_COLS.length;
-    const north = p.bina < half;
-    const bx0 = ox + SOKAK_COLS[c][0] + LOT / 2 + (p.bina % half) * LOT;
+    const { r, c } = this._sokakOrder(cell)[p.sokak];
+    // Sokakta binalar mahalle caddesine yakından uzağa, karşılıklı sırayla dizilir: tek numaralar
+    // kuzeyde, çiftler güneyde.
+    const pos = Math.floor(p.bina / 2), north = p.bina % 2 === 0;
+    const [c0, c1] = SOKAK_COLS[c];
+    const bx0 = c1 <= 0 ? ox + c1 - LOT / 2 - pos * LOT : ox + c0 + LOT / 2 + pos * LOT;
     const { z: streetZ, slope } = this.rowZ(cell, r, bx0);
     // Sokağın kuzey normali (eğimli sokakta binalar sokağa dik durur).
     const n = Math.hypot(1, slope);
@@ -1258,6 +1495,21 @@ export class World {
 
   placeOf(name) {
     return this.places[name] ?? this.places.meydan;
+  }
+}
+
+/** Tabloda adı olmayan gelişim adımlarının adı (çarşı dükkânları, sonraki mahallelerin yerleri). */
+function stageName(key) {
+  const [kind, n] = key.split(":");
+  const m = Number(n);
+  switch (kind) {
+    case "carsi": return "Çarşıda yeni dükkân";
+    case "cami": return `${mahalleName(m).replace(" Mahallesi", "")} Camii`;
+    case "cay": return `${mahalleName(m)} çay bahçesi`;
+    case "mpark": return `${mahalleName(m)} parkları`;
+    case "oyun": return `${mahalleName(m)} çocuk parkları`;
+    case "basket": return `${mahalleName(m)} basketbol sahası`;
+    default: return cat().isyerleri[kind]?.[m] ?? key;
   }
 }
 

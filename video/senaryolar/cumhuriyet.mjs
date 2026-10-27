@@ -1,49 +1,50 @@
-// 2. video (29 Ekim): adanın ilk Cumhuriyet Bayramı. Ada bayraklarla donanmış, akşam havai fişek var,
-// ama henüz kutlayacak kimse yok. Belediye (57, -18) önünde gönder (66.6, -1); yaya caddesi x = 0, z 30-190.
+// 2. video (29 Ekim): adanın ilk Cumhuriyet Bayramı. Boş adada meydandaki gönder ve iskele binasının
+// direğinde bayrak dalgalanıyor, akşam denizde havai fişek var, ama henüz kutlayacak kimse yok.
+// Meydan gönderi (0, -25.5), 12 m; iskele binası (-24, 182); vapur iskelesi x = 0, z 199-279.
 export default {
   ad: "02-cumhuriyet",
   fps: 30,
   w: 1080,
   h: 1920,
   gecis: 0.4,
-  aciklama: `Mercanada'nın ilk Cumhuriyet Bayramı 🇹🇷 Sokaklar bayraklarla donandı, akşam havai fişek var... ama adada henüz kutlayacak kimse yok.
+  aciklama: `Mercanada'nın ilk Cumhuriyet Bayramı 🇹🇷 Meydandaki gönderde bayrak dalgalanıyor, akşam havai fişek var... ama adada henüz kutlayacak kimse yok.
 
 TikTok'ta takip eden herkes adaya taşınıyor. Gelecek bayramda meydan dolu olsun.
 
 #29ekim #cumhuriyetbayramı #mercanada #keşfet #ada #şehirkurma`,
   cekimler: [
     {
-      // Bayraklı yaya caddesi boyunca denize doğru alçak uçuş.
+      // Meydan gönderi aşağıdan: bayrak gökyüzünde.
       sure: 5,
       adres: "tarih=2026-10-29&saat=10:30&hiz=2",
       kamera: [
-        [0, 2, 10, 36, 0, 5, 110],
-        [5, -1, 8, 120, 0, 4, 210],
+        [0, 9, 1.7, -11, 0, 10.5, -25.5],
+        [5, 5, 2.2, -14, 0, 11, -25.5],
       ],
       yazilar: [{ metin: "Mercanada'nın ilk<br>Cumhuriyet Bayramı 🇹🇷", bas: 0.2, son: 5, yer: "ust" }],
     },
     {
-      // Belediyenin önündeki gönder, aşağıdan.
-      sure: 4.2,
-      adres: "tarih=2026-10-29&saat=10:40&hiz=2",
+      // Bomboş meydan: önde çeşme, arkada gönder.
+      sure: 4.4,
+      adres: "tarih=2026-10-29&saat=10:45&hiz=2",
       kamera: [
-        [0, 32, 2.2, 6, 66.6, 12, -1],
-        [4.2, 44, 2.6, 3.5, 66.6, 14, -1],
+        [0, 26, 13, 30, 0, 5, -22],
+        [4.4, 17, 9.5, 21, 0, 6, -24],
       ],
-      yazilar: [{ metin: "Ada bayramlığını giydi...", bas: 0.2, son: 4.2, yer: "ust" }],
+      yazilar: [{ metin: "Meydanda bayrak<br>dalgalanıyor...", bas: 0.2, son: 4.4, yer: "ust" }],
     },
     {
-      // Bomboş meydan.
+      // İskele binası ve direği, boş iskele (kamera iskelenin batısında, denizin üstünde; vapur doğuda).
       sure: 4.4,
       adres: "tarih=2026-10-29&saat=11:00&hiz=2",
       kamera: [
-        [0, 44, 30, 64, 0, 0, 0],
-        [4.4, 30, 22, 46, 0, 0, -4],
+        [0, -11, 6.5, 236, -22, 4, 184],
+        [4.4, -14, 5.5, 222, -24, 4, 183],
       ],
       yazilar: [{ metin: "...ama kutlayacak<br>kimse yok.", bas: 0.2, son: 4.4, yer: "ust" }],
     },
     {
-      // Akşam, bayraklı yaya caddesinden denizdeki havai fişeğe.
+      // Akşam, karanlık adanın patikasından denizdeki havai fişeğe.
       sure: 7,
       adres: "tarih=2026-10-29&saat=20:41&hiz=1",
       kamera: [

@@ -52,6 +52,14 @@ def publish(db: str = DB) -> dict:
     takipci = psql("SELECT deger FROM durum WHERE anahtar = 'tt_takipci'", db)
     takipci = json.loads(takipci)["sayi"] if takipci else None
     son = psql("SELECT coalesce(max(extract(epoch FROM imported_at))::bigint, 0) FROM aktarimlar", db)
+    # Gelişim düzeyi: adanın ulaştığı en yüksek nüfus (en büyük sıra + 1). Ayrılanlar yüzünden düşmez;
+    # site neyin açık olduğunu (iş yerleri, yollar, parklar) buna göre kurar.
+    nufus = max((s[2] for s in sakinler), default=-1) + 1
+    eski = psql("SELECT deger FROM durum WHERE anahtar = 'zirve'", db)
+    zirve = max(nufus, json.loads(eski)["sayi"] if eski else 0)
+    if not eski or zirve != json.loads(eski)["sayi"]:
+        psql(f"""INSERT INTO durum (anahtar, deger) VALUES ('zirve', '{{"sayi": {zirve}}}')
+                 ON CONFLICT (anahtar) DO UPDATE SET deger = EXCLUDED.deger, updated_at = now();""", db)
     data = {
         "v": 1,
         "guncel": int(time.time()),
@@ -59,6 +67,7 @@ def publish(db: str = DB) -> dict:
         "takipci": takipci,
         # Takip etmiş ama henüz aktarımla taşınmamış olanlar: iskelede valizleriyle bekler.
         "bekleyen": max(0, takipci - len(sakinler)) if takipci is not None else 0,
+        "zirve": zirve,
         # [handle | null (adı gizli), seed, slot, arrived_day, overrides | null]
         "sakinler": sakinler,
     }
@@ -66,7 +75,7 @@ def publish(db: str = DB) -> dict:
     tmp = PUBLIC / "sakinler.json.tmp"
     tmp.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
     tmp.replace(PUBLIC / "sakinler.json")
-    return {"sakin": len(sakinler), "bekleyen": data["bekleyen"], "worker": push((PUBLIC / "sakinler.json").read_bytes())}
+    return {"sakin": len(sakinler), "bekleyen": data["bekleyen"], "zirve": zirve, "worker": push((PUBLIC / "sakinler.json").read_bytes())}
 
 
 def push(body: bytes) -> str:

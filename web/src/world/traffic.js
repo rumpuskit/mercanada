@@ -367,6 +367,8 @@ export class Traffic {
     const w = this.world;
     this.slots = [];
     this.containers = [];
+    this.slotIndex = new Map();
+    if (w.vehicles === false) return; // araçlar çevre yoluyla gelir: öncesinde park yeri ve konteyner yok
     const doors = w.buildings.map((b) => [b.x + Math.sin(b.rot) * (b.d / 2 + 4), b.z + Math.cos(b.rot) * (b.d / 2 + 4)]);
     let n = 0;
     for (const e of this.edges) {
@@ -489,6 +491,7 @@ export class Traffic {
   _busLines() {
     const w = this.world;
     this.lines = [];
+    if (w.vehicles === false) return;
     const halfW = CELL_W / 2, halfD = CELL_D / 2;
     const make = (name, color, waypoints, headway) => {
       const seq = this._loopSeq(waypoints);
@@ -607,6 +610,7 @@ export class Traffic {
     this.serviceDay = day;
     this.services = [];
     const w = this.world;
+    if (w.vehicles === false) return;
     const h = (a, b) => ((Math.imul((day * 2654435761 + a * 40503 + b * 97) | 0, 2246822519) >>> 0) % 10000) / 10000;
     const homes = w.buildings.filter((b) => b.daireler);
     const doorOf = (b) => [b.x + Math.sin(b.rot) * (b.d / 2 + 6), b.z + Math.cos(b.rot) * (b.d / 2 + 6)];

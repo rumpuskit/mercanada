@@ -15,6 +15,16 @@ TikTok takipçi listesini resmî arayüzünden vermez; tek resmî yol hesabın "
 3. Betik güncel listeyi Cloudflare Worker'ına (`sayac/`) yollar; site listeyi oradan okur. Ziyaretçi trafiği sunucuya gelmez.
 4. Aradaki günlerde TikTok API'sinden yalnız takipçi **sayısı** alınır (saatlik); henüz taşınmamış olanlar vapur iskelesinde valizleriyle bekler.
 
+## Ada nasıl büyür?
+
+Ada boş başlar: vapur iskelesi, toprak patikalar, çeşmeli meydan ve bayrak direği, tepe, fener ve kumsal. Her şeyin yeri baştan bellidir ama yalnızca açılmış olanlar kurulur:
+
+- **Evler** sakinlerle gelir: bir apartman, ilk dairesine biri taşınınca dikilir. Mahalle girişe en yakın sokaktan dışa doğru dolar; sokaklar evlerin önüne kadar uzanır.
+- **Yerler** `data/catalog.json` içindeki `gelisim` tablosuna göre açılır: 5. sakinde meydan bankları, 10'da kahvehane, 20'de market, 30'da fırın... 230'da çevre yolu ile arabalar ve otobüs, 600'de yük limanı, 2.650'de son kafe. Sonraki mahallelerin camisi, çay bahçesi ve okulu, mahalle dolmaya başladıktan sonra aynı aralıklarla gelir; çarşı dükkânları 240. sakinden başlayarak tek tek açılır.
+- Gelişim düzeyi adanın **ulaştığı en yüksek nüfustur** (`zirve`); takibi bırakanlar yüzünden açılmış bir yer kapanmaz.
+- İş yeri henüz açılmamış bir mesleğin sahibi o yer açılana kadar **anakarada çalışır** (vapurla gider gelir); kartında "Mercan Fırını açılınca fırın çırağı olacak (30. sakinde)" yazar. Açılınca asıl işine geçer.
+- Sitede "Sıradaki: … · N sakin daha" satırı ve haritada sıradaki yapının şantiye çitli hayalet taslağı görünür. Aktarım çıktısındaki `acilan` listesi Taşınma Günü videosunun malzemesidir.
+
 ## Yapı
 
 ```
@@ -49,7 +59,8 @@ sayac/                     Cloudflare Worker: çevrimiçi sayacı, /sakinler.jso
 # Geliştirme sunucusu (http://localhost:5173)
 cd web && npm install && npm run dev
 
-# Adres çubuğu seçenekleri: ?nufus=12000 (gerçek liste yerine örnek nüfus), ?bekleyen=40 (iskelede bekleyen),
+# Adres çubuğu seçenekleri: ?nufus=12000 (gerçek liste yerine örnek nüfus), ?gelisim=500 (adayı o gelişim
+# düzeyinde göster), ?bekleyen=40 (iskelede bekleyen),
 # ?test (60×/600× düğmeleri), ?saat=21:30 (sabit saat, test/hiz ile), ?hiz=60 (zaman hızı),
 # ?bul=sakin_0042 (sakini bulup göster), ?bak=x,z,uzaklık (kamera)
 

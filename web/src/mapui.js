@@ -95,18 +95,19 @@ export function createMapUI({ world, camera, controls, flyTo }) {
   });
   $("minimap-toggle").addEventListener("click", () => $("minimap").classList.toggle("open"));
 
-  // Yer kısayolları.
+  // Yer kısayolları (yalnızca adada açılmış olanlar).
+  const prom = world.promenade, park = world.plazas.find((q) => q.kind === "park"), tarla = world.workplaces.tarla?.find(Boolean);
   const places = [
     ["Meydan", 0, 0, 90],
-    ["Liman", 0, world.coastPoint(0, 60, 0, 1)[1] + 10, 110],
-    ["Sahil", world.promenade[Math.floor(world.promenade.length / 2)][0], world.promenade[Math.floor(world.promenade.length / 2)][1], 90],
-    ["Park", ...(() => { const p = world.plazas.find((q) => q.kind === "park"); return [(p.x0 + p.x1) / 2, (p.z0 + p.z1) / 2]; })(), 120],
+    ["İskele", 0, world.coastPoint(0, 60, 0, 1)[1] + 10, 110],
+    prom && ["Sahil", ...prom[Math.floor(prom.length / 2)], 90],
+    park && ["Park", (park.x0 + park.x1) / 2, (park.z0 + park.z1) / 2, 120],
     ["Plaj", ...world.places.plaj.anchors[4], 110],
     ["Tepe", ...world.places.tepe.anchors[0], 120],
     ["Fener", world.fener.x, world.fener.z, 90],
-    ["Tarlalar", ...world.workplaces.tarla[0].anchor, 160],
+    tarla && ["Tarlalar", ...tarla.anchor, 160],
     ...world.labels.filter((l) => /Mahallesi$/.test(l.text)).map((l) => [l.text.replace(" Mahallesi", ""), l.x, l.z, 220]),
-  ];
+  ].filter(Boolean);
   const chips = $("places");
   chips.replaceChildren(...places.map(([name, x, z, d]) => {
     const btn = document.createElement("button");

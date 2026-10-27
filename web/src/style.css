@@ -148,6 +148,10 @@ button {
 #hud .waiting[hidden] {
   display: none;
 }
+#hud .line.next {
+  color: #b8661f;
+  white-space: normal; /* telefonda kesilmesin: kaç sakin kaldığı satırın sonunda */
+}
 
 #hud .line {
   font-weight: 700;
@@ -367,6 +371,16 @@ button {
   color: var(--muted);
   font-weight: 700;
   font-size: 14px;
+}
+
+#card .dream {
+  margin-top: 3px;
+  color: #b8661f;
+  font-weight: 700;
+  font-size: 13px;
+}
+#card .dream[hidden] {
+  display: none;
 }
 
 #card .now {

@@ -6,10 +6,69 @@
 // (ör. {meslek: "balikci", evcil: "Kedi"}).
 
 let catalog = null;
+let town = Infinity; // adanın gelişim düzeyi (en yüksek nüfus); varsayılan: her şey açık
+let stageCache = null;
+let branchCache = new Map();
 
 /** Katalog dışarıdan verilir: tarayıcı JSON'u paketler, Node testi dosyadan okur. */
 export function setCatalog(data) {
   catalog = data;
+  stageCache = null;
+  branchCache = new Map();
+}
+
+// --- gelişim: ada nüfusla parça parça açılır ---
+//
+// Katalogdaki "gelisim" tablosu hangi yerin kaçıncı sakinde açıldığını söyler (iş yerleri "tür:sıra",
+// ör. "firin:0"; diğerleri yalnızca haritayı ilgilendirir). Tabloda olmayan anahtar baştan açıktır.
+// Mahalle yerleri (cami, çay bahçesi...) ilk mahallede tablodan, sonrakilerde mahallenin dolmaya
+// başladığı sayıdan aynı aralıkla açılır. Kilitli iş yerinin çalışanı o yer açılana kadar anakarada
+// çalışır (vapurla gider gelir); açılınca asıl mesleğine geçer.
+
+export function setTown(level) {
+  town = level;
+  branchCache = new Map();
+}
+
+export function townLevel() {
+  return town;
+}
+
+function perMahalle() {
+  return cap("daire_per_bina") * cap("bina_per_sokak") * cap("sokak_per_mahalle");
+}
+
+/** Anahtarın açıldığı nüfus (0: baştan açık). */
+export function stageOf(key) {
+  if (!stageCache) {
+    stageCache = new Map();
+    for (const st of catalog.gelisim ?? []) for (const k of st.acar) stageCache.set(k, st.nufus);
+  }
+  const hit = stageCache.get(key);
+  if (hit !== undefined) return hit;
+  const m = /^([a-z_]+):(\d+)$/.exec(key);
+  if (m) {
+    const n = Number(m[2]);
+    if (m[1] === "carsi" && catalog.gelisim_dukkan) return catalog.gelisim_dukkan.ilk + n * catalog.gelisim_dukkan.aralik;
+    const first = stageCache.get(m[1] + ":0");
+    if (n > 0 && first !== undefined && (catalog.gelisim_mahalle ?? []).includes(m[1])) return n * perMahalle() + first;
+  }
+  return 0;
+}
+
+export function isOpen(key) {
+  return town >= stageOf(key);
+}
+
+/** Bir iş yeri türünün açık şubeleri (sıra numaraları). */
+function openBranches(kind) {
+  let list = branchCache.get(kind);
+  if (!list) {
+    list = [];
+    catalog.isyerleri[kind].forEach((_, i) => { if (isOpen(`${kind}:${i}`)) list.push(i); });
+    branchCache.set(kind, list);
+  }
+  return list;
 }
 
 export function cat() {
@@ -124,7 +183,7 @@ export function sokakName(mahalle, sokak) {
 
 export function addressText(slot) {
   const p = addressParts(slot);
-  return `${sokakName(p.mahalle, p.sokak)} No ${p.bina * 2 + 1}, Daire ${p.daire + 1}, ` +
+  return `${sokakName(p.mahalle, p.sokak)} No ${p.bina + 1}, Daire ${p.daire + 1}, ` +
     `${mahalleName(p.mahalle)}, ${adaName(p.ada)}`;
 }
 
@@ -153,7 +212,8 @@ function override(r, key) {
   return String(r.overrides?.[key] ?? "");
 }
 
-export function job(r) {
+/** Sakinin asıl mesleği (iş yeri henüz açılmamış olabilir). */
+export function dreamJob(r) {
   const jobs = catalog.meslekler;
   let i = find(jobs, override(r, "meslek"));
   // Kadrolu işler (fener bekçisi, cankurtaran): geliş sırasına göre sabit kontenjan, nüfusla orantılı.
@@ -162,10 +222,22 @@ export function job(r) {
   return jobs[i];
 }
 
+/** Bugünkü mesleği: asıl mesleğinin iş yeri adada henüz yoksa anakarada çalışır. */
+export function job(r) {
+  const j = dreamJob(r);
+  if (openBranches(j.yer).length) return j;
+  return catalog.meslekler[find(catalog.meslekler, catalog.kilitli_meslek)];
+}
+
 export function workplace(r) {
   const kind = job(r).yer;
   const names = catalog.isyerleri[kind];
-  const index = roll(r.seed, "isyeri") % names.length;
+  let index = roll(r.seed, "isyeri") % names.length;
+  if (!isOpen(`${kind}:${index}`)) {
+    // Kendi şubesi açılana kadar açık olanlardan birinde çalışır.
+    const open = openBranches(kind);
+    index = open[roll(r.seed, "isyeri") % open.length];
+  }
   return { kind, index, name: names[index] };
 }
 

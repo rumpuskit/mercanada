@@ -187,7 +187,8 @@ VALUES (:'pf', :day, :'sha', :takipci, :gelen, :donen, :ayrilan, :silinen);
 
 SELECT json_build_object(
     'gelen', :gelen, 'donen', :donen, 'ayrilan', :ayrilan, 'silinen', :silinen,
-    'nufus', (SELECT count(*) FROM sakinler WHERE left_day IS NULL));
+    'nufus', (SELECT count(*) FROM sakinler WHERE left_day IS NULL),
+    'en_buyuk', (SELECT coalesce(max(slot) + 1, 0) FROM sakinler WHERE left_day IS NULL));
 {end};
 """
 
@@ -217,7 +218,14 @@ def main() -> None:
     rows = "\n".join(f"{h}\t{sim.seed_of(key_of(args.platform, h))}\t{ts}" for h, ts in followers.items())
     sql = IMPORT_SQL.format(rows=rows, window=RETURN_WINDOW_DAYS, end="ROLLBACK" if args.dry_run else "COMMIT")
     variables = ["-v", f"day={args.day}", "-v", f"sha={sha}", "-v", f"takipci={len(followers)}", "-v", f"pf={args.platform}"]
+    eski = psql("SELECT deger FROM durum WHERE anahtar = 'zirve'", args.db)
+    eski = json.loads(eski)["sayi"] if eski else 0
     result = json.loads(psql(sql, args.db, variables))
+    # Bu taşınmayla adada açılanlar (gelişim tablosundan): Taşınma Günü videosunun malzemesi.
+    yeni = max(eski, result.pop("en_buyuk"))
+    result["acilan"] = [st["ad"] for st in sim.catalog()["gelisim"] if eski < st["nufus"] <= yeni]
+    sira = [st for st in sim.catalog()["gelisim"] if st["nufus"] > yeni]
+    result["siradaki"] = f"{sira[0]['ad']} ({sira[0]['nufus']}. sakinde)" if sira else None
     if not args.dry_run:
         result["yayin"] = publish(args.db)
     print(("[DENEME] " if args.dry_run else "") + json.dumps(result, ensure_ascii=False))

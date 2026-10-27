@@ -187,7 +187,8 @@ export class People {
 
     this.nav = new PedNav(world);
     // Araç sahipliği (yaklaşık üçte bir) ve evin önündeki sabit park yeri.
-    this.hasCar = residents.map((r) => roll(r.seed, "araba") % 100 < 45);
+    // Araçlar çevre yoluyla gelir; öncesinde herkes yürür (otobüs ve taksi de yok).
+    this.hasCar = residents.map((r) => world.vehicles && roll(r.seed, "araba") % 100 < 45);
     this.carColor = residents.map((r) => roll(r.seed, "arabaRenk") % 10);
     this.homeSlot = residents.map((r, i) => (this.hasCar[i] && traffic ? traffic.takeSlot(...this.homes[i].door, -1, 1e9, 220) : null));
     this.homeSlot.forEach((slot, i) => { if (slot == null) this.hasCar[i] = false; });
@@ -207,10 +208,10 @@ export class People {
     const pools = {};
     const add = (name, item) => (pools[name] ??= []).push({ ...item, busy: [] });
     for (const s of w.seats) add("seat:" + s.place, s);
-    for (const s of w.places.iskele.spots) add("fish", s);
-    // İskele dolunca kıyıdan da balık tutulur: sahil yolunun deniz kenarında, 7 m arayla.
+    for (const s of w.places.iskele?.spots ?? []) add("fish", s);
+    // İskele dolunca (ya da henüz yoksa) kıyıdan balık tutulur: sahil yolunun deniz kenarında, 3,5 m arayla.
     for (let x = -300; x <= 25; x += 3.5) {
-      if (Math.abs(x - w.places.iskele.spots[0].x) < 6 || Math.abs(x) < 9 || Math.abs(x + 218) < 22) continue; // iskeleler ve balıkçı koyu hariç
+      if (Math.abs(x - (w.places.iskele?.spots[0].x ?? -1e4)) < 6 || Math.abs(x) < 9 || Math.abs(x + 218) < 22) continue; // iskeleler ve balıkçı koyu hariç
       const [cx, cz] = w.coastPoint(x, 60, 0, 1, 1.6);
       if (w.isWalkable(cx, cz) && w.height(cx, cz) > 0.2) add("fish", { x: cx, z: cz, heading: 0 });
     }
@@ -228,7 +229,7 @@ export class People {
       const a = (k / 8) * Math.PI * 2, [x, z] = w.nearestWalkable(summit[0] + Math.cos(a) * 9, summit[1] + Math.sin(a) * 9, 3);
       addView({ x, z, heading: Math.atan2(x - summit[0], z - summit[1]) });
     }
-    const pier = w.piers[0];
+    const pier = w.ferryPier;
     if (pier) for (const dx of [-3, 0, 3]) addView({ x: (pier.x0 + pier.x1) / 2 + dx, z: pier.z1 - 1.5, heading: 0 });
     // Park (şövale), plaj (yoga, yüzme), tepe (uçurtma): engelsiz noktalar.
     const scatter = (name, cx, cz, radius, count, heading, salt, accept = (x, z) => w.isWalkable(x, z)) => {
@@ -243,7 +244,12 @@ export class People {
     };
     const park = w.plazas.find((p) => p.kind === "park");
     const pond = w.features.find((f) => f.type === "gol");
-    scatter("easel", (park.x0 + park.x1) / 2, (park.z0 + park.z1) / 2, 40, 14, (x, z) => Math.atan2(pond.x - x, pond.z - z), 11);
+    if (park && pond) scatter("easel", (park.x0 + park.x1) / 2, (park.z0 + park.z1) / 2, 40, 14, (x, z) => Math.atan2(pond.x - x, pond.z - z), 11);
+    else {
+      // Göletli park açılana kadar ressamlar tepenin eteğinde, denize bakarak çalışır.
+      const [hx, hz] = w.places.tepe.anchors[0];
+      scatter("easel", hx - 30, hz + 25, 18, 6, Math.PI * 0.85, 11);
+    }
     const beach = w.places.plaj.anchors;
     const sea = (x, z) => w.height(x, z) > 0.35 && w.height(x, z) < 1.6 && !w.obstacles.has(w._obKey(x, z));
     for (const [bx, bz] of beach) scatter("yoga", bx, bz, 6, 2, Math.PI, 13 + Math.round(bx), sea);
@@ -320,10 +326,11 @@ export class People {
     const s = this.residents[i].seed;
     if (seg.ne === "is") return `work:${this.works[i].wp.kind}:${this.works[i].wp.index}`;
     if (seg.ne === "hobi") {
-      return {
+      const mode = {
         balik: "fish", kitap: "seat:park", resim: "easel", bisiklet: "bike", kosu: "jog", yuzme: "swim",
         yoga: "yoga", ucurtma: "kite", gitar: "seat:meydan", satranc: "seat:meydan", fotograf: "view", tavla: "seat:kahvehane",
-      }[this.hobbies[i].id] ?? "group:" + seg.yer.replace("hobi:", "");
+      }[this.hobbies[i].id];
+      return this._usable(mode) ? mode : "group:" + seg.yer.replace("hobi:", "");
     }
     if (seg.ne === "meydan") {
       const m = roll(s, "meydanMod", this.day * 16 + k) % 100;
@@ -333,9 +340,23 @@ export class People {
       // Kahvehane çoğunlukla içeridedir (tavla, okey); dışarıdaki birkaç masaya yer varsa oturulur.
       if (pl === "kahvehane") return m < 35 ? "seat:kahvehane" : "inside:kahvehane";
       if (pl !== "meydan") return m < 55 ? "seat:" + pl : "group:" + pl;
-      return m < 22 ? "seat:meydan" : m < 50 ? "seat:kafe" : m < 72 ? "shop" : "group:meydan";
+      const mode = m < 22 ? "seat:meydan" : m < 50 ? "seat:kafe" : m < 72 ? "shop" : "group:meydan";
+      return this._usable(mode) ? mode : "group:meydan";
     }
     return "group:meydan";
+  }
+
+  /**
+   * Bu etkinliğin yeri adada var mı? (Gelişimle açılan yerler: göletli park, sahil yolu, çarşı, kafe
+   * masaları...) Yoksa sakin o vakti meydanda ya da hobisinin yerinde sohbetle geçirir.
+   */
+  _usable(mode) {
+    if (!mode) return false;
+    const w = this.world;
+    if (mode === "bike" || mode === "jog") return !!w.promenade;
+    if (mode === "shop") return !!w.carsiWalks;
+    if (mode.startsWith("group:")) return true;
+    return !!this.pools[mode]?.length;
   }
 
   /** Gün başı: herkesin her yer ziyareti için rolünü varış sırasıyla ayırır. */
@@ -435,6 +456,7 @@ export class People {
 
   /** Günün maç saatleri: her akşam 19:30, hafta sonu ayrıca 15:00. */
   _matchWindows(day) {
+    if (!this.world.pitch) return []; // futbol sahası henüz yok
     const wd = (day + 3) % 7;
     const out = [{ start: 1170, end: 1260 }];
     if (wd >= 5 || isHoliday(day)) out.unshift({ start: 900, end: 1005 });
@@ -624,7 +646,7 @@ export class People {
     let trip = null;
     const cp = this.carPlan?.[i]?.get(k);
     if (cp) trip = this._carTrip(i, seg, k, A, B, cp);
-    else if (this.traffic && (dist > 520 || (dist > 300 && roll(s, "otobusTercih", this.day * 16 + k) % 100 < 70))) {
+    else if (this.traffic && this.world.vehicles && (dist > 520 || (dist > 300 && roll(s, "otobusTercih", this.day * 16 + k) % 100 < 70))) {
       // Arabası olmayan uzak yola otobüsle (bulamazsa kimi taksiyle) gider; kısa yolu yürür.
       trip = this._busTrip(i, seg, k, A, B);
       if (!trip && dist > 450 && roll(s, "taksi", this.day * 16 + k) % 100 < 45) trip = this._taxiTrip(i, seg, k, A, B);

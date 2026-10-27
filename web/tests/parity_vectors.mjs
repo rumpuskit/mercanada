@@ -1,13 +1,14 @@
 // Parite testi için JS simülasyonunun çıktısını JSON olarak basar:
-// node web/tests/parity_vectors.mjs <gün> <kullanıcı adı>...
+// node web/tests/parity_vectors.mjs <gün> <gelişim düzeyi | inf> <kullanıcı adı>...
 // server/tests/test_parity.py bunu Python çıktısıyla karşılaştırır.
 import { readFileSync } from "node:fs";
 import * as sim from "../src/sim.js";
 
 sim.setCatalog(JSON.parse(readFileSync(new URL("../../data/catalog.json", import.meta.url), "utf8")));
 
-const [dayArg, ...handles] = process.argv.slice(2);
+const [dayArg, levelArg, ...handles] = process.argv.slice(2);
 const day = Number(dayArg);
+sim.setTown(levelArg === "inf" ? Infinity : Number(levelArg));
 const out = handles.map((handle, i) => {
   const n = i + 1;
   const r = { handle, seed: sim.seedOf(handle), slot: n * 977, arrived_day: day - (n % 60) };
@@ -17,6 +18,7 @@ const out = handles.map((handle, i) => {
     seed: r.seed,
     address: sim.addressText(r.slot),
     job: sim.job(r).id,
+    dream: sim.dreamJob(r).id,
     workplace: sim.workplace(r).name,
     title: sim.title(r, day),
     pet: sim.pet(r, day),

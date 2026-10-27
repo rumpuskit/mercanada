@@ -5,12 +5,12 @@ import { TIKTOK, TIKTOK_URL } from "./config.js";
 
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const PLACE_NAMES = {
-  meydan: "Çarşı meydanı", iskele: "Balık iskelesi", park: "Park", sahil_yolu: "Sahil yolu", plaj: "Plaj",
+  meydan: "Meydan", iskele: "Balık iskelesi", park: "Park", sahil_yolu: "Sahil yolu", plaj: "Plaj",
   tepe: "Tepe", fener: "Fener", kahvehane: "Kahvehane", pazar: "Pazar", saha: "Futbol sahası",
 };
 // Buluşma yerinde ne yapıyor (yer anahtarına göre).
 const OUT_LABELS = {
-  meydan: "Çarşı meydanında, arkadaşlarıyla", park: "Parkta geziniyor", sahil_yolu: "Sahil yolunda yürüyüşte",
+  meydan: "Meydanda, arkadaşlarıyla", park: "Parkta geziniyor", sahil_yolu: "Sahil yolunda yürüyüşte",
   kahvehane: "Kahvehanede", pazar: "Pazarda alışverişte", saha: "Futbol sahasında",
 };
 
@@ -31,6 +31,15 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       const P0 = world.ferryPier;
       flyTo(0, P0.top, P0.z0 + 14, 45);
     });
+  }
+  // Sıradaki gelişim adımı: kaç sakin daha gelince ne açılacak. Dokununca yerine (şantiyeye) uçar.
+  const ns = world.nextStage;
+  if (ns) {
+    const btn = $("next");
+    const need = Math.max(1, ns.nufus - residents.length);
+    btn.hidden = false;
+    btn.textContent = waiting >= need ? `🏗️ ${ns.name} taşınma gününde açılıyor` : `🏗️ Sıradaki: ${ns.name} · ${fmt.format(need)} sakin daha`;
+    if (ns.at) btn.addEventListener("click", () => flyTo(ns.at[0], world.groundY(ns.at[0], ns.at[1]), ns.at[1], 110));
   }
   let selected = null;
   let mode = null; // "sakin" | "bina" | "arac" | "yer"
@@ -115,6 +124,14 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     // İş yerinin adı yalnızca gerçek bir iş yeri varsa (emekli ve evden çalışanlarda yok).
     const wk = people.works[selected];
     $("card-title").textContent = wk.wp.kind === "ev" ? (wk.job === "emekli" ? "Emekli" : `${sim.title(r, day)} · evinden çalışıyor`) : `${sim.title(r, day)} · ${wk.loc.name}`;
+    // Asıl mesleğinin iş yeri adada henüz yoksa: hangi yer açılınca ne olacağı.
+    const dream = sim.dreamJob(r);
+    $("card-dream").hidden = dream.id === wk.job;
+    if (dream.id !== wk.job) {
+      const opens = sim.cat().isyerleri[dream.yer].map((name, k) => [sim.stageOf(`${dream.yer}:${k}`), name]).sort((a, b) => a[0] - b[0])[0];
+      const t = dream.kademeler[Math.min(sim.rank(r, day), dream.kademeler.length - 1)];
+      $("card-dream").textContent = `🏗️ ${opens[1]} açılınca ${t.toLocaleLowerCase("tr")} olacak (${fmt.format(opens[0])}. sakinde)`;
+    }
     $("card-now").textContent = nowText(selected);
     $("card-tabs").hidden = false;
     $("card-traits").replaceChildren();
@@ -155,7 +172,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       ["Hobi", people.hobbies[selected].ad],
       ["Evcil", pet || "Henüz yok"],
       ["Adada", t === 0 ? "Bugün geldi" : `${fmt.format(t)} gündür`],
-      ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : "Otobüs ve yürüyüş") + (people.works[selected].wp.kind === "anakara" ? " · işe vapurla" : "")],
+      ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : world.vehicles ? "Otobüs ve yürüyüş" : "Yürüyerek (adada henüz araç yok)") + (people.works[selected].wp.kind === "anakara" ? " · işe vapurla" : "")],
     ]);
   }
 

@@ -115,7 +115,7 @@ def sokak_name(mahalle: int, sokak: int) -> str:
 def address_text(slot: int) -> str:
     p = address_parts(slot)
     return (
-        f"{sokak_name(p['mahalle'], p['sokak'])} No {p['bina'] * 2 + 1}, Daire {p['daire'] + 1}, "
+        f"{sokak_name(p['mahalle'], p['sokak'])} No {p['bina'] + 1}, Daire {p['daire'] + 1}, "
         f"{mahalle_name(p['mahalle'])}, {ada_name(p['ada'])}"
     )
 
@@ -139,7 +139,54 @@ def _override(r: dict, key: str) -> str:
     return str((r.get("overrides") or {}).get(key, ""))
 
 
-def job(r: dict) -> dict:
+# --- gelişim: ada nüfusla parça parça açılır (sim.js'teki açıklamaya bak) ---
+
+_town: float = math.inf
+_branch_cache: dict = {}
+
+
+def set_town(level: float) -> None:
+    global _town
+    _town = level
+    _branch_cache.clear()
+
+
+def _per_mahalle() -> int:
+    return cap("daire_per_bina") * cap("bina_per_sokak") * cap("sokak_per_mahalle")
+
+
+@cache
+def _stage_map() -> dict:
+    return {k: int(st["nufus"]) for st in catalog().get("gelisim", []) for k in st["acar"]}
+
+
+def stage_of(key: str) -> int:
+    stages = _stage_map()
+    if key in stages:
+        return stages[key]
+    kind, _, num = key.rpartition(":")
+    if kind and num.isdigit():
+        n = int(num)
+        dukkan = catalog().get("gelisim_dukkan")
+        if kind == "carsi" and dukkan:
+            return int(dukkan["ilk"]) + n * int(dukkan["aralik"])
+        first = stages.get(kind + ":0")
+        if n > 0 and first is not None and kind in catalog().get("gelisim_mahalle", []):
+            return n * _per_mahalle() + first
+    return 0
+
+
+def is_open(key: str) -> bool:
+    return _town >= stage_of(key)
+
+
+def _open_branches(kind: str) -> list:
+    if kind not in _branch_cache:
+        _branch_cache[kind] = [i for i in range(len(catalog()["isyerleri"][kind])) if is_open(f"{kind}:{i}")]
+    return _branch_cache[kind]
+
+
+def dream_job(r: dict) -> dict:
     jobs = catalog()["meslekler"]
     i = _find(jobs, _override(r, "meslek"))
     if i < 0:
@@ -151,10 +198,21 @@ def job(r: dict) -> dict:
     return jobs[i]
 
 
+def job(r: dict) -> dict:
+    j = dream_job(r)
+    if _open_branches(j["yer"]):
+        return j
+    jobs = catalog()["meslekler"]
+    return jobs[_find(jobs, catalog()["kilitli_meslek"])]
+
+
 def workplace(r: dict) -> dict:
     kind = job(r)["yer"]
     names = catalog()["isyerleri"][kind]
     index = roll(r["seed"], "isyeri") % len(names)
+    if not is_open(f"{kind}:{index}"):
+        open_ = _open_branches(kind)
+        index = open_[roll(r["seed"], "isyeri") % len(open_)]
     return {"kind": kind, "index": index, "name": names[index]}
 
 

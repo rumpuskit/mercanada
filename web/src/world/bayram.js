@@ -1,6 +1,7 @@
 // Milli bayramlar: 23 Nisan, 19 Mayıs, 30 Ağustos ve 29 Ekim'de (bir gün önce ve sonra da) ada bayraklarla
 // süslenir: cadde lambalarında dalgalanan bayraklar, belediyenin önünde büyük gönder, okul ve sağlık ocağının
 // önünde direkler, apartman balkonlarından sarkan bayraklar. 29 Ekim akşamı denizde havai fişek.
+// Meydandaki gönderde bayrak her gün dalgalanır (boş adada da).
 import * as THREE from "three";
 import { FLAT_Y, FLOOR_H, unitLayout } from "./layout.js";
 
@@ -135,12 +136,26 @@ export function buildBayram(world) {
   const fireworks = buildFireworks(world);
   group.add(fireworks.points);
 
+  // Meydan gönderi: her gün bayraklı (ayrı grup, hep görünür).
+  const mast = new THREE.Group();
+  const mastU = { uTime: { value: 0 } };
+  const masts = world.features.filter((f) => f.type === "gonder").map((f) => ({ x: f.x, y: world.groundY(f.x, f.z), z: f.z, h: 12, r: 0.1 }));
+  if (masts.length) {
+    // Bayrak doğuya uzanır: geniş yüzü güneye, iskeleden gelenlere bakar.
+    const mflags = masts.map((o) => new THREE.Matrix4().compose(p.set(o.x, o.y + o.h - 0.15, o.z), q.identity(), sc.setScalar(3)));
+    mast.add(inst(flagGeo, waveMaterial(tex, 0.13, mastU), mflags));
+    mast.add(inst(poleGeo, poleMat, masts.map((o) => new THREE.Matrix4().compose(p.set(o.x, o.y, o.z), q.identity(), sc.set(o.r * 2, o.h, o.r * 2)))));
+    mast.add(inst(knobGeo, new THREE.MeshStandardMaterial({ color: "#e8c35a", roughness: 0.3, metalness: 0.7 }), masts.map((o) => new THREE.Matrix4().compose(p.set(o.x, o.y + o.h + o.r * 1.6, o.z), q.identity(), sc.setScalar(o.r * 1.9)))));
+  }
+
   let active = null;
   return {
     group,
+    mast,
     counts: { lamba: flags.wave.length - poles.length, gonder: poles.length, balkon: flags.drape.length },
     /** px: çizim tamponu yüksekliği / 900 (parçacıklar her çözünürlükte aynı büyüklükte görünsün). */
     update(day, minute, real, px = 1) {
+      mastU.uTime.value = real;
       const on = bayramOf(day);
       if (on !== active) { group.visible = on; active = on; }
       if (!on) return;
