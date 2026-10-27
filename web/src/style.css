@@ -120,6 +120,35 @@ button {
   #hud .online .dot { animation: none; }
 }
 
+#hud .links {
+  font-size: 13px;
+}
+#hud .links a {
+  color: var(--muted);
+  text-decoration: none;
+}
+#hud .links a#cta {
+  color: var(--accent);
+  font-weight: 800;
+}
+#hud .links .sep {
+  color: var(--muted);
+}
+#hud .waiting {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+#hud .waiting[hidden] {
+  display: none;
+}
+
 #hud .line {
   font-weight: 700;
   font-size: 14px;

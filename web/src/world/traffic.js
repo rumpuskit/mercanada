@@ -609,12 +609,14 @@ export class Traffic {
     const h = (a, b) => ((Math.imul((day * 2654435761 + a * 40503 + b * 97) | 0, 2246822519) >>> 0) % 10000) / 10000;
     const homes = w.buildings.filter((b) => b.daireler);
     const doorOf = (b) => [b.x + Math.sin(b.rot) * (b.d / 2 + 6), b.z + Math.cos(b.rot) * (b.d / 2 + 6)];
+    // Çağrı sayısı nüfusla orantılı: 3.200 sakinde günde 4 ambulans, 1 yangın tatbikatı; boş adada hiç.
+    const lively = Math.min(1, (w.population ?? 0) / 3200);
     if (w.hospital && homes.length) {
-      for (let c = 0; c < 4; c++) {
+      for (let c = 0; c < Math.round(4 * lively); c++) {
         this.services.push({ kind: "ambulans", t: 480 + h(1, c) * 840, from: w.hospital.bay, to: doorOf(homes[Math.floor(h(2, c) * homes.length)]), dwell: 8 });
       }
     }
-    if (w.fireStation && homes.length) {
+    if (w.fireStation && homes.length && h(5, 0) < lively) {
       this.services.push({ kind: "itfaiye", t: 600 + h(3, 0) * 600, from: w.fireStation.bay, to: doorOf(homes[Math.floor(h(4, 0) * homes.length)]), dwell: 15 });
     }
     if (w.depot && this.containers.length) this.services.push({ kind: "cop", t: 360, from: w.depot.bay });

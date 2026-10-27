@@ -11,7 +11,7 @@ import { pet, roll } from "../sim.js";
 import { buildKit, drawBuilding, local, makeKit } from "./city.js";
 import { FLAT_Y, FLOOR_H, unitLayout } from "./layout.js";
 import { homeActivity } from "./life.js";
-import { idleGesture, resetPose, sitPose, walkPose } from "./people.js";
+import { idleGesture, keepExtra, resetPose, sitPose, walkPose } from "./people.js";
 import { buildWorkInterior, workPose } from "./workinterior.js";
 import * as P from "./palette.js";
 import { Color } from "three";
@@ -612,6 +612,7 @@ export class Dollhouse {
       const lesson = wd < 5 && minute >= 520 && minute < 920 && !(minute % 60 >= 50 || (minute >= 720 && minute < 760));
       if (!lesson) return;
       this.guests.forEach((g, n) => {
+        if (!keepExtra(this.people.lively, n * 977 + 5)) return; // sınıflar nüfusla dolar
         resetPose(v); v.height = 1.2 + (n % 6) * 0.035; v.t = time;
         v.x = g.p.x; v.z = g.p.z; v.heading = g.heading;
         sitPose(v, g.y + 0.44, v.height / k);
@@ -630,7 +631,7 @@ export class Dollhouse {
     const slot = Math.floor(minute / 25); // müşteriler 25 dakikada bir değişir
     this.guests.forEach((g, n) => {
       const seed = roll(n * 131 + this.building.x * 7, "musteri", slot);
-      if ((seed % 100) / 100 > busy) return;
+      if ((seed % 100) / 100 > busy * this.people.lively) return; // müşteriler adanın nüfusundan
       resetPose(v); v.height = 1.6 + (seed % 7) * 0.04; v.t = time;
       v.x = g.p.x; v.z = g.p.z; v.heading = g.heading;
       sitPose(v, g.y + 0.44, v.height / k);

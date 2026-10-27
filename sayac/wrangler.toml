@@ -1,10 +1,17 @@
-# Çevrimiçi sayacı (Cloudflare Worker + Durable Object). Yayın: cd sayac && npx wrangler@4 deploy
+# Çevrimiçi sayacı (Cloudflare Worker + Durable Object) ve sakin listesinin dağıtımı (KV).
+# Yayın: cd sayac && npx wrangler@4 deploy. Liste sunucudaki veritabanından gelir: sunucu her aktarımdan
+# sonra PUT /sakinler.json yollar (YAYIN_ANAHTARI: wrangler secret, sunucuda /opt/mercanada/secrets/yayin.json).
 name = "mercanada-sayac"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
 workers_dev = false
 
-routes = [{ pattern = "sayac.rumpuskit.com", custom_domain = true }]
+# mercanada.rumpuskit.com: videolarda ve biyografide yazan kısa adres; siteye (GitHub Pages, ada.rumpuskit.com)
+# yönlendirir. Pages bir depoya tek alan adı bağlayabildiği için yönlendirme burada.
+routes = [
+  { pattern = "sayac.rumpuskit.com", custom_domain = true },
+  { pattern = "mercanada.rumpuskit.com", custom_domain = true },
+]
 
 [[durable_objects.bindings]]
 name = "PRESENCE"
@@ -13,3 +20,7 @@ class_name = "Presence"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Presence"]
+
+[[kv_namespaces]]
+binding = "SAKINLER"
+id = "87cae72fa4a5459c871b7e4b1e7b5e30"

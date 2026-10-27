@@ -3,10 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-    <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#7ec4ea" />
     <title>Mercanada</title>
-    <meta name="description" content="Takipçilerin yaşadığı, büyüyen bir ada." />
+    <meta name="description" content="TikTok'ta takip eden herkesin evi, mesleği ve günü olan, takipçi geldikçe büyüyen bir ada." />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Mercanada · takip eden herkes bu adada yaşıyor" />
+    <meta property="og:description" content="TikTok'ta takip et; adada evin, mesleğin ve kendi günün olsun." />
+    <meta property="og:image" content="https://ada.rumpuskit.com/og.jpg" />
+    <meta property="og:url" content="https://ada.rumpuskit.com/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
@@ -24,6 +30,8 @@
       <div class="line" id="clock">--:--</div>
       <div class="line muted" id="stats"></div>
       <div class="line online" id="online" hidden><span class="dot"></span><span id="online-n">1</span> kişi şu an adada</div>
+      <button class="line waiting" id="waiting" hidden></button>
+      <div class="line links"><a id="cta" target="_blank" rel="noopener">TikTok'ta takip et, adaya taşın</a><span class="sep"> · </span><a href="/gizlilik.html">Gizlilik</a></div>
     </header>
 
     <div id="speed" role="group" aria-label="Zaman hızı (geliştirme)" hidden>

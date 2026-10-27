@@ -1,0 +1,8 @@
+# TikTok takipçi sayısını alır ve listeyi yeniden yayınlar (iskelede bekleyenler için).
+[Unit]
+Description=Mercanada TikTok takipçi sayısı
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/mercanada/app/server
+ExecStart=/usr/bin/python3 tiktok_api.py guncelle

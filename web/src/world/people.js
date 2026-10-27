@@ -25,6 +25,14 @@ const UNIFORMS = {
 };
 const TEAM_COLORS = ["#c8312f", "#2f5fb5", "#1d1d22"].map((c) => new Color(c));
 const WHITE = new Color("#f4f4f2");
+// Sakin olmayan figürler (öğrenciler, parktaki çocuklar, pazarcılar...) adanın nüfusuyla orantılıdır:
+// 3.200 sakinde tam kalabalık, boş adada hiç. Her figür kendi tohumuyla seçilir; nüfus arttıkça yenileri eklenir,
+// var olanlar kaybolmaz.
+export const FULL_TOWN = 3200;
+export function keepExtra(lively, seed) {
+  return lively >= 1 || (Math.imul((seed ^ 0x9e3779b9) | 0, 2654435761) >>> 0) / 4294967296 < lively;
+}
+const SUITCASES = [new Color("#3d5a80"), new Color("#9c2f3c"), new Color("#2f5d50"), new Color("#7a5c3a"), new Color("#4a4a52")];
 const SCHOOL_TOPS = [new Color("#2f4a6d"), new Color("#2f4a6d"), new Color("#f4f1ea")]; // okul forması
 const DRIVER_TOP = new Color("#3b5a7a"), FIRE_TOP = new Color("#b8231f"), MEDIC_TOP = new Color("#e9eef2"), COP_TOP = new Color("#f28c28");
 const DOG_COLORS = ["#8a5a32", "#2b2622", "#e8dcc4", "#c9954f", "#6b6b6b"].map((c) => new Color(c));
@@ -142,6 +150,8 @@ export class People {
     this.world = world;
     this.residents = residents;
     this.n = residents.length;
+    this.lively = Math.min(1, this.n / FULL_TOWN);
+    this.waiting = 0; // takip etmiş ama henüz taşınmamış olanlar: vapur iskelesinde valizleriyle bekler
     this.day = null;
     this.visibleCount = 0;
     this.athome = new Uint8Array(this.n);
@@ -1640,6 +1650,7 @@ export class People {
         const W = sch.x1 - sch.x0 - 3, D = sch.z1 - sch.z0 - 3, cx = (sch.x0 + sch.x1) / 2, cz = (sch.z0 + sch.z1) / 2;
         for (let k = 0; k < 28; k++) {
           const seed = si * 97 + k, ph = seed * 1.37;
+          if (!keepExtra(this.lively, seed * 3 + 1)) continue;
           resetPose(v);
           v.height = 1.18 + (seed % 7) * 0.04; v.t = time;
           const kind = seed % 4;
@@ -1682,7 +1693,8 @@ export class People {
           const c = Math.cos(it.rot), s2 = Math.sin(it.rot);
           v.x = it.x + lx * c + lz * s2; v.z = it.z - lx * s2 + lz * c; v.heading = it.rot + h;
         };
-        for (const it of items) {
+        for (const [ii, it] of items.entries()) {
+          if (!keepExtra(this.lively, pi * 7919 + ii * 31)) continue;
           const seed = pi * 131 + kid * 17 + this.day;
           const ph = seed * 0.37;
           const start = () => { resetPose(v); v.height = 1.05 + (seed % 6) * 0.06; v.t = time; v.y = y0; dressKid(seed + kid, false); kid++; };
@@ -1753,6 +1765,7 @@ export class People {
         }
         // Kovalamaca: parkın ortasında koşan iki üç çocuk.
         for (let k = 0; k < 3; k++) {
+          if (!keepExtra(this.lively, pi * 53 + k * 7)) continue;
           const seed = pi * 53 + k * 7 + this.day;
           resetPose(v); v.height = 1.05 + (seed % 6) * 0.06; v.t = time; dressKid(seed, false);
           const a = time * (0.5 + k * 0.07) + k * 2.1, rx = (f.w ?? 18) * 0.28, rz = (f.d ?? 14) * 0.22;
@@ -1764,6 +1777,7 @@ export class People {
         }
         // Veliler: parkın kenarında ayakta sohbet.
         for (let k = 0; k < 2; k++) {
+          if (!keepExtra(this.lively, pi * 977 + k * 31)) continue;
           const seed = pi * 977 + k * 31 + this.day;
           resetPose(v); v.height = 1.6 + (seed % 7) * 0.04; v.t = time;
           v.x = f.x + (k ? 1 : -1) * 0.4 + (f.w ?? 18) * 0.45; v.z = f.z + (k ? 0.4 : -0.4);
@@ -1783,6 +1797,7 @@ export class People {
       for (const c of this.world.plazas) {
         if (c.kind !== "basket") continue;
         ci++;
+        if (!keepExtra(this.lively, ci * 6151)) continue;
         const cx = (c.x0 + c.x1) / 2, cz = (c.z0 + c.z1) / 2, L = c.z1 - c.z0, W = c.x1 - c.x0;
         // Hücum yönü 40 saniyede bir değişir; oyuncular o potanın yarısında hareket eder.
         const dir = Math.floor(time / 40 + ci) % 2 ? 1 : -1;
@@ -1808,6 +1823,7 @@ export class People {
       let k = 0;
       for (const f of this.world.features) {
         if (f.type !== "tezgah") continue;
+        if (!keepExtra(this.lively, k * 389 + 11)) { k++; continue; }
         resetPose(v);
         v.height = 1.62 + (k % 5) * 0.05; v.t = time;
         const dir = f.dir ?? 1;
@@ -1820,11 +1836,62 @@ export class People {
         k++;
       }
     }
+    this._addWaiting(crowd, time);
     crowd.end();
     this.visibleCount = shown.length;
     // Maç varsa top.
     const m = this.matches?.find((mm) => minute >= mm.start && minute <= mm.end && mm.players.length >= 10);
     this.ball = m ? this.footballState(m, minute).ball : null;
+  }
+
+  /**
+   * İskelede bekleyenler: TikTok'ta takip etmiş ama aktarımla henüz taşınmamış kişiler (sayı API'den gelir,
+   * kimlikleri bilinmez). Vapur iskelesinin kara tarafında, valizleriyle, karaya bakarak bekler; aralarında
+   * küçük sohbet grupları olur. Taşınma gününde isim alıp evlerine yürürler.
+   */
+  _addWaiting(crowd, time) {
+    const P0 = this.world.ferryPier;
+    const n = Math.min(this.waiting, 120);
+    if (!P0 || n <= 0) return;
+    const v = (this._waitPose ??= {});
+    const h = (a) => (Math.imul((a ^ 0x5bd1e995) | 0, 2654435761) >>> 0) / 4294967296;
+    // 1-5 kişilik gruplar, iskelenin iki yanında sıra sıra; kalabalık arttıkça sıralar sıklaşır.
+    const groups = [];
+    for (let left = n, g = 0; left > 0; g++) {
+      const size = Math.min(left, 1 + Math.floor(h(g * 7 + 1) * 4.6));
+      groups.push(size);
+      left -= size;
+    }
+    const rows = Math.ceil(groups.length / 2);
+    const step = Math.max(1.9, Math.min(3.4, 30 / rows));
+    let k = 0;
+    groups.forEach((size, g) => {
+      const side = g % 2 ? 1 : -1, row = Math.floor(g / 2);
+      const cx = side * (1.9 + h(g * 3 + 2) * 1.1), cz = P0.z0 + 6 + row * step + (h(g * 5 + 3) - 0.5) * step * 0.5;
+      const rot = h(g * 11 + 4) * Math.PI * 2;
+      for (let m = 0; m < size; m++, k++) {
+        const seed = 7001 + k * 37;
+        resetPose(v);
+        v.height = 1.56 + (seed % 9) * 0.03; v.t = time;
+        if (size === 1) {
+          // Tek başına: korkuluğa yakın, ya denize ya adaya bakar.
+          v.x = side * 3.9; v.z = cz;
+          v.heading = h(seed) < 0.5 ? (side > 0 ? Math.PI / 2 : -Math.PI / 2) : Math.PI;
+        } else {
+          const a = rot + (m / size) * Math.PI * 2, r = 0.45 + size * 0.12;
+          v.x = cx + Math.cos(a) * r; v.z = cz + Math.sin(a) * r;
+          v.heading = Math.atan2(cx - v.x, cz - v.z);
+        }
+        v.x = Math.max(P0.x0 + 0.9, Math.min(P0.x1 - 0.9, v.x));
+        v.y = P0.top;
+        idleGesture(v, time, seed % 23, size > 1 && m % 2 === 0);
+        v.props = ["valiz"];
+        if (seed % 5 === 1) { v.shR = 0.7; v.elR = 1.8; v.headPitch = 0.45; v.props = ["telefon", "valiz"]; }
+        v.propColor = SUITCASES[seed % SUITCASES.length];
+        Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: P.CLOTHES[(seed * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length], sleeves: seed % 3 !== 0, skirt: seed % 4 === 1, beard: seed % 5 === 2, glasses: seed % 6 === 0 });
+        crowd.add(-1, v);
+      }
+    });
   }
 
   /** Dokunulan figürün sakin indeksi. */

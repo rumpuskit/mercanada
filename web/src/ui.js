@@ -1,6 +1,7 @@
 // Ekrandaki paneller: saat ve nüfus, zaman hızı, "Kendini bul" araması, sakin kartı ve ev içi görünümü.
 import * as sim from "./sim.js";
 import { HOME_LABELS, homeActivity } from "./world/life.js";
+import { TIKTOK, TIKTOK_URL } from "./config.js";
 
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const PLACE_NAMES = {
@@ -15,9 +16,22 @@ const OUT_LABELS = {
 
 const fmt = new Intl.NumberFormat("tr-TR");
 const $ = (id) => document.getElementById(id);
+// Sakinin görünen adı: adını gizlemek isteyenler "Gizli komşu" olarak görünür.
+export const at = (r) => (r.hidden ? "Gizli komşu" : "@" + r.handle);
 
-export function createUI({ residents, people, world, dollhouse, stories, traffic, follow, setSpeed, flyTo, speed, today, minute }) {
+export function createUI({ residents, people, world, dollhouse, stories, traffic, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
+  $("cta").href = TIKTOK_URL;
+  // İskelede bekleyenler: takip etmiş, taşınma gününü bekleyenler. Dokununca iskeleye uçar.
+  if (waiting > 0 && world.ferryPier) {
+    const btn = $("waiting");
+    btn.hidden = false;
+    btn.textContent = `🧳 ${fmt.format(waiting)} kişi iskelede taşınmayı bekliyor`;
+    btn.addEventListener("click", () => {
+      const P0 = world.ferryPier;
+      flyTo(0, P0.top, P0.z0 + 14, 45);
+    });
+  }
   let selected = null;
   let mode = null; // "sakin" | "bina" | "arac" | "yer"
   let vehicle = null; // seçili aracın kaydı
@@ -91,13 +105,13 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     }));
   }
 
-  const link = (j) => ["@" + residents[j].handle, () => select(j)];
+  const link = (j) => [at(residents[j]), () => select(j)];
 
   function renderPerson() {
     const r = residents[selected];
     const day = today();
     const t = sim.tenure(r, day);
-    $("card-handle").textContent = "@" + r.handle;
+    $("card-handle").textContent = at(r);
     // İş yerinin adı yalnızca gerçek bir iş yeri varsa (emekli ve evden çalışanlarda yok).
     const wk = people.works[selected];
     $("card-title").textContent = wk.wp.kind === "ev" ? (wk.job === "emekli" ? "Emekli" : `${sim.title(r, day)} · evinden çalışıyor`) : `${sim.title(r, day)} · ${wk.loc.name}`;
@@ -158,7 +172,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       for (const [i] of dollhouse.workSpots) {
         total++;
         if (people.activities[i]?.ne !== "is") continue;
-        rows.push([sim.title(residents[i], today()), `@${residents[i].handle}`, () => select(i)]);
+        rows.push([sim.title(residents[i], today()), at(residents[i]), () => select(i)]);
       }
       $("card-now").textContent = rows.length ? `Şu an ${rows.length} kişi çalışıyor (bu katın kadrosu ${total})` : total ? `Şu an kimse çalışmıyor (kadro ${total})` : "Bu katta çalışan yok";
       facts(rows.slice(0, 12));
@@ -175,7 +189,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       if (k >= b.daireler) continue;
       const i = people.slotToIndex.get(b.slot0 + k);
       if (i == null) rows.push([`Daire ${k + 1}`, "Boş, yeni sakinini bekliyor"]);
-      else rows.push([`Daire ${k + 1}`, `@${residents[i].handle} · ${nowText(i)}`, () => select(i)]);
+      else rows.push([`Daire ${k + 1}`, `${at(residents[i])} · ${nowText(i)}`, () => select(i)]);
     }
     facts(rows);
   }
@@ -233,10 +247,10 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       rows.push(["Yolcu", `${n} kişi`], ["Durak", `${line.stops.length} durak, ${line.headway} dakikada bir`]);
     } else if (r.kind === "car" || r.kind === "taxi") {
       const owner = r.owner != null ? residents[r.owner] : null;
-      $("card-title").textContent = r.kind === "taxi" ? "Mercanada Taksi" : owner ? `@${owner.handle} adlı sakinin arabası` : "Otomobil";
+      $("card-title").textContent = r.kind === "taxi" ? "Mercanada Taksi" : owner ? `${at(owner)} adlı sakinin arabası` : "Otomobil";
       const done = r.key && !live; // yolculuk bitti, araç park yerinde
       $("card-now").textContent = r.parked ? "Park halinde" : live ? (live.parked ? "Park etti" : live.v < 0.3 ? "Bekliyor" : `${Math.round(live.v * 3.6)} km/sa`) : done ? (r.kind === "taxi" ? "Yolcusunu bıraktı" : "Park etti") : "Müşteri bekliyor";
-      if (owner) rows.push([r.kind === "taxi" ? "Yolcu" : "Sahibi", "@" + owner.handle, () => select(r.owner)]);
+      if (owner) rows.push([r.kind === "taxi" ? "Yolcu" : "Sahibi", at(owner), () => select(r.owner)]);
     } else {
       $("card-title").textContent = { ambulans: "Mercanada Hastanesi", itfaiye: "Mercanada İtfaiyesi", cop: "Belediye temizlik işleri" }[r.kind] ?? "";
       $("card-now").textContent = live ? ({ out: "Göreve gidiyor", wait: "Görevde", back: "Dönüyor" }[live.phase] ?? (live.v < 0.3 ? "Konteyner boşaltıyor" : "Toplama turunda")) : "Görevini tamamladı";
@@ -359,7 +373,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       $("floorbar").hidden = true;
       $("card-handle").textContent = "@" + handle;
       $("card-title").textContent = "Bu kullanıcı adı henüz adada değil.";
-      $("card-now").textContent = "Mercanada'yı takip et; ertesi sabah ilk vapurla gelirsin.";
+      $("card-now").textContent = `TikTok'ta @${TIKTOK} hesabını takip ettiysen iskelede sıranı bekliyorsun: taşınmalar 2-3 günde bir yapılır. Etmediysen takip et, sen de taşın.`;
       $("card-facts").replaceChildren();
       $("card-tabs").hidden = true;
       $("card-traits").replaceChildren();
@@ -409,7 +423,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       }
       const out = residents.length - work - home;
       // Toplam, dar ekranda gizlenir (satır kesilmesin).
-      $("stats").innerHTML = `<span class="total">${fmt.format(residents.length)} sakin · </span>${fmt.format(work)} işte · ${fmt.format(home)} evde · ${fmt.format(out)} dışarıda`;
+      if (!residents.length) $("stats").textContent = listError === "none" ? "Sakin listesi şu an alınamadı" : waiting ? "Ada ilk sakinlerini bekliyor" : "Ada ilk sakinini bekliyor";
+      else $("stats").innerHTML = `<span class="total">${fmt.format(residents.length)} sakin · </span>${fmt.format(work)} işte · ${fmt.format(home)} evde · ${fmt.format(out)} dışarıda`;
       if (!$("card").hidden) render();
     },
   };

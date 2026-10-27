@@ -1,9 +1,11 @@
 // Çevrimiçi sayacı: sitede o an kaç kişinin olduğunu gösterir.
 // Her ziyaretçi tek bir WebSocket açar; tek bir Durable Object bağlantıları sayar ve sayıyı herkese yollar.
 // Hiçbir kimlik, IP ya da çerez saklanmaz; yalnızca açık bağlantıların sayısı tutulur.
+// Ayrıca /sakinler.json: adadaki sakinlerin listesi. Asıl kayıt sunucudaki veritabanındadır; sunucu her
+// aktarımdan sonra listeyi buraya yollar (PUT), ziyaretçiler Cloudflare kenarından okur (GET).
 import { DurableObject } from "cloudflare:workers";
 
-const ORIGINS = ["https://ada.rumpuskit.com", "http://localhost:4173", "http://localhost:5173"];
+const ORIGINS = ["https://mercanada.rumpuskit.com", "https://ada.rumpuskit.com", "http://localhost:4173", "http://localhost:5173"];
 
 export class Presence extends DurableObject {
   async fetch(request) {
@@ -45,10 +47,52 @@ export class Presence extends DurableObject {
   }
 }
 
+const LIST_HEADERS = {
+  "content-type": "application/json; charset=utf-8",
+  "access-control-allow-origin": "*", // herkese açık veri: sitede zaten görünür
+  "cache-control": "public, max-age=60",
+};
+
+/** Zamanlamadan bilgi sızdırmayan karşılaştırma. */
+function same(a, b) {
+  if (a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+
+async function residents(request, env, ctx) {
+  if (request.method === "GET" || request.method === "HEAD") {
+    const cache = caches.default;
+    const key = new Request(new URL("/sakinler.json", request.url).toString());
+    const hit = await cache.match(key);
+    if (hit) return hit;
+    const body = (await env.SAKINLER.get("sakinler")) ?? '{"v":1,"sakinler":[],"bekleyen":0,"takipci":null}';
+    const res = new Response(body, { headers: LIST_HEADERS });
+    ctx.waitUntil(cache.put(key, res.clone()));
+    return res;
+  }
+  if (request.method === "PUT") {
+    const auth = request.headers.get("authorization") ?? "";
+    if (!env.YAYIN_ANAHTARI || !same(auth, `Bearer ${env.YAYIN_ANAHTARI}`)) return new Response("izin yok", { status: 401 });
+    const text = await request.text();
+    let data;
+    try { data = JSON.parse(text); } catch { return new Response("geçersiz JSON", { status: 400 }); }
+    if (data?.v !== 1 || !Array.isArray(data.sakinler)) return new Response("beklenmeyen biçim", { status: 400 });
+    await env.SAKINLER.put("sakinler", text);
+    await caches.default.delete(new Request(new URL("/sakinler.json", request.url).toString()));
+    return new Response(JSON.stringify({ ok: true, sakin: data.sakinler.length }), { headers: { "content-type": "application/json" } });
+  }
+  if (request.method === "OPTIONS") return new Response(null, { headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "GET" } });
+  return new Response("yöntem yok", { status: 405 });
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.hostname === "mercanada.rumpuskit.com") return Response.redirect(`https://ada.rumpuskit.com${url.pathname}${url.search}`, 301);
     const origin = request.headers.get("Origin");
+    if (url.pathname === "/sakinler.json") return residents(request, env, ctx);
     if (url.pathname === "/ws") {
       if (request.headers.get("Upgrade") !== "websocket") return new Response("WebSocket bekleniyor", { status: 426 });
       if (origin && !ORIGINS.includes(origin)) return new Response("izin yok", { status: 403 });

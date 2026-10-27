@@ -833,7 +833,8 @@ export class World {
     this.addRoad([[0, MEYDAN_R], [0, avZ0]], "yaya");
     this.addRoad([[0, avZ0], [0, lz - 3]], "yaya");
     this.features.push({ type: "iskele", x: 0, z: lz - 4, len: 80, w: 10 });
-    this.piers.push({ x0: -5, x1: 5, z0: lz - 4, z1: lz + 76, top: 1.53 });
+    this.ferryPier = { x0: -5, x1: 5, z0: lz - 4, z1: lz + 76, top: 1.53 };
+    this.piers.push(this.ferryPier);
     this.features.push({ type: "vapur", x: 13, z: lz + 40 });
     this.addBuilding({ kind: "liman", x: -24, z: lz - 21, rot: 0, w: 16, d: 9, floors: 2, roofType: "hip", wall: "#f6f1e9", roof: "#8c4b3a", address: "Vapur İskelesi, Liman" });
     // Anakarada çalışan ve okuyanlar: vapur iskelesinin ucunda vapura biner (gün boyu adada görünmez).

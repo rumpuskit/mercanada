@@ -22,6 +22,7 @@ import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
 import { startOnline } from "./online.js";
 import { Follower } from "./follow.js";
+import { TEST_PHASE, VERI_URL } from "./config.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -29,13 +30,50 @@ sim.setCatalog(catalog);
 const params = new URLSearchParams(location.search);
 const nowUnix = () => Date.now() / 1000;
 
-// Örnek sakinler: gerçek takipçi verisi bağlanana kadar. Erken gelenler küçük sıra numarası alır.
+// Sakinler: TikTok takipçileri. Asıl liste sunucudaki veritabanındadır; her aktarımdan sonra Cloudflare'e
+// yollanır, site oradan okur. ?nufus=N örnek sakinlerle N kişilik ada kurar (video ve testler için),
+// ?bekleyen=N iskelede N bekleyen gösterir.
 const today = sim.dayOf(nowUnix());
-const population = Math.max(1, Math.min(60000, Number(params.get("nufus")) || 3200));
-const residents = Array.from({ length: population }, (_, i) => {
-  const handle = `sakin_${String(i).padStart(4, "0")}`;
-  return { handle, seed: sim.seedOf(handle), slot: i, arrived_day: today - Math.floor(90 * (1 - i / population)) };
-});
+const sample = Number(params.get("nufus"));
+const { residents, waiting, listError } = sample > 0 ? sampleTown(Math.min(60000, sample)) : await loadResidents();
+// Ada, en büyük sıra numarasına kadar kurulur: ayrılanların boş kalan evleri de durur (yeni gelen yerleşir).
+const population = residents.reduce((m, r) => Math.max(m, r.slot + 1), 0);
+
+function sampleTown(n) {
+  const residents = Array.from({ length: n }, (_, i) => {
+    const handle = `sakin_${String(i).padStart(4, "0")}`;
+    return { handle, seed: sim.seedOf(handle), slot: i, arrived_day: today - Math.floor(90 * (1 - i / n)) };
+  });
+  return { residents, waiting: Number(params.get("bekleyen")) || 0 };
+}
+
+async function loadResidents() {
+  const parse = (data) => ({
+    residents: data.sakinler.map(([handle, seed, slot, arrived_day, overrides]) => ({
+      handle: handle ?? `gizli.komsu.${slot}`, seed, slot, arrived_day, ...(overrides ? { overrides } : {}), ...(handle ? {} : { hidden: true }),
+    })),
+    waiting: Number(params.get("bekleyen")) || data.bekleyen || 0,
+  });
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 6000);
+    const res = await fetch(VERI_URL, { signal: ctl.signal, cache: "no-cache" });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const text = await res.text();
+    const out = parse(JSON.parse(text));
+    try { localStorage.setItem("sakinler", text); } catch {}
+    return out;
+  } catch (e) {
+    // Liste alınamadıysa son görülen liste (varsa); yoksa boş ada ve uyarı.
+    console.warn("sakin listesi alınamadı", e);
+    try {
+      const cached = localStorage.getItem("sakinler");
+      if (cached) return { ...parse(JSON.parse(cached)), listError: "stale" };
+    } catch {}
+    return { residents: [], waiting: 0, listError: "none" };
+  }
+}
 
 // --- sahne ---
 const canvas = document.getElementById("scene");
@@ -102,6 +140,7 @@ scene.add(clouds, labels);
 const vehicles = new Vehicles(Math.ceil(population * 0.4) + 80);
 scene.add(vehicles.group);
 const people = new People(world, residents, traffic);
+people.waiting = waiting;
 const stories = new Stories(people);
 people.stories = stories;
 const T8 = performance.now();
@@ -164,10 +203,8 @@ camera.position.set(260 * aspectBoost, 230 * aspectBoost, 330 * aspectBoost).add
 controls.update();
 
 // --- zaman ---
-// Zaman hızı yalnızca geliştirmede (vite dev ya da ?gelistir): yayında şehir gerçek saatle yaşar.
-// TEST_PHASE: yayın öncesi deneme sürecinde 60×/600× düğmeleri canlı sitede de görünür; açılışta false yapılacak.
-const TEST_PHASE = true;
-const dev = import.meta.env.DEV || params.has("gelistir") || params.has("denetle");
+// Zaman hızı yalnızca geliştirmede (vite dev, ?gelistir ya da ?test): yayında şehir gerçek saatle yaşar.
+const dev = import.meta.env.DEV || params.has("gelistir") || params.has("denetle") || params.has("test");
 let speed = dev ? Number(params.get("hiz")) || 1 : 1;
 if (dev || TEST_PHASE) document.getElementById("speed").hidden = false;
 let simBase = nowUnix();
@@ -199,7 +236,7 @@ if (params.has("denetle")) globalThis.__ada = { world, people, traffic, resident
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic });
-const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => follower.get(), set: (t, view) => { if (t) follower.start(t, view); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => follower.get(), set: (t, view) => { if (t) follower.start(t, view); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
 // Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
 follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false); };

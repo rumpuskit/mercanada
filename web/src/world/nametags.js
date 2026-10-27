@@ -48,7 +48,7 @@ export class NameTags {
       if (this.cache.size > 300) {
         for (const [k, v] of this.cache) { v.tex.dispose(); this.cache.delete(k); if (this.cache.size < 200) break; }
       }
-      t = makeTexture("@" + handle, selected);
+      t = makeTexture(handle ? "@" + handle : "Gizli komşu", selected);
       this.cache.set(key, t);
     } else {
       this.cache.delete(key);
@@ -86,7 +86,7 @@ export class NameTags {
     let k = 0;
     for (const [d2, i] of near) {
       if (k >= MAX_TAGS) break;
-      const { tex, aspect } = this._texture(residents[i].handle, i === selected);
+      const { tex, aspect } = this._texture(residents[i].hidden ? null : residents[i].handle, i === selected);
       const d = Math.sqrt(d2);
       const h = Math.max(0.28, d * 0.022);
       const y = P[i * 3 + 1] + people.colors[i].height + 0.35 + h * 0.5;

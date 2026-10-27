@@ -129,6 +129,16 @@ const PROPS = {
     ]);
   },
   mat: () => merge([tint(new THREE.BoxGeometry(0.62, 0.012, 1.8), "#7a5cc4")]),
+  // Tekerlekli valiz (gövde rengi kişiye göre değişir: beyaz tonlu gövde örnek rengiyle çarpılır).
+  valiz: () => merge([
+    tint(new THREE.BoxGeometry(0.4, 0.56, 0.24).translate(0, 0.35, 0), "#ffffff"),
+    tint(new THREE.BoxGeometry(0.41, 0.03, 0.25).translate(0, 0.35, 0), "#bdbdbd"),
+    tint(new THREE.BoxGeometry(0.02, 0.36, 0.02).translate(-0.12, 0.81, -0.08), "#2a2a2e"),
+    tint(new THREE.BoxGeometry(0.02, 0.36, 0.02).translate(0.12, 0.81, -0.08), "#2a2a2e"),
+    tint(new THREE.BoxGeometry(0.27, 0.035, 0.035).translate(0, 0.99, -0.08), "#2a2a2e"),
+    tint(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 8).rotateZ(Math.PI / 2).translate(-0.15, 0.04, -0.09), "#1a1a1a"),
+    tint(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 8).rotateZ(Math.PI / 2).translate(0.15, 0.04, -0.09), "#1a1a1a"),
+  ]),
   havlu: () => merge([tint(new THREE.BoxGeometry(0.8, 0.01, 1.7), "#e8607a")]),
   ucurtma: () => merge([
     tint(new THREE.ConeGeometry(0.55, 1.1, 4).scale(1, 1, 0.05).rotateX(Math.PI / 2).rotateX(-Math.PI / 2), "#e0463c"),
@@ -223,11 +233,12 @@ export class Crowd {
     return out.premultiply(parent);
   }
 
-  _prop(name, matrix) {
+  _prop(name, matrix, color) {
     const mesh = this.props[name];
     const k = this.propCounts[name];
     if (k >= mesh.instanceMatrix.count) return;
     mesh.setMatrixAt(k, matrix);
+    if (color) mesh.setColorAt(k, color);
     this.propCounts[name] = k + 1;
   }
 
@@ -322,6 +333,14 @@ export class Crowd {
           break;
         }
         case "mat": this._prop("mat", this._joint(propM, root, 0, 0.01, 0.3)); break;
+        case "valiz": {
+          // Valiz yerde, sağ elin yanında; sapı ele doğru.
+          this._q.setFromAxisAngle(AY, p.heading);
+          const sx = Math.cos(p.heading), sz = -Math.sin(p.heading);
+          propM.compose(this._p.set(p.x - sx * 0.42 * k, p.groundY ?? p.y, p.z - sz * 0.42 * k), this._q, this._one);
+          this._prop("valiz", propM, p.propColor);
+          break;
+        }
         case "havlu": {
           // Havlu yerde, bedenin ortasında (yatan kişinin başı arkada kalır).
           this._q.setFromAxisAngle(AY, p.heading);
@@ -425,6 +444,7 @@ export class Crowd {
     for (const [k, m] of Object.entries(this.props)) {
       m.count = this.propCounts[k];
       m.instanceMatrix.needsUpdate = true;
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
     this.dogBody.count = this.dogHead.count = this.dogTail.count = this.dogCount;
     this.dogLegs.count = this.dogCount * 4;
