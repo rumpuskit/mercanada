@@ -216,8 +216,18 @@ export function shiftOf(r) {
   return Array.isArray(v) ? v[roll(r.seed, "vardiya") % v.length] : v;
 }
 
+// Resmî tatiller (sabit tarihli olanlar; dinî bayramlar her yıl değiştiği için henüz yok). O gün yalnız
+// hafta sonu da açık olan işler (kafe, otel, sağlık, fırın, market, liman...) çalışır; okul kapalıdır.
+const HOLIDAYS = new Set(["1-1", "4-23", "5-1", "5-19", "7-15", "8-30", "10-29"]);
+
+export function isHoliday(day) {
+  const d = new Date(day * 86400000);
+  return HOLIDAYS.has(`${d.getUTCMonth() + 1}-${d.getUTCDate()}`);
+}
+
 export function worksOn(r, day) {
   if (job(r).calismaz) return false; // emekli
+  if (!job(r).hafta_sonu && isHoliday(day)) return false;
   const wd = weekday(day);
   let works;
   if (!job(r).hafta_sonu) works = wd < 5;

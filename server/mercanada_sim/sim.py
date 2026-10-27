@@ -4,6 +4,7 @@ web/src/sim.js ile bit bit aynı sonucu vermeli; kural değişirse ikisi birlikt
 ve tests/test_parity.py çalıştırılır. Sakin sözlüğü: {handle, seed, slot, arrived_day, overrides?}.
 """
 
+import datetime
 import json
 import math
 from functools import cache
@@ -204,9 +205,21 @@ def shift_of(r: dict) -> str:
     return v[roll(r["seed"], "vardiya") % len(v)] if isinstance(v, list) else v
 
 
+# Resmî tatiller (sabit tarihli olanlar; dinî bayramlar henüz yok). O gün yalnız hafta sonu da açık
+# olan işler çalışır.
+HOLIDAYS = {(1, 1), (4, 23), (5, 1), (5, 19), (7, 15), (8, 30), (10, 29)}
+
+
+def is_holiday(day: int) -> bool:
+    d = datetime.date(1970, 1, 1) + datetime.timedelta(days=day)
+    return (d.month, d.day) in HOLIDAYS
+
+
 def works_on(r: dict, day: int) -> bool:
     if job(r).get("calismaz"):
         return False  # emekli
+    if not job(r)["hafta_sonu"] and is_holiday(day):
+        return False
     wd = weekday(day)
     if not job(r)["hafta_sonu"]:
         works = wd < 5

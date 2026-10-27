@@ -9,7 +9,7 @@
 //    Erken kalırsa yolda kısa molalar verir. Kapıdan girerken kapı açılır.
 //  - Yürüyenler birbirine çok yaklaşırsa yana çekilir; durağan insanların ve engellerin içinden geçilmez.
 import { Color } from "three";
-import { activityAt, dayPlan, hobby, job, look, pet, roll, workplace, worksOn } from "../sim.js";
+import { activityAt, dayPlan, hobby, isHoliday, job, look, pet, roll, workplace, worksOn } from "../sim.js";
 import { Crowd } from "./human.js";
 import { PedNav } from "./nav.js";
 import { pedWait } from "./signals.js";
@@ -432,7 +432,7 @@ export class People {
   _matchWindows(day) {
     const wd = (day + 3) % 7;
     const out = [{ start: 1170, end: 1260 }];
-    if (wd >= 5) out.unshift({ start: 900, end: 1005 });
+    if (wd >= 5 || isHoliday(day)) out.unshift({ start: 900, end: 1005 });
     return out;
   }
 
@@ -1642,8 +1642,9 @@ export class People {
     this.dollhouse?.addExtras?.(crowd, minute, time, this.day); // iç mekân müşterileri ve öğrenciler
     // Öğrenciler (sakin değil): hafta içi 08:40-15:20 arası teneffüslerde (her saatin son 10 dakikası
     // ve öğle arası) okul bahçesinde koşar, top oynar, sohbet eder; ders saatinde içeridedirler.
-    const wd = (this.day + 3) % 7;
-    const recess = wd < 5 && minute >= 520 && minute < 920 && (minute % 60 >= 50 || (minute >= 720 && minute < 760));
+    // Okul günü: hafta içi ve resmî tatil değil (tatilde parklar hafta sonu gibi açık).
+    const wd = (this.day + 3) % 7, schoolDay = wd < 5 && !isHoliday(this.day);
+    const recess = schoolDay && minute >= 520 && minute < 920 && (minute % 60 >= 50 || (minute >= 720 && minute < 760));
     if (recess) {
       const v = (this._kidPose ??= {});
       for (const [si, sch] of (this.world.schools ?? []).entries()) {
@@ -1678,7 +1679,7 @@ export class People {
     // Oyun parklarında çocuklar ve veliler (sakin değil): hafta içi okul çıkışından akşama, hafta sonu
     // gün boyu. Aletlere göre: salıncakta sallanır, tahterevallide iner kalkar, atlıkarıncada döner,
     // yaylıda sallanır, kum havuzunda oynar; diğerleri aletlerin çevresinde koşar.
-    const parkOpen = minute < 1170 && (wd < 5 ? minute >= 940 : minute >= 600);
+    const parkOpen = minute < 1170 && (schoolDay ? minute >= 940 : minute >= 600);
     if (parkOpen) {
       const v = (this._parkKid ??= {});
       const dressKid = (seed, adult) => Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: P.CLOTHES[(seed * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length], sleeves: seed % 3 !== 0, skirt: seed % 4 === 1, beard: adult && seed % 5 === 0, glasses: adult && seed % 6 === 0 });
@@ -1790,7 +1791,7 @@ export class People {
     }
     // Basketbol sahalarında gençler (sakin değil): okul sonrası ve hafta sonu 3'e 3 oynar; potaya
     // doğru koşar, sıçrayıp atış yapar, savunmada kollarını açar.
-    const courtOpen = minute < 1230 && (wd < 5 ? minute >= 970 : minute >= 660);
+    const courtOpen = minute < 1230 && (schoolDay ? minute >= 970 : minute >= 660);
     if (courtOpen) {
       const v = (this._teen ??= {});
       let ci = 0;

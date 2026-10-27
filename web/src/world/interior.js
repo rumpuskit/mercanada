@@ -7,7 +7,7 @@
 // sakinler bir işten ötekine dairenin orta aksından yürüyerek geçer, duvarların içinden geçmez.
 // İş yerleri: türüne göre döşeme (workinterior.js); o an işte olanlar işlerinin başında.
 import * as THREE from "three";
-import { pet, roll } from "../sim.js";
+import { isHoliday, pet, roll } from "../sim.js";
 import { buildKit, drawBuilding, local, makeKit } from "./city.js";
 import { FLAT_Y, FLOOR_H, unitLayout } from "./layout.js";
 import { homeActivity } from "./life.js";
@@ -609,7 +609,7 @@ export class Dollhouse {
     const k = 1.75;
     if (kind === "okul") {
       const wd = (day + 3) % 7;
-      const lesson = wd < 5 && minute >= 520 && minute < 920 && !(minute % 60 >= 50 || (minute >= 720 && minute < 760));
+      const lesson = wd < 5 && !isHoliday(day) && minute >= 520 && minute < 920 && !(minute % 60 >= 50 || (minute >= 720 && minute < 760));
       if (!lesson) return;
       this.guests.forEach((g, n) => {
         if (!keepExtra(this.people.lively, n * 977 + 5)) return; // sınıflar nüfusla dolar

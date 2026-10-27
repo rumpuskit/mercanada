@@ -18,6 +18,7 @@ import { createMapUI } from "./mapui.js";
 import { NameTags } from "./world/nametags.js";
 import { Traffic, Vehicles, buildSignals, buildStops } from "./world/traffic.js";
 import { buildHarbor } from "./world/harbor.js";
+import { buildBayram } from "./world/bayram.js";
 import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
 import { startOnline } from "./online.js";
@@ -134,6 +135,8 @@ const lampLight = createLampLight(world, world.lampSpots,
   [terrain.material, ...roads.userData.groundMaterials, ...grounds.userData.groundMaterials, ...(harbor.userData.groundMaterials ?? [])],
   { wallMaterials: city.wallMaterials });
 scene.add(city.group, trees);
+const bayram = buildBayram(world);
+scene.add(bayram.group);
 const clouds = buildClouds(world);
 const labels = buildLabels(world);
 scene.add(clouds, labels);
@@ -209,8 +212,11 @@ let speed = dev ? Number(params.get("hiz")) || 1 : 1;
 if (dev || TEST_PHASE) document.getElementById("speed").hidden = false;
 let simBase = nowUnix();
 let realBase = performance.now() / 1000;
+// ?tarih=2026-10-29 (test): o günün aynı saatine (ya da ?saat'e) gider.
+const dateDay = dev && /^\d{4}-\d{2}-\d{2}$/.test(params.get("tarih") ?? "") ? Date.parse(params.get("tarih") + "T00:00:00Z") / 86400000 : null;
+if (dateDay != null) simBase += (dateDay - today) * 86400;
 const fixed = dev && params.get("saat")?.match(/^(\d{1,2}):(\d{2})$/);
-if (fixed) simBase = today * 86400 - sim.TZ_OFFSET + Number(fixed[1]) * 3600 + Number(fixed[2]) * 60;
+if (fixed) simBase = (dateDay ?? today) * 86400 - sim.TZ_OFFSET + Number(fixed[1]) * 3600 + Number(fixed[2]) * 60;
 const simNow = () => simBase + (performance.now() / 1000 - realBase) * speed;
 function setSpeed(next) {
   simBase = simNow();
@@ -363,6 +369,8 @@ function tick() {
     const d = new THREE.Vector3(nx - t.x, ny - t.y, nz - t.z);
     if (!shoulder && d.lengthSq() > 1e-8) { t.add(d); camera.position.add(d); }
   }
+  // Video kaydı (video/kaydet.mjs): senaryo, varsa, kamerayı her karede kendisi yerleştirir.
+  globalThis.__yonetmen?.(dt, unix);
   controls.update(dt);
 
   const skyState = sky.update(day, minute, controls.target);
@@ -386,6 +394,7 @@ function tick() {
   city.tick(real);
   harbor.userData.tick(real);
   harbor.userData.setMinute(minute);
+  bayram.update(day, minute, real, renderer.domElement.height / 900);
   fadeTrees(trees, dist);
   // Telefonda kart ekranın altını kapatır; görüntüyü yukarı kaydır.
   const cardOpen = !document.getElementById("card").hidden;

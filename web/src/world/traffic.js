@@ -582,6 +582,7 @@ export class Traffic {
   }
 
   _spawnBuses(minute) {
+    if (!this.world.population) return; // boş adada sefer yok (yolcusu olmayan otobüs dolaşmaz)
     this.lines.forEach((line, li) => {
       const n0 = Math.max(0, Math.floor((minute - line.cycle - line.first) / line.headway) - 1);
       for (let n = n0; ; n++) {
