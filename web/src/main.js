@@ -461,7 +461,8 @@ function tick() {
   }
 
   tryFollow();
-  nameTags.update(camera, controls.target, people, residents, ui.selected(), shoulder ? follower.target.i ?? null : null);
+  // Video kaydı (__etiket): izlenen sakinin etiketi seçiliymiş gibi önde, ama işaretsiz.
+  nameTags.update(camera, controls.target, people, residents, globalThis.__etiket ?? ui.selected(), shoulder ? follower.target.i ?? null : null);
   mapUI.update(real);
   renderer.render(scene, camera);
   if (frame === 1) {

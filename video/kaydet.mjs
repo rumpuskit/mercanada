@@ -2,7 +2,7 @@
 // ilerletip ekran görüntüsünü ffmpeg'e verir; sonunda çekimleri geçişlerle birleştirir.
 //
 //   cd web && npm run build && npx vite preview --port 4173      (ayrı terminalde)
-//   cd video && node kaydet.mjs senaryolar/acilis.mjs [--onizleme] [--cekim 2]
+//   cd video && node kaydet.mjs senaryolar/acilis.mjs [--onizleme] [--cekim 2] [--birlestir]
 //
 // Senaryo: { ad, fps, w, h, gecis, cekimler: [{ sure, adres, kamera, yazilar, takip, arayuz, hazirlik }] }
 //   adres:   sitenin sorgu parametreleri (ör. "saat=08:10&hiz=20&nufus=3200")
@@ -19,6 +19,7 @@ const args = process.argv.slice(2);
 const file = args.find((a) => !a.startsWith("--"));
 const preview = args.includes("--onizleme");
 const only = args.includes("--cekim") ? Number(args[args.indexOf("--cekim") + 1]) : null;
+const joinOnly = args.includes("--birlestir"); // çekimleri yeniden çizmeden yalnızca birleştir
 const base = process.env.SITE ?? "http://localhost:4173/";
 const S = (await import(resolve(file))).default;
 const fps = preview ? 15 : S.fps ?? 30;
@@ -64,7 +65,7 @@ const parts = [];
 for (const [ci, shot] of S.cekimler.entries()) {
   const path = `${out}/cekim${ci + 1}.mp4`;
   parts.push({ path, sure: shot.sure });
-  if (only != null && only !== ci + 1) continue;
+  if (joinOnly || (only != null && only !== ci + 1)) continue;
   const page = await browser.newPage({ viewport: { width: S.w ?? 1080, height: S.h ?? 1920 }, deviceScaleFactor: scale });
   page.on("pageerror", (e) => console.log("  sayfa hatası:", e.message));
   await page.addInitScript(CLOCK);
@@ -106,6 +107,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
       }
       if (best < 0) return;
       if (takip.ad) A.residents[best].handle = takip.ad;
+      globalThis.__etiket = best; // etiketi hep önde ve vurgulu (işaret yok)
       const i = best, st = {};
       globalThis.__yonetmen = (dt) => {
         const x = P.positions[i * 3], y = P.positions[i * 3 + 1], z = P.positions[i * 3 + 2];
@@ -183,7 +185,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
 }
 await browser.close();
 
-if (only == null) {
+if (only == null || joinOnly) {
   // Çekimleri yumuşak geçişlerle birleştir.
   const X = S.gecis ?? 0.35;
   const inputs = parts.flatMap((p) => ["-i", p.path]);
