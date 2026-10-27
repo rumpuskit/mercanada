@@ -277,11 +277,40 @@ def _night_out(plan: list, s: int, day: int, commute: int, sleep: int) -> None:
     _travel(plan, commute, "meydan", PLACE_HOME)
 
 
+def _late_night(r: dict, day: int) -> bool:
+    """Cuma/Cumartesi geceleri ve tatil arifelerinde bazıları gece yarısından sonra da dışarıdadır."""
+    wd = weekday(day)
+    if not (wd in (4, 5) or is_holiday(day + 1)):
+        return False
+    if roll(r["seed"], "gece_gec", day) % 100 >= 5:
+        return False
+    if works_on(r, day) and shift_of(r) == "gece":
+        return False
+    if works_on(r, day + 1) and shift_of(r) in ("erken", "sabah", "gece"):
+        return False
+    return True
+
+
+def _go_late(plan: list, s: int, day: int, commute: int) -> None:
+    e = _end(plan)
+    if e + commute + 15 <= 1440:
+        start = min(max(e + commute + 10, 1350 + roll(s, "gece_gec_saat", day) % 50), 1440 - 5)
+        _add(plan, start - commute, "ev", PLACE_HOME)
+        _travel(plan, commute, PLACE_HOME, "meydan")
+        _add(plan, 1440, "meydan", "meydan")
+    else:
+        plan.pop()  # eve dönüş yolu
+        plan[-1]["son"] = 1440
+
+
 def day_plan(r: dict, day: int) -> list:
     s = r["seed"]
     commute = 15 + roll(s, "yol") % 20
     hobby_place = "hobi:" + hobby(r)["yer"]
     plan: list = []
+    if _late_night(r, day - 1):
+        _add(plan, 30 + roll(s, "gece_donus", day - 1) % 60, "meydan", "meydan")
+        _travel(plan, commute, "meydan", PLACE_HOME)
 
     sleep = 1350 + roll(s, "uyku", day) % 80
     if works_on(r, day) and job(r)["yer"] == "ev":
@@ -373,6 +402,9 @@ def day_plan(r: dict, day: int) -> list:
             _travel(plan, commute, PLACE_HOME, "meydan")
             _add(plan, min(_end(plan) + 90 + roll(s, "meydan_sure", day) % 90, sleep - 10 - commute), "meydan", "meydan")
             _travel(plan, commute, "meydan", PLACE_HOME)
+    if _late_night(r, day):
+        _go_late(plan, s, day, commute)
+        return plan
     _add(plan, max(sleep, _end(plan)), "ev", PLACE_HOME)
     _add(plan, 1440, "uyku", PLACE_HOME)
     return plan

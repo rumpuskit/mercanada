@@ -282,12 +282,46 @@ function nightOut(plan, s, day, commute, sleep) {
   travel(plan, commute, "meydan", PLACE_HOME);
 }
 
+/**
+ * Cuma ve Cumartesi geceleri (ve tatil arifelerinde) bazıları gece yarısından sonra da dışarıdadır:
+ * meydanda kalır, 00:30-01:30 arasında eve döner. Gece vardiyası olanlar ve ertesi sabah erken işe
+ * gidenler bu gruba girmez.
+ */
+function lateNight(r, day) {
+  const wd = weekday(day);
+  if (!(wd === 4 || wd === 5 || isHoliday(day + 1))) return false;
+  if (roll(r.seed, "gece_gec", day) % 100 >= 5) return false;
+  if (worksOn(r, day) && shiftOf(r) === "gece") return false;
+  if (worksOn(r, day + 1) && ["erken", "sabah", "gece"].includes(shiftOf(r))) return false;
+  return true;
+}
+
+/** Gece geç saate kalanlar: evdeyse yeniden meydana çıkar; dışarıdan yeni döndüyse orada kalır. */
+function goLate(plan, s, day, commute) {
+  const e = end(plan);
+  if (e + commute + 15 <= 1440) {
+    // Evde en az 10 dakika kalır (iki yolculuk arka arkaya gelmez).
+    const start = Math.min(Math.max(e + commute + 10, 1350 + (roll(s, "gece_gec_saat", day) % 50)), 1440 - 5);
+    add(plan, start - commute, "ev", PLACE_HOME);
+    travel(plan, commute, PLACE_HOME, "meydan");
+    add(plan, 1440, "meydan", "meydan");
+  } else {
+    plan.pop(); // eve dönüş yolu
+    plan[plan.length - 1].son = 1440;
+  }
+}
+
 /** Günün planı: dakika aralıklarından oluşan kesintisiz liste (0-1440). */
 export function dayPlan(r, day) {
   const s = r.seed;
   const commute = 15 + (roll(s, "yol") % 20);
   const hobbyPlace = "hobi:" + hobby(r).yer;
   const plan = [];
+  if (lateNight(r, day - 1)) {
+    // Dün gece geç saate kaldı: günün başında hâlâ meydanda, sonra eve dönüp uyur.
+    add(plan, 30 + (roll(s, "gece_donus", day - 1) % 60), "meydan", "meydan");
+    travel(plan, commute, "meydan", PLACE_HOME);
+  }
 
   let sleep = 1350 + (roll(s, "uyku", day) % 80);
   if (worksOn(r, day) && job(r).yer === "ev") {
@@ -385,6 +419,10 @@ export function dayPlan(r, day) {
       add(plan, Math.min(end(plan) + 90 + (roll(s, "meydan_sure", day) % 90), sleep - 10 - commute), "meydan", "meydan");
       travel(plan, commute, "meydan", PLACE_HOME);
     }
+  }
+  if (lateNight(r, day)) {
+    goLate(plan, s, day, commute);
+    return plan;
   }
   add(plan, Math.max(sleep, end(plan)), "ev", PLACE_HOME);
   add(plan, 1440, "uyku", PLACE_HOME);

@@ -209,7 +209,14 @@ controls.update();
 // Zaman hızı yalnızca geliştirmede (vite dev, ?gelistir ya da ?test): yayında şehir gerçek saatle yaşar.
 const dev = import.meta.env.DEV || params.has("gelistir") || params.has("denetle") || params.has("test");
 let speed = dev ? Number(params.get("hiz")) || 1 : 1;
-if (dev || TEST_PHASE) document.getElementById("speed").hidden = false;
+if (dev || TEST_PHASE) {
+  const speedBar = document.getElementById("speed"), hud = document.getElementById("hud");
+  speedBar.hidden = false;
+  // Telefonda hız düğmeleri üst bilginin hemen altında (üst bilgi satır ekledikçe aşağı kayar).
+  const place = () => { speedBar.style.top = innerWidth < 900 ? `${Math.round(hud.getBoundingClientRect().bottom + 8)}px` : ""; };
+  new ResizeObserver(place).observe(hud);
+  addEventListener("resize", place);
+}
 let simBase = nowUnix();
 let realBase = performance.now() / 1000;
 // ?tarih=2026-10-29 (test): o günün aynı saatine (ya da ?saat'e) gider.
@@ -311,6 +318,27 @@ function updateWindows(minute, light, sunDeg) {
 // --- döngü ---
 let frame = 0;
 let lastReal = performance.now() / 1000;
+
+// Uyarlanır kalite: zayıf telefonlarda kare hızı düşük kalırsa önce çözünürlük kademeli düşer, en sonda
+// gölgeler kapanır. Yalnız düşürür (gidip gelme olmaz); video kaydında (sanal saat) devre dışı.
+const quality = { t0: null, n: 0, steps: 0 };
+function adaptQuality(real) {
+  if (globalThis.__yonetmen !== undefined || document.hidden) return;
+  if (quality.t0 == null || frame < 60) { quality.t0 = real; quality.n = 0; return; }
+  quality.n++;
+  const span = real - quality.t0;
+  if (span < 4) return;
+  const fps = quality.n / span;
+  quality.t0 = real; quality.n = 0;
+  if (fps >= 26 || quality.steps >= 4) return;
+  const pr = renderer.getPixelRatio();
+  if (pr > 1.01) renderer.setPixelRatio(Math.max(1, pr - 0.35));
+  else if (renderer.shadowMap.enabled) { renderer.shadowMap.enabled = false; scene.traverse((o) => { if (o.material) o.material.needsUpdate = true; }); }
+  else return;
+  renderer.setSize(innerWidth, innerHeight, false);
+  quality.steps++;
+  if (params.has("denetle")) console.info(`kalite düşürüldü: ${fps.toFixed(1)} fps → piksel oranı ${renderer.getPixelRatio()}, gölge ${renderer.shadowMap.enabled}`);
+}
 let lastSim = null;
 const bounds = world.bounds;
 function tick() {
@@ -435,6 +463,7 @@ function tick() {
     document.getElementById("loading").classList.add("done");
     console.info(`Mercanada hazır: ${Math.round(performance.now())} ms`);
   }
+  adaptQuality(real);
   frame++;
   requestAnimationFrame(tick);
 }

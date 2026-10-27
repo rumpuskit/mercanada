@@ -330,6 +330,8 @@ export class People {
       const pl = this._placeOf(i, k);
       if (pl === "sahil_yolu") return "stroll"; // sahil yolunda akşam yürüyüşü
       if (pl === "pazar" && m % 3) return "stroll"; // pazarda koridorlarda gezinir (kalanı sohbette)
+      // Kahvehane çoğunlukla içeridedir (tavla, okey); dışarıdaki birkaç masaya yer varsa oturulur.
+      if (pl === "kahvehane") return m < 35 ? "seat:kahvehane" : "inside:kahvehane";
       if (pl !== "meydan") return m < 55 ? "seat:" + pl : "group:" + pl;
       return m < 22 ? "seat:meydan" : m < 50 ? "seat:kafe" : m < 72 ? "shop" : "group:meydan";
     }
@@ -394,6 +396,9 @@ export class People {
           item.busy.push([seg.bas - 2, seg.son + 2]);
           role = { mode, item };
         } else if (mode.startsWith("work:")) {
+          role = { mode };
+        } else if (mode === "seat:kahvehane") {
+          mode = "inside:kahvehane"; // dışarıda boş masa yok: içeride oturur
           role = { mode };
         } else {
           mode = "group:" + (mode.startsWith("seat:") ? mode.slice(5).replace("kafe", "meydan").replace("kahvehane", "meydan") : seg.yer.replace("hobi:", ""));
@@ -499,8 +504,9 @@ export class People {
   _endpoint(i, k, atEnd) {
     const seg = this.plans[i][k];
     if (!seg) return this.homes[i].door;
-    if (seg.ne === "ev" || seg.ne === "uyku") return this.homes[i].door;
+    if (seg.ne === "ev" || seg.ne === "uyku" || seg.ne === "yol") return this.homes[i].door; // (yol: olmamalı)
     if (seg.ne === "is" && !this.works[i].loc.outdoor) return this.works[i].loc.door;
+    if (this.roles[i]?.[k]?.mode?.startsWith("inside:")) return this.world.places.kahvehane?.anchors[0] ?? this.homes[i].door;
     const p = this._tmp;
     p.height = this.colors[i].height;
     resetPose(p);
@@ -789,6 +795,7 @@ export class People {
     const w = this.world;
     const seg = this.plans[i][k];
     const role = this.roles[i]?.[k] ?? { mode: "group:meydan" };
+    if (role.mode.startsWith("inside:")) return false; // kahvehanenin içinde: sokakta görünmez
     const s = this.residents[i].seed;
     const kk = p.height / 1.75;
     const ph = frac(s) * 6.283;
