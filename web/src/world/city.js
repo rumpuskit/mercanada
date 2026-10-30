@@ -1136,18 +1136,6 @@ function buildFeatures(world) {
         add(new THREE.ConeGeometry(1.4, 0.5, 10), std(["#e05a4a", "#2f7fb5", "#f2c14e", "#3e8a86"][f.c % 4]), f.x, y0 + 2.4, f.z);
         break;
       }
-      case "sezlong": {
-        const y0 = Math.max(world.height(f.x, f.z), 0.3);
-        add(new THREE.BoxGeometry(0.7, 0.1, 1.9), white, f.x, y0 + 0.3, f.z, f.rot);
-        break;
-      }
-      case "cankurtaran": {
-        const y0 = Math.max(world.height(f.x, f.z), 0.3);
-        for (const dx of [-0.8, 0.8]) for (const dz of [-0.8, 0.8]) add(new THREE.BoxGeometry(0.12, 2.6, 0.12), wood, f.x + dx, y0 + 1.3, f.z + dz, 0, false);
-        add(new THREE.BoxGeometry(2, 0.15, 2), wood, f.x, y0 + 2.6, f.z);
-        add(new THREE.BoxGeometry(2.2, 0.1, 2.2), std("#d8433d"), f.x, y0 + 4.2, f.z);
-        break;
-      }
     }
   }
   for (const batch of [benchSeat, benchBack, benchLegs, tables, tableLegs, chairs, chairBacks, chairLegs, chairBackLegs, bins, binPoles, containers]) group.add(batch.build());

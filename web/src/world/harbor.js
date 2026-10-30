@@ -25,6 +25,8 @@ export function merged(parts) {
 }
 
 export const MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
+const MATW = new THREE.MeshStandardMaterial({ color: "#8a5a3a", roughness: 0.85 });
+const FLAT = 1.2; // bina tabanı (layout FLAT_Y)
 export const METAL = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.5 });
 
 /** Tahta iskele: x merkez, z başlangıç (kıyı), +z yönünde len metre, w genişlik, döşeme üstü top.
@@ -385,10 +387,84 @@ export function buildFishingCove(world) {
     parts.push(cyl(0.18, 0.18, 0.05, q.x, sy + 0.42, q.z, "#9b7350", 10));
     for (const [dx, dz] of [[-0.12, -0.12], [0.12, -0.12], [-0.12, 0.12], [0.12, 0.12]]) parts.push(box(0.03, 0.42, 0.03, q.x + dx, sy + 0.21, q.z + dz, "#3a3f47"));
   }
+  // Kulübe verandaları (deniz tarafında, ahşap, alçak korkuluk, duvar dibinde bank) ve pencere kepenkleri.
+  const SHUTTER = ["#3e7a86", "#2f5d8a", "#c9573a"];
+  K.huts.forEach(([hx, hz], i) => {
+    // Veranda kapı eşiğinde (bina tabanı); eğimli kumda direkleri zemine iner.
+    const fz = hz + 3, py = Math.max(FLAT + 0.12, y(hx, fz + 0.7) + 0.12);
+    for (const lx of [-4.1, -2, 0, 2, 4.1]) {
+      const g = y(hx + lx, fz + 1.3), hgt = Math.max(0.1, py - g);
+      parts.push(box(0.12, hgt, 0.12, hx + lx, g + hgt / 2, fz + 1.3, "#6b4a35"));
+    }
+    parts.push(box(8.4, 0.08, 1.4, hx, py, fz + 0.7, "#a87a50"));
+    for (const [lx, w] of [[-2.6, 3.2], [2.6, 3.2]]) parts.push(box(w, 0.06, 0.06, hx + lx, py + 0.75, fz + 1.36, "#7a5a3e"));
+    for (const lx of [-4.1, -1.0, 1.0, 4.1]) parts.push(box(0.07, 0.75, 0.07, hx + lx, py + 0.38, fz + 1.36, "#7a5a3e"));
+    parts.push(box(2.2, 0.06, 0.4, hx - 2.6, py + 0.45, fz + 0.3, "#8a6a4a"), box(2.2, 0.4, 0.05, hx - 2.6, py + 0.68, fz + 0.1, "#8a6a4a"));
+    for (const lx of [-2.6, 2.6]) {
+      parts.push(box(1.0, 0.9, 0.04, hx + lx, 1.55 + FLAT, fz + 0.03, "#2d3e4f"));
+      for (const sd of [-1, 1]) parts.push(box(0.5, 0.95, 0.05, hx + lx + sd * 0.78, 1.55 + FLAT, fz + 0.06, SHUTTER[i % 3]));
+    }
+  });
+  // Tahta yol (kulübelerin önünden iskelenin başına): enine tahtalar, kenar kirişleri.
+  {
+    const [[x0, z0], [x1]] = K.boardwalk;
+    for (let x = x0; x < x1; x += 0.32) parts.push(box(0.26, 0.05, 1.4, x + 0.13, y(x, z0) + 0.06, z0, Math.round((x - x0) / 0.32) % 2 ? "#b88a5e" : "#a87a50"));
+    for (const dz of [-0.72, 0.72]) parts.push(box(x1 - x0, 0.08, 0.06, (x0 + x1) / 2, y((x0 + x1) / 2, z0) + 0.03, z0 + dz, "#7a5a3e"));
+  }
+  // Balık tezgâhı: buzlu tezgâh, üstünde balıklar, çizgili tente.
+  {
+    const [sx, sz] = K.stall, sy = y(sx, sz);
+    parts.push(box(2.4, 0.9, 0.9, sx, sy + 0.45, sz, "#e9edf0"), box(2.3, 0.08, 0.8, sx, sy + 0.94, sz, "#cfe6ef"));
+    for (let k = 0; k < 9; k++) parts.push(colored(new THREE.SphereGeometry(0.11, 6, 4).scale(2.2, 0.55, 0.8).rotateY(0.3 * (k % 3 - 1)).translate(sx - 0.9 + (k % 5) * 0.45, sy + 1.02, sz - 0.2 + Math.floor(k / 5) * 0.38), k % 3 ? "#b8c4cc" : "#d98a6a"));
+    for (const dx of [-1.15, 1.15]) for (const dz of [-0.4, 0.4]) parts.push(box(0.06, 2.3, 0.06, sx + dx, sy + 1.15, sz + dz, "#7a5a3e"));
+    for (let k = 0; k < 6; k++) parts.push(box(2.6 / 6, 0.05, 1.2, sx - 1.3 + (k + 0.5) * (2.6 / 6), sy + 2.3, sz, k % 2 ? "#f7f5f0" : "#d8433d"));
+    parts.push(box(0.5, 0.35, 0.4, sx + 1.6, sy + 0.18, sz, "#3e7fb0"), box(0.5, 0.35, 0.4, sx + 1.6, sy + 0.53, sz, "#d8342b"));
+  }
+  // Balık sepetleri (yeşil kafes yığınları) ve iskelede halat kangalları, babalar.
+  for (const [tx, tz] of K.traps) {
+    const ty = y(tx, tz);
+    for (let k = 0; k < 4; k++) parts.push(cyl(0.32, 0.36, 0.42, tx + (k % 2) * 0.72 - 0.36, ty + 0.21 + Math.floor(k / 2) * 0.42, tz, "#4f6b4a", 10));
+  }
+  for (const [rx, rz] of K.ropes) parts.push(colored(new THREE.TorusGeometry(0.22, 0.06, 5, 12).rotateX(Math.PI / 2).translate(rx, 1.58, rz), "#d9c38a"));
+  for (let k = 0; k * 6 < K.jetty.z1 - K.jetty.z0; k++) for (const dx of [-1.15, 1.15]) parts.push(cyl(0.1, 0.12, 0.3, K.jetty.x + dx, 1.68, K.jetty.z0 + 3 + k * 6, "#2a2d33", 8));
+  // Dalgakıran: suya yığılmış iri taşlar.
+  {
+    const [rx, rz] = K.rocks;
+    for (let k = 0; k < 9; k++) {
+      const a = k * 2.3, r = 1 + (k % 4) * 1.1, sc = 0.9 + (k % 3) * 0.4;
+      parts.push(colored(new THREE.IcosahedronGeometry(sc, 0).scale(1.2, 0.7, 1).rotateY(a).translate(rx + Math.cos(a) * r, -0.2 + (k % 2) * 0.25, rz + Math.sin(a) * r * 1.6), k % 2 ? "#8f949a" : "#a7aaae"));
+    }
+  }
   const group = new THREE.Group();
   const m = new THREE.Mesh(merged(parts.map((g) => (g.index ? g.toNonIndexed() : g))), MAT);
   m.castShadow = m.receiveShadow = true;
   group.add(m, uh);
+  // Kıyıya çekilmiş sandallar (kumda, hafif yatık).
+  for (const [sx, sz, sr, col] of K.beached) {
+    const bt = new THREE.Mesh(hull(4.6, 1.6, 0.6, { top: col, stripe: "#f7f5f0", deck: "#9b7350" }).geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, side: THREE.DoubleSide }));
+    bt.rotation.set(0, sr, 0.12);
+    bt.position.set(sx, y(sx, sz) + 0.22, sz);
+    bt.castShadow = true;
+    group.add(bt);
+  }
+  // Giriş tabelası: iki direk, üstünde yazılı ahşap levha.
+  {
+    const [gx, gz] = K.sign, g0 = y(gx, gz);
+    const cv = document.createElement("canvas");
+    cv.width = 512; cv.height = 128;
+    const c = cv.getContext("2d");
+    c.fillStyle = "#8a5a3a"; c.fillRect(0, 0, 512, 128);
+    c.fillStyle = "#f4ead8"; c.font = "bold 60px sans-serif"; c.textAlign = "center"; c.textBaseline = "middle";
+    c.fillText("BALIKÇI KOYU", 256, 68);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const board = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.65, 0.08), [MATW, MATW, MATW, MATW, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }), MATW]);
+    board.position.set(gx, g0 + 2.1, gz);
+    board.rotation.y = Math.PI;
+    board.castShadow = true;
+    const posts = new THREE.Mesh(merged([box(0.12, 2.5, 0.12, gx - 1.2, g0 + 1.25, gz, "#6b4a35"), box(0.12, 2.5, 0.12, gx + 1.2, g0 + 1.25, gz, "#6b4a35")]), MAT);
+    group.add(board, posts);
+  }
   // Ağlar: serenlere asılı, yarı saydam yeşil-mavi file.
   const net = new THREE.MeshStandardMaterial({ color: "#3f7f7a", transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 0.9, depthWrite: false });
   for (const [rx, rz] of K.racks) {

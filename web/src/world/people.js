@@ -340,12 +340,15 @@ export class People {
     // Buluşma yeri saatine göre, mekânların kapasitesiyle orantılı seçilir: kimse tek bir meydana yığılmaz.
     const local = "mahalle:" + this.homes[i].parts.mahalle;
     const t = seg.bas;
+    // Yaz (Haziran–Eylül) gündüzü plaj da buluşma yeridir: şezlonglarda güneşlenilir.
+    const month = new Date(this.day * 86400000).getUTCMonth();
+    const beach = month >= 5 && month <= 8 && this.world.beach ? 22 : 0;
     const table = t >= 1290
       ? [[local, 45], ["meydan", 40], ["kahvehane", 15]]
       : t < 1080
-        ? [[local, 25], ["meydan", 24], ["park", 20], ["sahil_yolu", 16], ["pazar", 10], ["kahvehane", 5]]
-        : [[local, 30], ["meydan", 27], ["sahil_yolu", 19], ["park", 14], ["kahvehane", 10]];
-    const opts = table.filter(([name]) => this.world.places[name]);
+        ? [[local, 25], ["meydan", 24], ["park", 20], ["sahil_yolu", 16], ["pazar", 10], ["kahvehane", 5], ["plaj", beach]]
+        : [[local, 30], ["meydan", 27], ["sahil_yolu", 19], ["park", 14], ["kahvehane", 10], ["plaj", Math.round(beach / 2)]];
+    const opts = table.filter(([name, wgt]) => wgt > 0 && this.world.places[name]);
     const total = opts.reduce((a, [, wgt]) => a + wgt, 0);
     let x = roll(this.residents[i].seed, "mekan", this.day * 16 + k) % total;
     for (const [name, wgt] of opts) { if (x < wgt) return name; x -= wgt; }
@@ -1117,6 +1120,23 @@ export class People {
       resetPose(st); st.y = w.groundY(ax, az);
       resetPose(si); sitPose(si, it.top, kk);
       blendPose(p, st, si, u);
+      if (u >= 1 && it.sunbed) {
+        // Şezlongda: çoğu sırtüstü uzanıp güneşlenir (ayakları deniz tarafında), kimi oturup kitap okur ya da
+        // telefona bakar. Plaj kıyafeti: kısa kollu, şort.
+        p.sleeves = false; p.shorts = true;
+        if (roll(s, "sezlong", this.day) % 3) {
+          resetPose(p);
+          p.height = st.height; p.sleeves = false; p.shorts = true;
+          p.x = it.x + fx * 0.95; p.z = it.z + fz * 0.95; p.heading = it.heading;
+          p.y = it.top; p.lie = Math.PI / 2;
+          p.shL = p.shR = 0.1; p.abL = p.abR = 0.2; p.elL = p.elR = 0.25; p.kneeL = 0.15;
+          p.headYaw = 0.35 * Math.sin(t * 0.05 + ph);
+        } else {
+          p.shL = p.shR = 0.7; p.elL = p.elR = 1.5; p.headPitch = 0.45;
+          p.props = [roll(s, "okur") % 2 ? "kitap" : "telefon"];
+        }
+        return true;
+      }
       if (u >= 1) {
         const hobbyId = seg.ne === "hobi" ? this.hobbies[i].id : null;
         if (hobbyId === "kitap") { p.shL = p.shR = 0.7; p.elL = p.elR = 1.5; p.headPitch = 0.45; p.props = ["kitap"]; }

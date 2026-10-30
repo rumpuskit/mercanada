@@ -78,7 +78,7 @@ const TAGGED = ["buildings", "roads", "plazas", "features", "labels", "seats", "
 // Tek nesne olarak tutulan yerler ve açıldıkları anahtar.
 const REFS = {
   carsiWalks: "carsi_yol", pitch: "saha", hospital: "saglik:0", port: "liman:0", tersane: "tersane:0",
-  koy: "balikci_koyu:0", promenade: "sahil_yolu", fireStation: "itfaiye", depot: "garaj",
+  koy: "balikci_koyu:0", promenade: "sahil_yolu", fireStation: "itfaiye", depot: "garaj", beach: "plaj:0",
 };
 
 // Yol yüksekliği için yumuşatma çekirdeği (12 m çapında, ağırlıklı).
@@ -1089,9 +1089,20 @@ export class World {
       racks: [[bx - 14, bz - 0.5], [bx + 13, bz - 0.5]],
       upturned: [bx - 25, bz - 1.5, 0.3],
       crates: [jx, jz - 1.8],
-      table: [bx - 3.5, bz - 3.4],
+      table: [bx - 3.5, bz - 1.4],
       buoys: [[bx - 12, bz + 13], [bx + 9, bz + 20], [bx - 2, bz + 26]],
+      // Kulübeler (verandaları deniz tarafında), kulübeleri iskeleye bağlayan tahta yol, balık tezgâhı,
+      // kıyıya çekilmiş sandallar, sepet yığınları, halat kangalları, dalgakıran taşları ve giriş tabelası.
+      huts: [0, 1, 2].map((i) => [bx - 14 + i * 12, bz - 9]),
+      boardwalk: [[bx - 20, bz - 3.8], [bx, bz - 3.8]],
+      stall: [jx + 4.5, jz - 0.8],
+      beached: [[bx + 9, bz - 0.5, 0.35, "#d8433d"], [bx + 12.5, bz + 0.2, -0.25, "#2f7fb5"]],
+      traps: [[bx - 19.6, bz - 5.0], [bx - 8.6, bz - 5.0], [bx + 3.0, bz - 5.0]],
+      ropes: [[jx - 0.7, jz + 4], [jx + 0.7, jz + 12], [jx - 0.7, jz + 20]],
+      rocks: [jx + 9, jz + 14],
+      sign: [bx, bz - 15.5],
     };
+    for (const lx of [bx - 22, bx - 8, bx + 4]) this.lamps.push({ x: lx, z: bz - 2.6, dir: Math.PI });
     const kposts = [];
     const kpost = (type, x, z, heading, extra = {}) => kposts.push({ post: type, x, z, heading, ...extra });
     for (const [rx, rz] of K.racks) for (const dx of [-1.4, 1.4]) kpost("ag", rx + dx, rz + 1.3, Math.PI);
@@ -1195,14 +1206,69 @@ export class World {
     this.addRoad(this.has("tarla:0") ? toBeach : [[-halfW, 0], [kx - 30, 0], [px, pz - 14]], "patika");
     this._place("plaj", { anchors: beach.map(([x, z]) => [x, z + 4]), spread: 5, path: beachPath });
     this._tag("plaj:0", () => {
-      beach.forEach(([x, z], i) => {
-        this.features.push({ type: "semsiye", x, z, c: i % 10 });
-        this.features.push({ type: "sezlong", x: x + 2.2, z: z + 1, rot: 0.1 });
-      });
+      this._layoutBeach(kx, px, pz);
       this._addWorkplace("plaj", 0, { door: [px, pz], path: beachPath, anchor: [px, pz + 2], spread: 3 });
       this.features.push({ type: "cankurtaran", x: px, z: pz - 2 });
     });
     this.labels.push({ text: "Plaj", x: px, z: pz, h: 18 });
+  }
+
+  /**
+   * Plaj düzeni (kıyı çizgisine göre; "geri" = su kenarından karaya metre): su kenarından 9 ve 15 m geride iki
+   * sıra şemsiye kümesi (şemsiye + denize bakan iki şezlong; şezlonglar sakinlerin uzandığı yerler), kumsala inen
+   * üç tahta yol (cankurtaran kulesinin önü ve yollar boş), yol başlarında duşlar, ortada soyunma kabinleri ve
+   * çöp kutuları, batıda plaj büfesi (masalarıyla), doğu ucunda plaj voleybolu, açıkta şamandıralı yüzme alanı.
+   * Çizim: beach.js.
+   */
+  _layoutBeach(kx, px, pz) {
+    const n = Math.hypot(0.2, 1), dx = -0.2 / n, dz = 1 / n; // denize doğru
+    const at = (x, back) => this.coastPoint(x, 10, -0.2, 1, back);
+    const face = Math.atan2(dx, dz); // şezlonglar denize bakar
+    const walks = [kx - 66, px, kx + 6];
+    const B = { face, clusters: [], walks: [], showers: [], cabins: [], buoys: [], volley: null, bins: [] };
+    for (let x = kx - 96; x <= kx + 34; x += 6.2) {
+      for (const [back, off] of [[9, 0], [15, 3.1]]) {
+        const xx = x + off;
+        if (walks.some((w) => Math.abs(w - xx) < 4.2) || Math.abs(xx - px) < 7) continue;
+        const [cx, cz] = at(xx, back);
+        const c = { x: cx, z: cz, c: Math.round((xx - kx) / 6.2 + back) };
+        B.clusters.push(c);
+        // İki şezlong: kümenin iki yanında, denize bakar; insan uzanınca ayakları deniz tarafında.
+        for (const side of [-1, 1]) {
+          const sx = cx + side * 1.0 * dz, sz = cz - side * 1.0 * dx;
+          this.seats.push({ x: sx, z: sz, heading: face, h: 0.38, place: "plaj", sunbed: true });
+        }
+      }
+    }
+    for (const wx of walks) {
+      const a = at(wx, 31), b = at(wx, 5);
+      B.walks.push({ a, b });
+      B.showers.push(at(wx + 2.6, 20));
+      B.bins.push(at(wx - 2.4, 21));
+    }
+    // Soyunma kabinleri: orta yolun iki yanında ikişer.
+    for (const o of [-6.5, -4.5, 4.5, 6.5]) B.cabins.push(at(px + o, 25));
+    // Büfe: batı yolunun başında, gerçek bina (içi açılır); önünde üç masa ve şemsiyesi.
+    const [bx, bz] = at(walks[0] - 9, 27);
+    this.addBuilding({ kind: "bufe", x: bx, z: bz, rot: face, w: 6, d: 4.5, floors: 1, roofType: "flat", wall: "#f6e3d8", roof: "#c9c4bb", style: { shop: true, awning: "#2f7fb5" }, address: "Plaj Büfesi, Mercan Plajı" });
+    for (let t = 0; t < 3; t++) {
+      const [tx, tz] = at(walks[0] - 13 + t * 4, 21.5);
+      this.features.push({ type: "masa1", x: tx, z: tz });
+      this.features.push({ type: "semsiye", x: tx, z: tz, c: t, town: true });
+      for (const sd of [-0.7, 0.7]) {
+        const hx = tx + sd * dz, hz = tz - sd * dx;
+        const heading = Math.atan2(tx - hx, tz - hz);
+        this.features.push({ type: "sandalye", x: hx, z: hz, rot: heading });
+        this.seats.push({ x: hx, z: hz, heading, h: 0.475, place: "plaj", table: [tx, tz] });
+      }
+    }
+    // Voleybol: doğu ucunda, file kıyıya dik.
+    const [vx, vz] = at(kx + 46, 16);
+    B.volley = { x: vx, z: vz, rot: face };
+    // Yüzme alanı: 30 m açıkta, kıyıya paralel şamandıralı ip.
+    for (let x = kx - 100; x <= kx + 38; x += 3.5) B.buoys.push(at(x, -30));
+    this.beach = B;
+    this.block(kx - 100, Math.min(...B.clusters.map((c) => c.z)) - 4, kx + 52, Math.max(...B.clusters.map((c) => c.z)) + 4, 0);
   }
 
   // --- mahalleler ---
