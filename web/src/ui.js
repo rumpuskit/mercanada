@@ -1,7 +1,7 @@
 // Ekrandaki paneller: saat ve nüfus, zaman hızı, "Kendini bul" araması, sakin kartı ve ev içi görünümü.
 import * as sim from "./sim.js";
 import { HOME_LABELS, homeActivity } from "./world/life.js";
-import { TIKTOK, TIKTOK_URL } from "./config.js";
+import { TIKTOK, TIKTOK_URL, nextMove } from "./config.js";
 
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const PLACE_NAMES = {
@@ -21,12 +21,17 @@ export const at = (r) => (r.hidden ? "Gizli komşu" : "@" + r.handle);
 
 export function createUI({ residents, people, world, dollhouse, stories, traffic, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
-  $("cta").href = TIKTOK_URL;
-  // İskelede bekleyenler: takip etmiş, taşınma gününü bekleyenler. Dokununca iskeleye uçar.
+  if (TIKTOK_URL) $("cta").href = TIKTOK_URL;
+  else {
+    // Hesap henüz açılmadı: bağlantı yok, yalnız haber.
+    $("cta").removeAttribute("href");
+    $("cta").textContent = "TikTok hesabımız çok yakında açılıyor";
+  }
+  // İskelede bekleyenler: takip etmiş, sıradaki taşınmayı bekleyenler. Dokununca iskeleye uçar.
   if (waiting > 0 && world.ferryPier) {
     const btn = $("waiting");
     btn.hidden = false;
-    btn.textContent = `🧳 ${fmt.format(waiting)} kişi iskelede taşınmayı bekliyor`;
+    btn.textContent = `🧳 ${fmt.format(waiting)} kişi iskelede · taşınma ${nextMove()}`;
     btn.addEventListener("click", () => {
       const P0 = world.ferryPier;
       flyTo(0, P0.top, P0.z0 + 14, 45);
@@ -38,7 +43,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const btn = $("next");
     const need = Math.max(1, ns.nufus - residents.length);
     btn.hidden = false;
-    btn.textContent = waiting >= need ? `🏗️ ${ns.name} taşınma gününde açılıyor` : `🏗️ Sıradaki: ${ns.name} · ${fmt.format(need)} sakin daha`;
+    btn.textContent = waiting >= need ? `🏗️ ${ns.name} ${nextMove()} taşınmasında açılıyor` : `🏗️ Sıradaki: ${ns.name} · ${fmt.format(need)} sakin daha`;
     if (ns.at) btn.addEventListener("click", () => flyTo(ns.at[0], world.groundY(ns.at[0], ns.at[1]), ns.at[1], 110));
   }
   let selected = null;
@@ -390,7 +395,10 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       $("floorbar").hidden = true;
       $("card-handle").textContent = "@" + handle;
       $("card-title").textContent = "Bu kullanıcı adı henüz adada değil.";
-      $("card-now").textContent = `TikTok'ta @${TIKTOK} hesabını takip ettiysen iskelede sıranı bekliyorsun: taşınmalar 2-3 günde bir yapılır. Etmediysen takip et, sen de taşın.`;
+      $("card-now").textContent = TIKTOK
+        ? `TikTok'ta @${TIKTOK} hesabını takip ettiysen iskelede sıranı bekliyorsun: sıradaki taşınma ${nextMove()}. ` +
+          "Etmediysen takip et, sen de taşın. (Bazı hesapları, ör. gizli hesapları, TikTok takipçi listesinde göstermiyor; onlar taşınamıyor.)"
+        : "Ada henüz sakin kabul etmiyor: TikTok hesabımız çok yakında açılıyor.";
       $("card-facts").replaceChildren();
       $("card-tabs").hidden = true;
       $("card-traits").replaceChildren();

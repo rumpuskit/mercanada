@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Takipçi dışa aktarımını şehre işler: yeni gelenler taşınır, takibi bırakanlar adadan ayrılır.
+"""Takipçi listesini şehre işler: yeni gelenler taşınır, takibi bırakanlar adadan ayrılır.
 
 Kullanım:
-    python3 import_followers.py tiktok-export.zip [--platform tt] [--day N] [--force] [--dry-run]
+    python3 import_followers.py liste.json [--platform tt] [--day N] [--force] [--dry-run]
 
-Girdi TikTok "Verilerini indir" çıktısıdır (JSON ya da TXT): zip'in kendisi ya da içindeki
-user_data*.json / Follower*.txt. Instagram dışa aktarımı da okunur (--platform ig, followers_*.json).
+Asıl kaynak, Mac'teki tik.ninja takibinin günde 3 kez ssh ile yolladığı listedir (tasinma.py bu
+modülün aktar() işlevini çağırır). Elle verilen dosya da okunur: aynı biçimdeki liste
+({"kaynak": "tikninja", "liste": [[ad, takip zamanı, sıra], ...]}), TikTok "Verilerini indir" çıktısı
+(zip ya da içindeki user_data*.json / Follower*.txt) ya da Instagram dışa aktarımı (--platform ig).
 Kurallar:
   - Takibi bırakan bu aktarımda ayrılır; evi 7 gün tutulur, bu sürede dönerse aynı evine döner.
   - 7 günü geçen ayrılanın kaydı silinir (KVKK: gerekenden uzun tutulmaz), evi boşa çıkar.
   - Yeni gelenler takip sırasına göre önce boş evlere, sonra adanın ucundaki yeni evlere yerleşir.
     Böylece mahalleler delik deşik kalmaz, tek kişilik görevler (fener bekçisi) de boş kalmaz.
+    tik.ninja takip zamanını sayfa başına verir; aynı sayfadakileri listedeki sıra ayırır.
   - Çıkma isteyenler (cikanlar) bir daha taşınmaz.
   - Dışa aktarım aktif nüfusun %80'inden azını içeriyorsa yarım dosya olabilir; --force olmadan işlenmez.
 """
@@ -33,13 +36,31 @@ MIN_RATIO = 0.8
 NAME_KEYS = ("username", "user_name", "uniqueid", "unique_id")
 
 
+class AktarimHatasi(Exception):
+    pass
+
+
+# --- tik.ninja (Mac'teki takip aracı) ---
+
+def _tikninja_json(data: dict) -> dict[str, tuple[int, int]]:
+    """{"kaynak": "tikninja", "liste": [[ad, takip zamanı, sıra], ...]}: sıra, aynı takip zamanını
+    paylaşanlar (aynı sayfa) arasında eskiden yeniye artar."""
+    out: dict[str, tuple[int, int]] = {}
+    for item in data.get("liste") or []:
+        if isinstance(item, list) and item and isinstance(item[0], str):
+            ts = int(item[1]) if len(item) > 1 and isinstance(item[1], (int, float)) else 0
+            sira = int(item[2]) if len(item) > 2 and isinstance(item[2], (int, float)) else 0
+            _add(out, item[0], ts, sira)
+    return out
+
+
 # --- TikTok ---
 
-def _tiktok_json(blob: bytes) -> dict[str, int]:
+def _tiktok_json(blob: bytes) -> dict[str, tuple[int, int]]:
     """user_data.json içinde takipçi listesini arar. Biçim yıllar içinde değişti
     (Activity → "Follower List" → FansList, ya da "Follower" → FansList); bu yüzden ağaçta
     adı 'fan'/'follower' geçen ama 'following' geçmeyen bir yolun altındaki kişi listeleri toplanır."""
-    out: dict[str, int] = {}
+    out: dict[str, tuple[int, int]] = {}
 
     def walk(node, path: str) -> None:
         if isinstance(node, dict):
@@ -58,13 +79,16 @@ def _tiktok_json(blob: bytes) -> dict[str, int]:
                 if name:
                     _add(out, str(name), _tiktok_date(low.get("date")))
 
-    walk(json.loads(blob), "")
+    data = json.loads(blob)
+    if isinstance(data, dict) and data.get("kaynak") == "tikninja":
+        return _tikninja_json(data)
+    walk(data, "")
     return out
 
 
-def _tiktok_txt(text: str) -> dict[str, int]:
+def _tiktok_txt(text: str) -> dict[str, tuple[int, int]]:
     """TXT biçimi: 'Date: 2026-10-28 10:12:03' ve 'Username: ali.veli' satırları."""
-    out: dict[str, int] = {}
+    out: dict[str, tuple[int, int]] = {}
     date = None
     for line in text.splitlines():
         k, _, v = line.partition(":")
@@ -90,8 +114,8 @@ def _tiktok_date(value) -> int:
 
 # --- Instagram ---
 
-def _instagram_json(blob: bytes) -> dict[str, int]:
-    out: dict[str, int] = {}
+def _instagram_json(blob: bytes) -> dict[str, tuple[int, int]]:
+    out: dict[str, tuple[int, int]] = {}
     data = json.loads(blob)
     if isinstance(data, dict):  # bazı sürümlerde {"relationships_followers": [...]}
         data = next((v for v in data.values() if isinstance(v, list)), [])
@@ -104,14 +128,21 @@ def _instagram_json(blob: bytes) -> dict[str, int]:
     return out
 
 
-def _add(out: dict[str, int], handle: str, ts: int) -> None:
+def _add(out: dict[str, tuple[int, int]], handle: str, ts: int, sira: int = 0) -> None:
     h = sim.normalize_handle(handle)
     if HANDLE_RE.match(h):
-        out[h] = min(ts, out.get(h, ts)) if ts else out.get(h, 0)
+        _merge(out, h, (ts, sira))
 
 
-def read_export(paths: list[Path], platform: str) -> tuple[dict[str, int], str]:
-    """{handle: takip zaman damgası (UTC, saniye)} ve okunan dosyaların sha256 özeti."""
+def _merge(out: dict[str, tuple[int, int]], h: str, v: tuple[int, int]) -> None:
+    """Aynı kişi iki kez geçerse bilinen en eski takip zamanı kalır (0 = bilinmiyor)."""
+    old = out.get(h)
+    if old is None or (v[0] and (not old[0] or v < old)):
+        out[h] = v
+
+
+def read_export(paths: list[Path], platform: str) -> tuple[dict[str, tuple[int, int]], str]:
+    """{handle: (takip zaman damgası (UTC, saniye), sıra)} ve okunan dosyaların sha256 özeti."""
     if platform == "ig":
         wanted = re.compile(r"followers_\d+\.json$")
     else:
@@ -124,9 +155,9 @@ def read_export(paths: list[Path], platform: str) -> tuple[dict[str, int], str]:
         else:
             blobs.append((path.name, path.read_bytes()))
     if not blobs:
-        sys.exit("HATA: dışa aktarımda takipçi dosyası bulunamadı")
+        raise AktarimHatasi("dışa aktarımda takipçi dosyası bulunamadı")
 
-    followers: dict[str, int] = {}
+    followers: dict[str, tuple[int, int]] = {}
     for name, blob in blobs:
         if platform == "ig":
             part = _instagram_json(blob)
@@ -134,14 +165,14 @@ def read_export(paths: list[Path], platform: str) -> tuple[dict[str, int], str]:
             part = _tiktok_txt(blob.decode("utf-8", "replace"))
         else:
             part = _tiktok_json(blob)
-        for h, ts in part.items():
-            followers[h] = min(ts, followers.get(h, ts)) if ts else followers.get(h, 0)
+        for h, v in part.items():
+            _merge(followers, h, v)
     return followers, hashlib.sha256(b"".join(b for _, b in blobs)).hexdigest()
 
 
 IMPORT_SQL = """
 BEGIN;
-CREATE TEMP TABLE gelenler (handle text PRIMARY KEY, seed bigint NOT NULL, ts bigint NOT NULL) ON COMMIT DROP;
+CREATE TEMP TABLE gelenler (handle text PRIMARY KEY, seed bigint NOT NULL, ts bigint NOT NULL, sira bigint NOT NULL) ON COMMIT DROP;
 COPY gelenler FROM STDIN;
 {rows}
 \\.
@@ -169,7 +200,7 @@ WITH d AS (
 
 -- Yeniler takip sırasına göre önce boş evlere, sonra adanın ucuna yerleşir.
 WITH yeni AS (
-    SELECT g.handle, g.seed, row_number() OVER (ORDER BY g.ts, g.handle) AS rn
+    SELECT g.handle, g.seed, row_number() OVER (ORDER BY g.ts, g.sira, g.handle) AS rn
     FROM gelenler g
     WHERE NOT EXISTS (SELECT 1 FROM sakinler s WHERE s.platform = :'pf' AND s.handle = g.handle)
 ), bos AS (
@@ -193,6 +224,38 @@ SELECT json_build_object(
 """
 
 
+def aktar(followers: dict[str, tuple[int, int]], sha: str, platform: str = "tt", day: int | None = None,
+          db: str = DB, force: bool = False, dry_run: bool = False, yayinla: bool = True) -> dict:
+    """Listeyi şehre işler ve (deneme değilse) yayınlar. Aynı liste daha önce işlendiyse
+    {"atlandi": True} döner; boş ya da yarım görünen liste AktarimHatasi verir."""
+    day = sim.day_of(time.time()) if day is None else day
+    if not followers:
+        raise AktarimHatasi("listede geçerli kullanıcı adı yok")
+    if psql(f"SELECT 1 FROM aktarimlar WHERE dosya_sha256 = '{sha}'", db):
+        return {"atlandi": True}
+    opted_out = set(psql("SELECT ozet FROM cikanlar", db).split())
+    followers = {h: v for h, v in followers.items() if opt_out_hash(platform, h) not in opted_out}
+    active = int(psql(f"SELECT count(*) FROM sakinler WHERE left_day IS NULL AND platform = '{platform}'", db))
+    if len(followers) < MIN_RATIO * active and not force:
+        raise AktarimHatasi(f"listede {len(followers)} kişi var, şehirde {active}. "
+                            "Yarım liste olabilir; eminsen --force ile çalıştır.")
+
+    rows = "\n".join(f"{h}\t{sim.seed_of(key_of(platform, h))}\t{ts}\t{sira}" for h, (ts, sira) in followers.items())
+    sql = IMPORT_SQL.format(rows=rows, window=RETURN_WINDOW_DAYS, end="ROLLBACK" if dry_run else "COMMIT")
+    variables = ["-v", f"day={day}", "-v", f"sha={sha}", "-v", f"takipci={len(followers)}", "-v", f"pf={platform}"]
+    eski = psql("SELECT deger FROM durum WHERE anahtar = 'zirve'", db)
+    eski = json.loads(eski)["sayi"] if eski else 0
+    result = json.loads(psql(sql, db, variables))
+    # Bu taşınmayla adada açılanlar (gelişim tablosundan): taşınma videosunun malzemesi.
+    yeni = max(eski, result.pop("en_buyuk"))
+    result["acilan"] = [st["ad"] for st in sim.catalog()["gelisim"] if eski < st["nufus"] <= yeni]
+    sira = [st for st in sim.catalog()["gelisim"] if st["nufus"] > yeni]
+    result["siradaki"] = f"{sira[0]['ad']} ({sira[0]['nufus']}. sakinde)" if sira else None
+    if yayinla and not dry_run:
+        result["yayin"] = publish(db)
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("exports", nargs="+", type=Path)
@@ -203,31 +266,13 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="hesapla ama kaydetme")
     args = parser.parse_args()
 
-    followers, sha = read_export(args.exports, args.platform)
-    if not followers:
-        sys.exit("HATA: dışa aktarımda geçerli kullanıcı adı yok")
-    if psql(f"SELECT 1 FROM aktarimlar WHERE dosya_sha256 = '{sha}'", args.db):
-        sys.exit("Bu dışa aktarım daha önce işlenmiş, atlandı.")
-    opted_out = set(psql("SELECT ozet FROM cikanlar", args.db).split())
-    followers = {h: ts for h, ts in followers.items() if opt_out_hash(args.platform, h) not in opted_out}
-    active = int(psql(f"SELECT count(*) FROM sakinler WHERE left_day IS NULL AND platform = '{args.platform}'", args.db))
-    if len(followers) < MIN_RATIO * active and not args.force:
-        sys.exit(f"HATA: dışa aktarımda {len(followers)} kişi var, şehirde {active}. "
-                 "Yarım dosya olabilir; eminsen --force ile çalıştır.")
-
-    rows = "\n".join(f"{h}\t{sim.seed_of(key_of(args.platform, h))}\t{ts}" for h, ts in followers.items())
-    sql = IMPORT_SQL.format(rows=rows, window=RETURN_WINDOW_DAYS, end="ROLLBACK" if args.dry_run else "COMMIT")
-    variables = ["-v", f"day={args.day}", "-v", f"sha={sha}", "-v", f"takipci={len(followers)}", "-v", f"pf={args.platform}"]
-    eski = psql("SELECT deger FROM durum WHERE anahtar = 'zirve'", args.db)
-    eski = json.loads(eski)["sayi"] if eski else 0
-    result = json.loads(psql(sql, args.db, variables))
-    # Bu taşınmayla adada açılanlar (gelişim tablosundan): Taşınma Günü videosunun malzemesi.
-    yeni = max(eski, result.pop("en_buyuk"))
-    result["acilan"] = [st["ad"] for st in sim.catalog()["gelisim"] if eski < st["nufus"] <= yeni]
-    sira = [st for st in sim.catalog()["gelisim"] if st["nufus"] > yeni]
-    result["siradaki"] = f"{sira[0]['ad']} ({sira[0]['nufus']}. sakinde)" if sira else None
-    if not args.dry_run:
-        result["yayin"] = publish(args.db)
+    try:
+        followers, sha = read_export(args.exports, args.platform)
+        result = aktar(followers, sha, args.platform, args.day, args.db, args.force, args.dry_run)
+    except AktarimHatasi as e:
+        sys.exit(f"HATA: {e}")
+    if result.get("atlandi"):
+        sys.exit("Bu liste daha önce işlenmiş, atlandı.")
     print(("[DENEME] " if args.dry_run else "") + json.dumps(result, ensure_ascii=False))
 
 

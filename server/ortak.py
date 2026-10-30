@@ -51,6 +51,10 @@ def publish(db: str = DB) -> dict:
     sakinler = json.loads(rows or "[]")
     takipci = psql("SELECT deger FROM durum WHERE anahtar = 'tt_takipci'", db)
     takipci = json.loads(takipci)["sayi"] if takipci else None
+    # Listede hiç görünmeyecek takipçiler (TikTok'un listede göstermediği hesaplar, çıkanlar): son
+    # taşınmada profil sayısı ile nüfus farkı. Bunlar iskelede "bekleyen" sayılmaz.
+    disarida = psql("SELECT deger FROM durum WHERE anahtar = 'disarida'", db)
+    disarida = json.loads(disarida)["sayi"] if disarida else 0
     son = psql("SELECT coalesce(max(extract(epoch FROM imported_at))::bigint, 0) FROM aktarimlar", db)
     # Gelişim düzeyi: adanın ulaştığı en yüksek nüfus (en büyük sıra + 1). Ayrılanlar yüzünden düşmez;
     # site neyin açık olduğunu (iş yerleri, yollar, parklar) buna göre kurar.
@@ -66,7 +70,7 @@ def publish(db: str = DB) -> dict:
         "son_aktarim": int(son or 0),
         "takipci": takipci,
         # Takip etmiş ama henüz aktarımla taşınmamış olanlar: iskelede valizleriyle bekler.
-        "bekleyen": max(0, takipci - len(sakinler)) if takipci is not None else 0,
+        "bekleyen": max(0, takipci - disarida - len(sakinler)) if takipci is not None else 0,
         "zirve": zirve,
         # [handle | null (adı gizli), seed, slot, arrived_day, overrides | null]
         "sakinler": sakinler,

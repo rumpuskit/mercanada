@@ -8,22 +8,24 @@ Takip etmenin dışında hiçbir özellik kullanıcıdan işlem istemez. Sakinle
 
 ## Sakinler nereden gelir?
 
-TikTok takipçi listesini resmî arayüzünden vermez; tek resmî yol hesabın "Verilerini indir" dosyasıdır (hazırlanması saatler-günler sürer). Akış:
+TikTok takipçi listesini resmî arayüzünden vermez; resmî "Verilerini indir" dosyası da günler sürer. Bu yüzden liste, hesabın herkese açık takipçi listesinden, bağımsız bir profil görüntüleme sitesi (tik.ninja) üzerinden okunur. Bu iş bu depoda değil, ayrı bir yerel takip aracında (Mac'te, launchd ile) yapılır. Akış:
 
-1. TikTok uygulamasında Ayarlar → Hesap → Verilerini indir → yalnız "Takipçi listesi", JSON. Dosya gelince indirilir, hemen yenisi istenir.
-2. Dosya sunucuda `import_followers.py` ile işlenir: yeni gelenler takip sırasına göre önce boş evlere yerleşir, takibi bırakanlar ayrılır (evi 7 gün tutulur, sonra kaydı silinir), adadan çıkmak isteyenler bir daha taşınmaz.
-3. Betik güncel listeyi Cloudflare Worker'ına (`sayac/`) yollar; site listeyi oradan okur. Ziyaretçi trafiği sunucuya gelmez.
-4. Aradaki günlerde TikTok API'sinden yalnız takipçi **sayısı** alınır (saatlik); henüz taşınmamış olanlar vapur iskelesinde valizleriyle bekler.
+1. **Saatte bir** araç yalnız profildeki takipçi **sayısını** okuyup sunucuya yollar. Henüz taşınmamış olanlar vapur iskelesinde valizleriyle bekler.
+2. **Günde üç kez** (09:00, 15:00, 21:00; `web/src/config.js` `TASINMA_SAATLERI` ve aracın `config.toml`'u) araç listeyi tarar. Aktif takipçilerin tamamını takip sırasıyla `ssh` ile sunucudaki `tasinma.py`'ye yollar. Bu ssh anahtarı yalnız o betiği çalıştırabilir (zorunlu komut).
+3. `tasinma.py`, `import_followers.aktar()` ile listeyi işler: yeni gelenler takip sırasına göre önce boş evlere yerleşir, takibi bırakanlar ayrılır (evi 7 gün tutulur, sonra kaydı silinir), adadan çıkmak isteyenler bir daha taşınmaz. Liste aktif nüfusun %80'inden azsa işlenmez (yarım liste adayı boşaltmasın).
+4. Güncel liste Cloudflare Worker'ına (`sayac/`) gider; site listeyi oradan okur. Ziyaretçi trafiği sunucuya gelmez.
+
+TikTok bazı hesapları (ör. gizli hesapları) herkese açık takipçi listesinde göstermez; onlar taşınamaz ve iskelede bekleyen sayılmaz (profil sayısıyla nüfus farkı `durum.disarida`). tik.ninja kapanırsa resmî dışa aktarım dosyası `import_followers.py` ile elle işlenebilir.
 
 ## Ada nasıl büyür?
 
 Ada boş başlar: vapur iskelesi, toprak patikalar, çeşmeli meydan ve bayrak direği, tepe, fener ve kumsal. Her şeyin yeri baştan bellidir ama yalnızca açılmış olanlar kurulur:
 
 - **Evler** sakinlerle gelir: bir apartman, ilk dairesine biri taşınınca dikilir. Mahalle girişe en yakın sokaktan dışa doğru dolar; sokaklar evlerin önüne kadar uzanır.
-- **Yerler** `data/catalog.json` içindeki `gelisim` tablosuna göre açılır: 5. sakinde meydan bankları, 10'da kahvehane, 20'de market, 30'da fırın... 230'da çevre yolu ile arabalar ve otobüs, 600'de yük limanı, 2.650'de son kafe. Sonraki mahallelerin camisi, çay bahçesi ve okulu, mahalle dolmaya başladıktan sonra aynı aralıklarla gelir; çarşı dükkânları 240. sakinden başlayarak tek tek açılır.
+- **Yerler** `data/catalog.json` içindeki `gelisim` tablosuna göre açılır: 5. sakinde meydan bankları, 10'da kahvehane, 20'de market, 30'da fırın... 200'de çevre yolu ile arabalar ve otobüs, 600'de yük limanı, 2.650'de son kafe. Sonraki mahallelerin camisi, çay bahçesi ve okulu, mahalle dolmaya başladıktan sonra aynı aralıklarla gelir; çarşı dükkânları 240. sakinden başlayarak tek tek açılır.
 - Gelişim düzeyi adanın **ulaştığı en yüksek nüfustur** (`zirve`); takibi bırakanlar yüzünden açılmış bir yer kapanmaz.
 - İş yeri henüz açılmamış bir mesleğin sahibi o yer açılana kadar **anakarada çalışır** (vapurla gider gelir); kartında "Mercan Fırını açılınca fırın çırağı olacak (30. sakinde)" yazar. Açılınca asıl işine geçer.
-- Sitede "Sıradaki: … · N sakin daha" satırı ve haritada sıradaki yapının şantiye çitli hayalet taslağı görünür. Aktarım çıktısındaki `acilan` listesi Taşınma Günü videosunun malzemesidir.
+- Sitede "Sıradaki: … · N sakin daha" satırı ve haritada sıradaki yapının şantiye çitli hayalet taslağı görünür. Taşınma çıktısındaki `acilan` listesi taşınma videolarının malzemesidir; takip aracı bir yer açılınca bildirim de gönderir.
 
 ## Yapı
 
@@ -44,13 +46,15 @@ web/                       tarayıcı istemcisi (Three.js + Vite), telefonda ve 
 server/
   mercanada_sim/sim.py     simülasyonun Python karşılığı (web ile bit bit aynı)
   schema.sql               Postgres şeması (sakinler, aktarimlar, istekler)
-  import_followers.py      TikTok (ya da Instagram) takipçi dışa aktarımını şehre işler, listeyi yayınlar
+  tasinma.py               Mac'teki takip aracından gelen sayı/liste (ssh zorunlu komutu)
+  import_followers.py      takipçi listesini şehre işler, listeyi yayınlar (elle: dosyadan)
   cikar.py                 adadan çıkmak / adını gizlemek isteyenler (DM ile)
-  tiktok_api.py            TikTok takipçi sayısı (iskelede bekleyenler için), OAuth kurulumu
+  tiktok_api.py            TikTok resmî API'sinden takipçi sayısı (isteğe bağlı; sayı artık takip aracından geliyor)
   ortak.py                 psql, listenin yayını (public/sakinler.json + Worker)
   systemd/                 mercanada kullanıcısının kendi servisleri (saatlik takipçi sayısı)
 sayac/                     Cloudflare Worker: çevrimiçi sayacı, /sakinler.json, mercanada.rumpuskit.com yönlendirmesi
   tests/test_parity.py     JS ve Python aynı sonucu veriyor mu?
+  tests/test_tasinma.py    taşınma uçtan uca (gerçek Postgres ister, MERCANADA_TEST_DB ile)
 ```
 
 ## Komutlar
@@ -71,9 +75,13 @@ cd server && python3 -m unittest -v
 rsync -a --delete --exclude __pycache__ --relative server/ data/catalog.json $SUNUCU:/opt/mercanada/app/
 ssh $SUNUCU 'chown -R mercanada:mercanada /opt/mercanada/app'
 
-# Takipçi dışa aktarımını işle (sunucuda; önce --dry-run ile bak)
+# Taşınma testleri (geçici Postgres; asıl veritabanına dokunmaz)
+docker run -d --rm --name mercanada-deneme -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:55432:5432 postgres:17-alpine
+cd server && PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres MERCANADA_TEST_DB=mercanada_deneme python3 -m unittest tests.test_tasinma
+
+# Bir listeyi elle işle (sunucuda; önce --dry-run ile bak). Normalde takip aracı günde 3 kez kendisi yollar.
 cd /opt/mercanada/app/server
-sudo -u mercanada python3 import_followers.py tiktok-export.zip --dry-run
+sudo -u mercanada python3 import_followers.py liste.json --dry-run
 sudo -u mercanada python3 import_followers.py tiktok-export.zip
 
 # Adadan çıkma / adı gizleme isteği (DM)
