@@ -71,7 +71,7 @@ const CENTER_ORDER = [
 const HOUSE_WALLS = ["#f4efe6", "#f3e3c8", "#e9d3c0", "#dfe7e4", "#f1d7cf", "#e8e0cf", "#f6f1e9", "#d9e2ea", "#efdcb8", "#e6d2d8"];
 const HOUSE_ROOFS = ["#b5563f", "#a85a44", "#c06a4c", "#8c4b3a", "#9e5a48"];
 
-const OUTDOOR_KINDS = new Set(["liman", "balikci_koyu", "tersane", "tarla", "plaj", "fener"]);
+const OUTDOOR_KINDS = new Set(["liman", "balikci_koyu", "tersane", "tarla", "plaj", "fener", "saha"]);
 
 // Gelişim anahtarıyla etiketlenen listeler.
 const TAGGED = ["buildings", "roads", "plazas", "features", "labels", "seats", "lamps", "piers", "parks"];
@@ -809,6 +809,8 @@ export class World {
     }
     this.addRoad([[145, -CELL_D / 2], [145, -124.5]], "patika");
     this._place("saha", { anchors: [[145, -84]], spread: 20, path: [[145, -CELL_D / 2]] });
+    // Mercanspor: futbolcular gündüz sahada antrenman yapar.
+    this._addWorkplace("saha", 0, { door: [145, -124.5], path: [[145, -CELL_D / 2]], anchor: [145, -84], spread: 20 });
     this.block(88, -127, 202, -41, 0); // saha, tribünler ve arka duvarları (ağaç dikilmez)
   }
 
