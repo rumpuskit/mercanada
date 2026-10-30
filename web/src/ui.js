@@ -503,9 +503,16 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     selected: () => (mode === "sakin" ? selected : null),
     selectedVehicle: () => (mode === "arac" && !$("card").hidden ? vehicle : null),
     tick(unix, minuteNow, day, times) {
-      // Gün doğumu/batımı yalnız geniş ekranda (telefonda saat kutusu kısa kalsın).
-      const sun = times?.rise != null ? `<span class="sun"> · ☀ ${sim.formatMinute(times.rise)}–${sim.formatMinute(times.set)}</span>` : "";
-      $("clock").innerHTML = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}${sun}`;
+      // Gün doğumu/batımı sığarsa (uzun gün adlarında ve telefonda gizlenir; tam metin ipucunda).
+      const sunText = times?.rise != null ? ` · ☀ ${sim.formatMinute(times.rise)}–${sim.formatMinute(times.set)}` : "";
+      const clock = $("clock"), text = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}`;
+      if (clock.dataset.text !== text + sunText) {
+        clock.dataset.text = text + sunText;
+        clock.title = text + sunText;
+        clock.innerHTML = `${text}<span class="sun">${sunText}</span>`;
+        clock.classList.remove("dar");
+        if (clock.scrollWidth > clock.clientWidth + 1) clock.classList.add("dar");
+      }
       // Döküm benzetimden: işte, evde (uyuyanlar dahil) ve dışarıda (yolda, çarşıda, hobisinde).
       let work = 0, home = 0;
       for (const seg of people.activities) {

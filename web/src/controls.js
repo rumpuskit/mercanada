@@ -81,9 +81,13 @@ export class MapControls2 {
     this.camera.lookAt(this.target);
   }
 
-  /** P noktasına doğru yakınlaş (factor < 1) ya da uzaklaş (> 1). */
+  /**
+   * P noktasına doğru yakınlaş (factor < 1) ya da uzaklaş (> 1). Uzaklaşma hep ekranın ortası (hedef)
+   * çevresinde: imleç noktasından uzaklaşmak eğik kamerada bakılan yeri ileri ya da geri savuruyordu
+   * (mini haritadaki konum uzaklaşınca kayıyordu). Google Haritalar gibi: yakınlaşma imlece, uzaklaşma ortadan.
+   */
   _zoom(factor, pivot = this.target) {
-    const P = pivot.clone(); // pivot hedefin kendisi olabilir; aşağıda hedef değişirken bozulmasın
+    const P = (factor > 1 ? this.target : pivot).clone(); // pivot hedefin kendisi olabilir; hedef değişirken bozulmasın
     const off = this._offset();
     const dist = off.length();
     const nd = THREE.MathUtils.clamp(dist * factor, this.minDistance, this.maxDistance);

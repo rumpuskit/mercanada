@@ -155,6 +155,18 @@ button {
   padding: 4px 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  /* Panel dar kalırsa kutu daralır (taşmaz); sığmayan gün doğumu/batımı gizlenir (ui.js "dar"). */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#hud .clock.dar .sun {
+  display: none;
+}
+
+#hud .brand {
+  flex: 0 0 auto;
 }
 
 #hud .stats {
