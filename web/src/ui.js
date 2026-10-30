@@ -8,9 +8,9 @@ const PLACE_NAMES = {
   meydan: "Meydan", iskele: "Balık iskelesi", park: "Park", sahil_yolu: "Sahil yolu", plaj: "Plaj",
   tepe: "Tepe", fener: "Fener", kahvehane: "Kahvehane", pazar: "Pazar", saha: "Futbol sahası",
 };
-// Buluşma yerinde ne yapıyor (yer anahtarına göre).
+// Buluşma yerinde ne yapıyor (yer anahtarına göre); yanında kimin olduğu ayrıca eklenir.
 const OUT_LABELS = {
-  meydan: "Meydanda, arkadaşlarıyla", park: "Parkta geziniyor", sahil_yolu: "Sahil yolunda yürüyüşte",
+  meydan: "Meydanda", park: "Parkta geziniyor", sahil_yolu: "Sahil yolunda yürüyüşte",
   kahvehane: "Kahvehanede", pazar: "Pazarda alışverişte", saha: "Futbol sahasında",
 };
 
@@ -19,7 +19,7 @@ const $ = (id) => document.getElementById(id);
 // Sakinin görünen adı: adını gizlemek isteyenler "Gizli komşu" olarak görünür.
 export const at = (r) => (r.hidden ? "Gizli komşu" : "@" + r.handle);
 
-export function createUI({ residents, people, world, dollhouse, stories, traffic, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null }) {
+export function createUI({ residents, people, world, dollhouse, stories, traffic, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
   $("cta").href = TIKTOK_URL;
   // İskelede bekleyenler: takip etmiş, sıradaki taşınmayı bekleyenler. Dokununca iskeleye uçar.
@@ -32,6 +32,18 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       flyTo(0, P0.top, P0.z0 + 14, 45);
     });
   }
+  // Belediye başkanlığı seçimi (açıkken): kalan süre ve önde giden; dokununca belediyeye gider, kart adayları gösterir.
+  const belediye = () => Object.values(world.workplaces.belediye ?? []).find(Boolean)?.building;
+  if (secim?.durum === "acik") {
+    const btn = $("secim");
+    const kalan = Math.max(0, secim.bitis - Date.now() / 1000);
+    const sure = kalan > 86400 ? `${Math.ceil(kalan / 86400)} gün kaldı` : kalan > 3600 ? `${Math.ceil(kalan / 3600)} saat kaldı` : "son saat";
+    const lider = secim.adaylar?.find(([h]) => h);
+    btn.hidden = false;
+    btn.textContent = `🗳️ Başkanlık seçimi · ${sure}` + (lider ? ` · önde @${lider[0]}` : " · aday ol: “adayım” yaz");
+    btn.addEventListener("click", () => { const b = belediye(); if (b) openBuilding(b); });
+  }
+
   // Sıradaki gelişim adımı: kaç sakin daha gelince ne açılacak; çubuk bir önceki adımdan bu yana ilerleme.
   // Dokununca yerine (şantiyeye) uçar.
   const ns = world.nextStage;
@@ -70,7 +82,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   function placeLabel(i, yer) {
     if (yer === "ev") return "Ev";
     if (yer === "is") return people.works[i].loc.name;
-    if (yer.startsWith("mahalle:")) return "Mahallesinin çay bahçesi";
+    if (yer.startsWith("mahalle:")) return sim.isOpen(`cay:${yer.slice(8)}`) ? "Mahallesinin çay bahçesi" : "Mahallesi";
     return PLACE_NAMES[yer.replace("hobi:", "")] ?? yer;
   }
 
@@ -104,10 +116,25 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       case "hobi": return `${people.hobbies[i].ad} · ${placeLabel(i, seg.yer)}`;
       case "meydan": {
         const pl = people.currentPlace[i] ?? "meydan";
-        return pl.startsWith("mahalle:") ? "Mahallesinin çay bahçesinde, komşularıyla" : OUT_LABELS[pl] ?? "Çarşıda, arkadaşlarıyla";
+        const yer = pl.startsWith("mahalle:") ? (sim.isOpen(`cay:${pl.slice(8)}`) ? "Mahallesinin çay bahçesinde" : "Mahallesinde")
+          : OUT_LABELS[pl] ?? "Çarşıda";
+        // Yalnız gerçekten yanında biri varsa "arkadaşlarıyla" (12 m içinde dışarıda vakit geçiren sakinler).
+        const near = company(i);
+        const kim = pl.startsWith("mahalle:") ? "komşularıyla" : "arkadaşlarıyla";
+        return `${yer}, ${near.length === 0 ? "tek başına" : near.length === 1 ? `${at(residents[near[0]])} ile` : kim}`;
       }
       default: return seg.ne;
     }
+  }
+
+  /** i'nin yakınında (12 m) dışarıda vakit geçiren diğer sakinler. */
+  function company(i) {
+    const P = people.positions, out = [];
+    for (let j = 0; j < residents.length; j++) {
+      if (j === i || !people.visible[j] || !["meydan", "hobi"].includes(people.activities[j]?.ne)) continue;
+      if (Math.hypot(P[j * 3] - P[i * 3], P[j * 3 + 2] - P[i * 3 + 2]) < 12) out.push(j);
+    }
+    return out;
   }
 
   function facts(rows) {
@@ -120,6 +147,16 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   }
 
   const link = (j) => [at(residents[j]), () => select(j)];
+
+  /** Kişinin kendisi için: yorumla seçtikleri ve henüz seçebilecekleri (istekler sonraki taşınmada işlenir). */
+  function senMisin(r, unvan) {
+    const o = r.overrides ?? {};
+    const secti = [o.meslek && `mesleğini (${unvan})`, o.hobi && "hobini", o.evcil && "evcilini"].filter(Boolean);
+    const oneri = [!o.meslek && "“meslek: balıkçı”", !o.hobi && "“hobi: tavla”", !o.evcil && "“evcil: kedi”"].filter(Boolean);
+    const bas = secti.length ? `${secti.join(", ").replace(/, ([^,]*)$/, " ve $1")} sen seçtin. ` : "";
+    const ne = oneri.length ? `Videomuza ${oneri.join(", ")} ya da “adımı gizle” yaz` : "Değiştirmek için videomuza yeniden yaz (ör. “meslek: polis”) ya da “adımı gizle” yaz";
+    return `${bas}${ne}; sonraki taşınmada işlenir.`.replace(/^./, (c) => c.toLocaleUpperCase("tr"));
+  }
 
   function renderPerson() {
     const r = residents[selected];
@@ -178,10 +215,10 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       ["Adres", sim.addressText(r.slot)],
       ["Hobi", people.hobbies[selected].ad],
       ["Evcil", pet || "Henüz yok"],
-      ["Adada", t === 0 ? "Bugün geldi" : `${fmt.format(t)} gündür`],
+      ["Adada", t === 0 ? "Bugün geldi" : t === 1 ? "Dün geldi" : `${fmt.format(t)} gündür`],
       ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : world.vehicles ? "Otobüs ve yürüyüş" : "Yürüyerek (adada henüz araç yok)") + (people.works[selected].wp.kind === "anakara" ? " · işe vapurla" : "")],
       // İstekler videolarımızın yorumlarından okunur (sunucuda istekler.py; biçim orada).
-      ...(!r.hidden ? [["Sen misin?", "Videomuza “meslek: balıkçı”, “hobi: tavla”, “evcil: kedi” ya da “adımı gizle” yaz; sonraki taşınmada işlenir."]] : []),
+      ...(!r.hidden ? [["Sen misin?", senMisin(r, dreamTitle)]] : []),
     ]);
   }
 
@@ -202,6 +239,16 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       }
       $("card-now").textContent = rows.length ? `Şu an ${rows.length} kişi çalışıyor (bu katın kadrosu ${total})` : total ? `Şu an kimse çalışmıyor (kadro ${total})`
         : b.kind === "muhtarlik" ? "Mahallenin muhtarı yok. İlk isteyen muhtar olur: videomuza “meslek: muhtar” yaz." : "Bu katta çalışan yok";
+      if (b.kind === "belediye" && secim) {
+        // Seçim: açıkken adaylar ve oyları, bittiyse başkan. Adını gizleyenler "Gizli aday".
+        const ad = (h) => (h ? "@" + h : "Gizli aday");
+        const sec = secim.durum === "acik"
+          ? [["Seçim", "Aday olmak için videomuza “adayım”, oy için “oy: @aday” yaz (yalnız adada oturanlar)"],
+             ...(secim.adaylar ?? []).map(([h, n], k) => [k === 0 ? "Adaylar" : "", `${ad(h)} · ${fmt.format(n)} oy`])]
+          : [["Başkan", secim.kazanan ? "@" + secim.kazanan : "Gizli komşu"]];
+        facts([...sec, ...rows.slice(0, 10)]);
+        return;
+      }
       facts(rows.slice(0, 12));
       if (rows.length > 12) facts([...rows.slice(0, 12), ["", `ve ${rows.length - 12} kişi daha`]]);
       return;

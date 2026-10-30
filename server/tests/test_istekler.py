@@ -36,7 +36,7 @@ class CozumleTest(unittest.TestCase):
 
     def test_istek_degil(self):
         for text in ("çok güzel olmuş", "balıkçı amca çok iyi", "balıkçı olmak istemiyorum",
-                     "itfaiyeci olmak istiyorum", "kahve içmek istiyorum", "meslek: şef", "meslek: müdür",
+                     "itfaiyeci olmak istiyorum", "belediye başkanı olmak istiyorum", "kahve içmek istiyorum", "meslek: şef", "meslek: müdür",
                      # Kadrolu işler (kontenjanlı) ve "anakara" istenemez.
                      "meslek: cankurtaran", "meslek: uzman"):
             self.assertEqual(cozumle(text), {}, text)

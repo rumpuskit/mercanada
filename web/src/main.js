@@ -63,7 +63,7 @@ progress(0.06, "Sakin listesi alınıyor…");
 // ?bekleyen=N iskelede N bekleyen gösterir.
 const today = sim.dayOf(nowUnix());
 const sample = Number(params.get("nufus"));
-const { residents, waiting, listError, peak = 0 } = sample > 0 ? sampleTown(Math.min(60000, sample)) : await loadResidents();
+const { residents, waiting, listError, peak = 0, secim = null } = sample > 0 ? sampleTown(Math.min(60000, sample)) : await loadResidents();
 progress(0.16, "Ada kuruluyor…");
 await paint();
 // Ada, en büyük sıra numarasına kadar kurulur: ayrılanların boş kalan evleri de durur (yeni gelen yerleşir).
@@ -88,6 +88,7 @@ async function loadResidents() {
     })),
     waiting: Number(params.get("bekleyen")) || data.bekleyen || 0,
     peak: data.zirve ?? 0,
+    secim: data.secim ?? null, // belediye başkanlığı seçimi (sunucu: secim.py)
   });
   try {
     const ctl = new AbortController();
@@ -307,7 +308,7 @@ if (params.has("denetle")) globalThis.__ada = { world, people, traffic, resident
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic });
-const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
 // Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
 follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false, false); };

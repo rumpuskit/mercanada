@@ -38,6 +38,8 @@ class TasinmaTest(unittest.TestCase):
     def send(self, msg) -> tuple[int, dict]:
         p = subprocess.run([sys.executable, str(SERVER / "tasinma.py")], input=json.dumps(msg),
                            capture_output=True, text=True, env=self.env)
+        if not p.stdout.strip():
+            raise AssertionError(p.stderr[-2000:])
         return p.returncode, json.loads(p.stdout.strip().splitlines()[-1])
 
     def q(self, sql) -> str:
@@ -169,6 +171,34 @@ class TasinmaTest(unittest.TestCase):
         code, out = self.send({"tur": "yorumlar", "yorumlar": [
             ["m8", "k06", t, "meslek: fener bekçisi"], ["m9", "k08", t + 5, "fener bekçisi"]]})
         self.assertEqual((out["uygulanan"], out["dolu"]), ([["k06", "meslek", "fener_bekcisi"]], [["k08", "fener_bekcisi"]]))
+
+    def test_belediye_secimi(self):
+        # Belediye 100. sakinde açılır: ilk taşınmada seçim başlar.
+        liste = [[f"k{i:03d}", 300 + i, 0] for i in range(100)]
+        code, out = self.send({"tur": "liste", "takipci": 100, "liste": liste})
+        self.assertEqual((code, out.get("secim")), (0, {"secim": "basladi"}), out)
+        self.assertEqual(self.published()["secim"]["durum"], "acik")
+        t = int(time.time()) + 60  # seçim açıldıktan sonra yazılan yorumlar (öncekiler sayılmaz)
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [
+            ["s0", "k002", t - 30, "meslek: polis"], ["s9", "k007", t - 3600, "adayım"],
+            ["s1", "k001", t - 20, "adayım"], ["s2", "k002", t - 10, "Başkan adayıyım!"],
+            ["s3", "k003", t, "oy: @k001"], ["s4", "k004", t, "oyum @K002"],
+            ["s5", "k005", t - 5, "oy @k001"], ["s6", "k005", t, "oy: @k002."],  # son oy geçer
+            ["s7", "yabanci", t, "oy: @k001"],                                      # adada değil
+            ["s8", "k006", t, "adaya yeni taşındım, oyun güzel @k001"]]})            # ne aday ne oy
+        self.assertEqual((code, out["secim"]), (0, {"aday": 2, "oy": 3}), out)
+        self.assertEqual(self.published()["secim"]["adaylar"], [["k002", 2], ["k001", 1]])
+        # Süre dolar: sonraki taşınmada sonuç. Kazanan başkan olur, eski mesleği saklanır.
+        self.q("UPDATE secimler SET son = now() - interval '1 second'")
+        code, out = self.send({"tur": "liste", "takipci": 100, "liste": liste})
+        self.assertEqual(out["secim"]["kazanan"], "k002", out)
+        self.assertEqual(json.loads(self.q("SELECT overrides FROM sakinler WHERE handle = 'k002'")),
+                         {"meslek": "belediye_baskani", "eski_meslek": "polis"})
+        self.assertEqual(self.published()["secim"]["kazanan"], "k002")
+        self.assertEqual(self.q("SELECT count(*) FROM secim_oylar"), "0")  # oylar silinir
+        # Başkan adadan ayrılır: makam boşalır, önceki mesleği geri gelir.
+        code, out = self.send({"tur": "liste", "takipci": 99, "liste": [x for x in liste if x[0] != "k002"]})
+        self.assertEqual(json.loads(self.q("SELECT overrides FROM sakinler WHERE handle = 'k002'")), {"meslek": "polis"})
 
     def test_korumalar(self):
         liste = [[f"k{i:02d}", 300 + i, 0] for i in range(10)]

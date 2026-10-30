@@ -75,6 +75,10 @@ def publish(db: str = DB) -> dict:
         # [handle | null (adı gizli), seed, slot, arrived_day, overrides | null]
         "sakinler": sakinler,
     }
+    # Belediye başkanlığı seçimi (açıksa adaylar ve oyları, bittiyse sonuç); döngüsel içe aktarma olmasın diye burada.
+    import secim
+    if s := secim.yayin(db):
+        data["secim"] = s
     PUBLIC.mkdir(parents=True, exist_ok=True)
     tmp = PUBLIC / "sakinler.json.tmp"
     tmp.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))

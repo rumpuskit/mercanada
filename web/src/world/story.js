@@ -157,7 +157,7 @@ export class Stories {
       if (seg.ne === "is") { out.push([at, `İşte · ${p.works[i].loc.name}`]); return; }
       const withFriend = f >= 0 && p.plans[f]?.some((q) => q.yer === seg.yer && q.bas < seg.son && q.son > seg.bas) ? ` (@${p.residents[f].handle} ile)` : "";
       if (seg.ne === "hobi") out.push([at, `${p.hobbies[i].ad} · ${placeLabel(seg.yer)}${withFriend}`]);
-      else if (seg.ne === "meydan") out.push([at, `Çarşıda arkadaşlarıyla buluştu${withFriend}`]);
+      else if (seg.ne === "meydan") out.push([at, `Dışarıda · ${placeLabel(p._placeOf(i, k) ?? "meydan")}${withFriend}`]);
     });
     return out;
   }

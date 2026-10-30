@@ -55,3 +55,27 @@ CREATE TABLE IF NOT EXISTS istekler (
     created_at  timestamptz NOT NULL DEFAULT now(),
     UNIQUE (kaynak, kaynak_id)
 );
+
+-- Belediye başkanlığı seçimi (secim.py; tablolar oradan da kurulur).
+CREATE TABLE IF NOT EXISTS secimler (
+    id        bigserial   PRIMARY KEY,
+    makam     text        NOT NULL,
+    bas       timestamptz NOT NULL,
+    son       timestamptz NOT NULL,
+    durum     text        NOT NULL DEFAULT 'acik',   -- acik, bitti
+    kazanan   text,
+    sonuc     jsonb                                  -- [[aday, oy], ...]
+);
+CREATE TABLE IF NOT EXISTS secim_adaylar (
+    secim_id  bigint      NOT NULL,
+    handle    text        NOT NULL,
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (secim_id, handle)
+);
+CREATE TABLE IF NOT EXISTS secim_oylar (
+    secim_id  bigint      NOT NULL,
+    secmen    text        NOT NULL,
+    aday      text        NOT NULL,
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (secim_id, secmen)
+);

@@ -61,7 +61,9 @@ def _sozluk(pairs) -> list[tuple[str, str]]:
 @cache
 def secenekler() -> dict[str, list[tuple[str, str]]]:
     c = sim.catalog()
-    meslekler = [j for j in c["meslekler"] if (not j.get("kadro") or j.get("istenebilir")) and j["id"] != c["kilitli_meslek"]]
+    # Seçimle gelen makamlar (belediye başkanı) istenemez: secim.py.
+    meslekler = [j for j in c["meslekler"] if (not j.get("kadro") or j.get("istenebilir")) and not j.get("secimle")
+                 and j["id"] != c["kilitli_meslek"]]
     meslek = [(katla(j["id"].replace("_", " ")), j["id"]) for j in meslekler]
     meslek += [(katla(k), j["id"]) for j in meslekler for k in j["kademeler"] if katla(k) not in GENEL]
     meslek += list(EK_MESLEK.items())

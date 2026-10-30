@@ -8,7 +8,8 @@ zorunlu komutudur (mercanada kullanıcısının authorized_keys'i); veri stdin'd
         Günde 3 kez (taşınma): aktif takipçilerin tam listesi, import_followers.aktar() ile şehre işlenir.
     {"tur": "yorumlar", "hesap": ad, "yorumlar": [[yorum kimliği, ad, unix zaman, metin], ...]}
         Taşınmadan hemen sonra: videolarımıza son okumadan beri gelen yorumlar. istekler.py ayrıştırır;
-        metin saklanmaz, yalnız geçerli istekler (meslek, hobi, evcil, adımı gizle) kaydedilir.
+        metin saklanmaz, yalnız geçerli istekler (meslek, hobi, evcil, adımı gizle) kaydedilir. Açık
+        belediye başkanlığı seçiminde adaylık ve oylar da (secim.py).
 
 Çıktı tek satır JSON; hata olursa {"hata": "..."} ve çıkış kodu 1. Aynı anda tek çalıştırma (kilit).
 Elle deneme:  echo '{"tur": "sayi", "takipci": 3}' | python3 tasinma.py
@@ -23,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import istekler  # noqa: E402
+import secim  # noqa: E402
 from import_followers import AktarimHatasi, _tikninja_json, aktar  # noqa: E402
 from ortak import DB, ROOT, psql, publish  # noqa: E402
 
@@ -65,13 +67,19 @@ def liste(takipci: int, items: list) -> dict:
     # Taşınmadan önce yorum yazıp şimdi gelenlerin bekleyen istekleri.
     if uygulanan := istekler.uygula():
         sonuc["istek_uygulanan"] = uygulanan
+    # Belediye başkanlığı seçimi: zamanı geldiyse başlar, süresi dolduysa sonuçlanır.
+    if s := secim.ilerlet():
+        sonuc["secim"] = s
     sonuc["yayin"] = publish()
     return sonuc
 
 
 def yorumlar(hesap: str | None, items: list) -> dict:
     sonuc = istekler.yorumlar(items, hesap)
-    if sonuc["uygulanan"]:
+    # Açık seçim varsa adaylık ve oylar (yorum metninden; metin saklanmaz).
+    if s := secim.yorumlar(items, hesap):
+        sonuc["secim"] = s
+    if sonuc["uygulanan"] or any(sonuc.get("secim", {}).values()):
         sonuc["yayin"] = publish()
     return sonuc
 
