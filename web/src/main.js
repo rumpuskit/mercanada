@@ -259,7 +259,7 @@ if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, fo
 // Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
 follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false); };
 // Çevrimiçi sayacı yalnızca yayındaki sitede (ya da ?sayac ile denerken).
-if (location.hostname === "ada.rumpuskit.com" || params.has("sayac")) startOnline();
+if (["mercanada.rumpuskit.com", "ada.rumpuskit.com"].includes(location.hostname) || params.has("sayac")) startOnline();
 const mapUI = createMapUI({ world, camera, controls, flyTo });
 
 // Bir sakine dokununca kartını aç.

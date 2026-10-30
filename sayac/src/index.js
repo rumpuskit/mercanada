@@ -90,7 +90,8 @@ async function residents(request, env, ctx) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    if (url.hostname === "mercanada.rumpuskit.com") return Response.redirect(`https://ada.rumpuskit.com${url.pathname}${url.search}`, 301);
+    // Eski adres (ilk günlerin paylaşımları): yeni adrese kalıcı yönlendirme.
+    if (url.hostname === "ada.rumpuskit.com") return Response.redirect(`https://mercanada.rumpuskit.com${url.pathname}${url.search}`, 301);
     const origin = request.headers.get("Origin");
     if (url.pathname === "/sakinler.json") return residents(request, env, ctx);
     if (url.pathname === "/ws") {

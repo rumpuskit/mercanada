@@ -51,10 +51,8 @@ server/
   istekler.py              yorumdan ya da DM'den gelen istekler (meslek, hobi, evcil, adı gizle)
   import_followers.py      takipçi listesini şehre işler, listeyi yayınlar (elle: dosyadan)
   cikar.py                 adadan çıkmak / adını gizlemek isteyenler (DM ile)
-  tiktok_api.py            TikTok resmî API'sinden takipçi sayısı (isteğe bağlı; sayı artık takip aracından geliyor)
   ortak.py                 psql, listenin yayını (public/sakinler.json + Worker)
-  systemd/                 mercanada kullanıcısının kendi servisleri (saatlik takipçi sayısı)
-sayac/                     Cloudflare Worker: çevrimiçi sayacı, /sakinler.json, mercanada.rumpuskit.com yönlendirmesi
+sayac/                     Cloudflare Worker: çevrimiçi sayacı, /sakinler.json, eski ada.rumpuskit.com adresinin yönlendirmesi
   tests/test_parity.py     JS ve Python aynı sonucu veriyor mu?
   tests/test_tasinma.py    taşınma ve yorum istekleri uçtan uca (gerçek Postgres ister, MERCANADA_TEST_DB ile)
   tests/test_istekler.py   yorumdan istek ayrıştırma
@@ -106,7 +104,7 @@ Sunucuda başka servisler de çalışıyor. Mercanada sadece `mercanada` Linux k
 
 ## Yayın
 
-`main` dalına her push'ta GitHub Actions parite testlerini çalıştırır, web istemcisini derler ve GitHub Pages'a yayınlar: https://ada.rumpuskit.com (Cloudflare üzerinden).
+`main` dalına her push'ta GitHub Actions parite testlerini çalıştırır, web istemcisini derler ve GitHub Pages'a yayınlar: https://mercanada.rumpuskit.com (Cloudflare üzerinden; eski ada.rumpuskit.com oraya yönlenir).
 
 ## Simülasyon kuralı değişirse
 

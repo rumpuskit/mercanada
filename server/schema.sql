@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS aktarimlar (
     imported_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- Anahtar/değer durum: ör. 'tt_takipci' (TikTok API'den saatlik takipçi sayısı).
+-- Anahtar/değer durum: 'tt_takipci' (saatlik takipçi sayısı), 'disarida' (listede görünmeyenler), 'zirve'.
 CREATE TABLE IF NOT EXISTS durum (
     anahtar     text        PRIMARY KEY,
     deger       jsonb       NOT NULL,

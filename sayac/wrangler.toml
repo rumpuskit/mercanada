@@ -6,11 +6,10 @@ main = "src/index.js"
 compatibility_date = "2026-09-01"
 workers_dev = false
 
-# mercanada.rumpuskit.com: videolarda ve biyografide yazan kısa adres; siteye (GitHub Pages, ada.rumpuskit.com)
-# yönlendirir. Pages bir depoya tek alan adı bağlayabildiği için yönlendirme burada.
+# Site GitHub Pages'te, mercanada.rumpuskit.com (DNS: CNAME → rumpuskit.github.io, proxied). Pages bir depoya tek
+# alan adı bağlayabildiği için eski ada.rumpuskit.com adresi burada (rota) yeni adrese yönlendirilir.
 routes = [
   { pattern = "sayac.rumpuskit.com", custom_domain = true },
-  { pattern = "mercanada.rumpuskit.com", custom_domain = true },
 ]
 
 [[durable_objects.bindings]]

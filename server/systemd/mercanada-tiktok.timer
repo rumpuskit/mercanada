@@ -1,9 +1,0 @@
-[Unit]
-Description=Mercanada TikTok takipçi sayısı (saatlik)
-
-[Timer]
-OnCalendar=*:07
-Persistent=true
-
-[Install]
-WantedBy=timers.target

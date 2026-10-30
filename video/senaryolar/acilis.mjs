@@ -60,7 +60,7 @@ export default {
   aciklama: `Bu adada kimse yaşamıyor. TikTok'ta takip eden herkes Mercanada'ya taşınıyor: kendi evi, mesleği ve kendi günüyle. Her yeni sakinle adada yeni bir yer açılıyor.
 Mesleğini sen seç: yorumuna "meslek: balıkçı" gibi yaz. 🏝️
 
-ada.rumpuskit.com
+mercanada.rumpuskit.com
 
 #mercanada #keşfet #ada #şehirkurma #simülasyon #oyun #3d`,
   cekimler: [
