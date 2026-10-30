@@ -4,13 +4,15 @@
 //   cd web && npm run build && npx vite preview --port 4173      (ayrı terminalde)
 //   cd video && node kaydet.mjs senaryolar/acilis.mjs [--onizleme] [--cekim 2] [--birlestir]
 //
-// Senaryo: { ad, fps, w, h, gecis, seslendirme?, aralar?, cekimler: [{ sure, adres, kamera, yazilar, takip, arayuz, hazirlik }] }
+// Senaryo: { ad, fps, w, h, gecis, seslendirme?, aralar?, muzik?, cekimler: [{ sure, adres, kamera, yazilar, takip, arayuz, hazirlik }] }
 //   seslendirme: seslendir.mjs'e bak (ses + cümle cümle altyazı). aralar: { cümle sırası: sn } o cümleden önce
 //   eklenecek sessizlik (vuruş cümlesi öncesi 0,3–0,5 sn; anlatım standardı). Ses değiştiyse:
-//   ELEVENLABS_API_KEY=... ile çalıştır (yoksa kayıtlı ses kullanılır).
+//   ELEVENLABS_API_KEY=... ile çalıştır (yoksa kayıtlı ses kullanılır). muzik: arka plan müziği dosyası
+//   (video/ klasörüne göre), konuşmanın 14 dB altına ayarlanır.
 //   adres:   sitenin sorgu parametreleri (ör. "saat=08:10&hiz=20&nufus=3200")
 //   kamera:  [[t, kx, ky, kz, bx, by, bz], ...] kamera konumu ve bakılan nokta (çekim başından saniye)
-//   takip:   { omuz: true } yürüyen bir sakini omuz görünümünde izler (kamera yerine)
+//   takip:   { omuz: true } yürüyen bir sakini omuz görünümünde izler (kamera yerine); { yakin: true, secim }
+//            yürüyen bir sakini yakından izler, secim görünüş koşulları (kel değil vb.)
 //   yazilar: [{ metin, alt?, bas, son, yer: "ust" | "orta" | "alt" }]
 //   arayuz:  true ise sitenin üst bilgisi görünür (diğer paneller hep gizli)
 import { chromium } from "playwright-core";
@@ -119,9 +121,16 @@ for (const [ci, shot] of S.cekimler.entries()) {
     if (takip?.yakin) {
       // Yürüyen bir sakini önden-yandan, yakından izler; etiketi ("@sen") ve işareti görünür.
       const P = A.people;
+      // secim: görünüşe göre aday (ör. kel, sakallı, üniformalı ya da gri saçlı olmasın; sac: saç biçimleri,
+      // ust: üst giysi renkleri). Video karakteri izleyiciyi temsil ediyor: göze hoş görünmeli.
+      const s = takip.secim, hex = (c) => "#" + c.getHexString();
+      const uygun = (c) => !s || ((!s.sac || s.sac.includes(c.style)) && (!s.ust || s.ust.includes(hex(c.top)))
+        && (s.etek == null || c.skirt === s.etek) && (s.sakal == null || c.beard === s.sakal)
+        && (s.gozluk == null || c.glasses === s.gozluk) && !c.uniform && (!s.sacRenk || s.sacRenk.includes(hex(c.hairColor))));
       let best = -1, bd = Infinity;
       for (let i = 0; i < P.n; i++) {
         if (!P.visible[i] || !P.poses[i].moving || P.poses[i].inVehicle || P.poses[i].indoor || P.poses[i].dog) continue;
+        if (!uygun(P.colors[i])) continue;
         const d = Math.hypot(P.positions[i * 3] - (takip.x ?? 0), P.positions[i * 3 + 2] - (takip.z ?? 0));
         if (d < bd) { bd = d; best = i; }
       }
@@ -248,8 +257,25 @@ if (only == null || joinOnly) {
     };
     const sik = `volume=${(-14 - (await olc(""))).toFixed(2)}dB,acompressor=threshold=-18dB:ratio=3:attack=5:release=80`;
     const kazanc = (-14 - (await olc(sik + ",")) + 0.3).toFixed(2);
-    af += `;[ham]${sik},volume=${kazanc}dB,alimiter=limit=0.84:level=false:attack=2:release=60,aresample=48000[a]`;
-    audio = { input: ["-i", raw], filter: ";" + af, map: ["-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-shortest"] };
+    const input = ["-i", raw];
+    if (!S.muzik) {
+      af += `;[ham]${sik},volume=${kazanc}dB,alimiter=limit=0.84:level=false:attack=2:release=60,aresample=48000[a]`;
+    } else {
+      // Müzik konuşmanın 14 dB altında (−28 LUFS; standart 12–15 dB), yumuşak giriş ve çıkışla; sonra ortak sınırlayıcı.
+      const total = starts.at(-1) + S.cekimler.at(-1).sure;
+      const muzik = resolve(S.muzik);
+      const p = spawn("ffmpeg", ["-hide_banner", "-nostats", "-i", muzik, "-af", "ebur128", "-f", "null", "-"]);
+      let log = "";
+      p.stderr.on("data", (d) => (log += d));
+      await new Promise((ok) => p.on("close", ok));
+      const mI = Number([...log.matchAll(/^\s+I:\s+(-?[\d.]+) LUFS/gm)].at(-1)[1]);
+      input.push("-i", muzik);
+      af += `;[ham]${sik},volume=${kazanc}dB,aresample=48000,aformat=channel_layouts=stereo[ko]`
+        + `;[${parts.length + 1}:a]aresample=48000,aformat=channel_layouts=stereo,volume=${(-28 - mI).toFixed(2)}dB,apad,atrim=0:${total.toFixed(3)},`
+        + `afade=t=in:d=0.6,afade=t=out:st=${(total - 1.8).toFixed(3)}:d=1.8[mz]`
+        + `;[ko][mz]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.84:level=false:attack=2:release=60[a]`;
+    }
+    audio = { input, filter: ";" + af, map: ["-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-shortest"] };
   }
   const enc = ffmpeg([...inputs, ...(audio.input ?? []), "-filter_complex", chain.replace(/;$/, "") + (audio.filter ?? ""), "-map", "[v]", ...(audio.map ?? []),
     "-c:v", "libx264", "-preset", "slow", "-crf", preview ? "24" : "17", "-pix_fmt", "yuv420p", "-movflags", "+faststart", final]);

@@ -51,6 +51,8 @@ export default {
   ad: "01-acilis-sesli",
   seslendirme: SESLENDIRME,
   aralar: { 6: 0.3 }, // "Kendisine sorulmayacak." vuruşundan önce
+  // ElevenLabs Music (30 Eki): hafif akustik gitar + marimba, 92 bpm, sözsüz. Dosya git dışında.
+  muzik: "cikti/muzik/ada-1.mp3",
   fps: 30,
   w: 1080,
   h: 1920,
@@ -123,7 +125,13 @@ ada.rumpuskit.com
       sure: 3.0,
       adres: "saat=17:45&hiz=2&nufus=3200",
       isinma: 90,
-      takip: { yakin: true, x: 0, z: 30, ad: "sen", uzaklik: 6.5, aci: 0.8, yukseklik: 2.7, bak: 2.2 },
+      takip: {
+        yakin: true, x: 0, z: 30, ad: "sen", uzaklik: 5.2, aci: 0.8, yukseklik: 1.7, bak: 0.75,
+        // Saç biçimi uzun, at kuyruğu ya da küt (kahküllü kısa saç uzaktan şapka gibi duruyor); saç kahve tonu
+        // (siyah saç yüzle birleşip maske gibi görünüyor), canlı renkli üst, etek/sakal/gözlük yok.
+        secim: { sac: [2, 4, 7], ust: ["#b8423c", "#d9a441", "#3e8a86", "#d98ca0", "#8fb6d9"], etek: false, sakal: false,
+          gozluk: false, sacRenk: ["#3b2a20", "#5e4128", "#8c5a32"] },
+      },
     },
     {
       // "Yorumuna yaz: meslek, balıkçı.": yeniden bomboş ada, yüksekten; çağrı.

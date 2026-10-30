@@ -160,7 +160,8 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   const addWindow = (b, lx, ly, side, w, h, owner) => {
     const z = side * (b.d / 2);
     B.frames.add(local(b, lx, ly - 0.08, z), b.rot, s.set(w + 0.24, h + 0.24, 0.16));
-    addGlass(b, lx, ly + h / 2 - 0.08 + 0.04, z + side * 0.085, w, h, side < 0, owner);
+    // Cam çerçevenin (ön yüzü z ± 0,08) 2 cm önünde: uzaktan bakınca titreşmesin.
+    addGlass(b, lx, ly + h / 2 - 0.08 + 0.04, z + side * 0.1, w, h, side < 0, owner);
     B.trims.add(local(b, lx, ly - 0.16, z + side * 0.1), b.rot, s.set(w + 0.5, 0.1, 0.28), "#f2efe8");
   };
 
@@ -273,7 +274,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
         if (si === 0 && Math.abs(lx) < 2) continue; // kapı
         for (const [y, hgt, wd] of [[0.9, 2.0, 1.0], [3.9, 1.6, 0.9]]) {
           B.frames.add(local(fake, lx, y - 0.12, fd / 2), fake.rot, s.set(wd + 0.3, hgt + 0.2, 0.16), "#d9cfbd");
-          addGlass(fake, lx, y + hgt / 2, fd / 2 + 0.085, wd, hgt, false, { workplace: "cami", seed: si * 8 + k });
+          addGlass(fake, lx, y + hgt / 2, fd / 2 + 0.1, wd, hgt, false, { workplace: "cami", seed: si * 8 + k });
           B.arches.add(local(fake, lx, y + hgt, fd / 2 + 0.02), fake.rot, s.set(wd / 2 + 0.15, 1, 0.2), "#d9cfbd");
           B.arches.add(local(fake, lx, y + hgt, fd / 2 + 0.09), fake.rot, s.set(wd / 2, 1, 0.05), "#7fa3b8");
         }
@@ -345,9 +346,10 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   if (st.shop) {
     // Zemin kat dükkân vitrini, tente ve tabela.
     // Vitrin ortada camlı kapıyla ikiye bölünür.
+    // Cam taş tabanın ön yüzünün (b.d / 2 + 0,06) önünde: aynı düzlemde olunca alt kenarı titreşiyordu.
     const pane = (b.w - 2.4 - 1.5) / 2;
-    addGlass(b, -(0.75 + pane / 2), 0.45 + 1.3, b.d / 2 + 0.06, pane, 2.6, false, { workplace: b.kind, seed: 0, shop: true });
-    addGlass(b, 0.75 + pane / 2, 0.45 + 1.3, b.d / 2 + 0.06, pane, 2.6, false, { workplace: b.kind, seed: 1, shop: true });
+    addGlass(b, -(0.75 + pane / 2), 0.45 + 1.3, b.d / 2 + 0.09, pane, 2.6, false, { workplace: b.kind, seed: 0, shop: true });
+    addGlass(b, 0.75 + pane / 2, 0.45 + 1.3, b.d / 2 + 0.09, pane, 2.6, false, { workplace: b.kind, seed: 1, shop: true });
     B.frames.add(local(b, 0, 0.35, b.d / 2), b.rot, s.set(b.w - 2.1, 2.9, 0.1));
     b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.07), b.rot, s.set(1.3, 2.45, 0.06)), y: 0.15, z: b.d / 2 + 0.07, w: 1.3, h: 2.45 };
     B.awnings.add(local(b, 0, 3.0, b.d / 2 + 0.9), b.rot, s.set(b.w - 1.6, 0.12, 1.9), st.awning);
