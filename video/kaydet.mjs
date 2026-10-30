@@ -14,10 +14,15 @@
 //   takip:   { omuz: true } yürüyen bir sakini omuz görünümünde izler (kamera yerine); { yakin: true, secim }
 //            yürüyen bir sakini yakından izler, secim görünüş koşulları (kel değil vb.)
 //   yazilar: [{ metin, alt?, bas, son, yer: "ust" | "orta" | "alt" }]
-//   arayuz:  true ise sitenin üst bilgisi görünür (diğer paneller hep gizli)
+//   arayuz:  true ise sitenin üst bilgisi görünür (diğer paneller hep gizli); kart: true ise sakin kartı da
+//   yorunge: { hedef: "siradaki" | "iskele" | "fener" | "meydan" | [x, z], r, h, a0, a1, bak } hedefin
+//            çevresinde a0'dan a1'e (radyan) dönen kamera; hedef sitede o anda hesaplanır (ör. sıradaki şantiye)
+//   serbest: true ise kamerayı site yönetir (ör. adres "bul=kullanici": sakini bulup izler, evdeyse içini açar)
+// Senaryo dosyası .mjs (default export) ya da .json olabilir (gunluk.mjs JSON yazar). olcek: 2 ise sayfa
+// yarı boyutta, iki kat piksel yoğunluğuyla çizilir: arayüz (kart, üst bilgi) videoda okunur boyutta görünür.
 import { chromium } from "playwright-core";
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { seslendir } from "./seslendir.mjs";
 import { resolve } from "node:path";
 
@@ -27,7 +32,8 @@ const preview = args.includes("--onizleme");
 const only = args.includes("--cekim") ? Number(args[args.indexOf("--cekim") + 1]) : null;
 const joinOnly = args.includes("--birlestir"); // çekimleri yeniden çizmeden yalnızca birleştir
 const base = process.env.SITE ?? "http://localhost:4173/";
-const S = (await import(resolve(file))).default;
+const S = file.endsWith(".json") ? JSON.parse(readFileSync(file, "utf8")) : (await import(resolve(file))).default;
+const olcek = S.olcek ?? 1;
 const fps = preview ? 15 : S.fps ?? 30;
 const scale = preview ? 0.5 : 1;
 const W = Math.round((S.w ?? 1080) * scale), H = Math.round((S.h ?? 1920) * scale);
@@ -45,10 +51,13 @@ const CLOCK = `(() => {
 })();`;
 
 const CSS = `
-#hud .links, #speed, #card, #navbtns, #minimap, #places, #search, #floorbar, #loading, #online { display: none !important; }
+#hud .links, #hud .waiting, #speed, #card, #navbtns, #minimap, #arama, #floorbar, #loading, #online { display: none !important; }
 body:not(.arayuz) #hud { display: none !important; }
-body.arayuz #hud { transform: scale(2.1); transform-origin: top left; top: 150px !important; left: 60px !important; }
-#kayit { position: fixed; inset: 0; pointer-events: none; font-family: Nunito, system-ui, sans-serif; }
+body.arayuz #sol { transform: scale(calc(2.1 * var(--k))); transform-origin: top left; top: calc(150px * var(--k)) !important; left: calc(60px * var(--k)) !important; }
+body.kart #card { display: block !important; }
+/* Yazı katmanı her zaman 1080×1920 düzeninde; olcek 2'de sayfa yarı boyutta olduğu için küçültülür. */
+#kayit { position: fixed; left: 0; top: 0; width: 1080px; height: 1920px; transform: scale(var(--k)); transform-origin: 0 0;
+  pointer-events: none; font-family: Nunito, system-ui, sans-serif; z-index: 20; }
 #kayit .yazi { position: absolute; left: 50%; transform: translate(-50%, 0); width: 860px; text-align: center; transition: none; }
 #kayit .yazi.ust { top: 300px; }
 #kayit .yazi.orta { top: 760px; }
@@ -59,7 +68,7 @@ body.arayuz #hud { transform: scale(2.1); transform-origin: top left; top: 150px
   font-weight: 800; font-size: 46px; line-height: 1.2; }
 #kayit .alt-yazi small { font-size: 36px; font-weight: 700; opacity: 0.95; }
 #kayit .altyazi { position: absolute; left: 50%; top: 1215px; transform: translateX(-50%); width: 900px; text-align: center;
-  color: #fff; font-weight: 900; font-size: 64px; line-height: 1.18; letter-spacing: -0.3px; white-space: pre-line;
+  color: #fff; font-weight: 900; font-size: 64px; line-height: 1.18; letter-spacing: -0.3px; white-space: pre-line; text-wrap: balance;
   -webkit-text-stroke: 12px #000; paint-order: stroke fill; text-shadow: 0 4px 14px rgba(0,0,0,.35); }
 `;
 
@@ -85,15 +94,17 @@ for (const [ci, shot] of S.cekimler.entries()) {
   const path = `${out}/cekim${ci + 1}.mp4`;
   parts.push({ path, sure: shot.sure });
   if (joinOnly || (only != null && only !== ci + 1)) continue;
-  const page = await browser.newPage({ viewport: { width: S.w ?? 1080, height: S.h ?? 1920 }, deviceScaleFactor: scale });
+  const page = await browser.newPage({ viewport: { width: (S.w ?? 1080) / olcek, height: (S.h ?? 1920) / olcek }, deviceScaleFactor: scale * olcek });
   page.on("pageerror", (e) => console.log("  sayfa hatası:", e.message));
   await page.addInitScript(CLOCK);
   await page.goto(`${base}?denetle&${shot.adres}`);
   await page.waitForFunction(() => globalThis.__ada?.ui, null, { timeout: 120000 });
   await page.addStyleTag({ content: CSS + (S.css ?? "") });
-  await page.evaluate(async ({ yazilar, arayuz }) => {
+  await page.evaluate(async ({ yazilar, arayuz, kart, olcek }) => {
     await document.fonts.ready;
+    document.documentElement.style.setProperty("--k", String(1 / olcek));
     if (arayuz) document.body.classList.add("arayuz");
+    if (kart) document.body.classList.add("kart");
     const box = document.createElement("div");
     box.id = "kayit";
     for (const y of yazilar ?? []) {
@@ -107,7 +118,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
     sub.className = "altyazi";
     box.append(sub);
     document.body.append(box);
-  }, { yazilar: shot.yazilar, arayuz: shot.arayuz });
+  }, { yazilar: shot.yazilar, arayuz: shot.arayuz, kart: shot.kart, olcek });
   // Dokular ve ilk kareler otursun, sonra sanal saate geç.
   await page.waitForTimeout(2500);
   await page.evaluate(() => window.__manual());
@@ -115,9 +126,29 @@ for (const [ci, shot] of S.cekimler.entries()) {
   if (shot.hazirlik) await page.evaluate(shot.hazirlik);
   // Isınma: benzetim birkaç saniye ilerlesin (yürüyüşler, araçlar yerleşsin).
   for (let k = 0; k < (shot.isinma ?? 20); k++) await page.evaluate(() => window.__step(1000 / 30));
-  await page.evaluate(({ kamera, takip }) => {
+  await page.evaluate(({ kamera, takip, yorunge, sure }) => {
     const A = globalThis.__ada;
+    if (!kamera && !takip && !yorunge) {
+      globalThis.__yonetmen = null; // kamerayı site yönetir (bul=, uçuş, takip)
+      return;
+    }
     A.controls.custom = { rotate() {}, zoom() {} };
+    if (yorunge) {
+      const W = A.world, h = yorunge.hedef;
+      const at = h === "siradaki" ? W.nextStage?.at : h === "iskele" ? [0, W.ferryPier.z0 + 14] : h === "fener" ? [W.fener.x, W.fener.z]
+        : h === "meydan" ? [0, -12] : h;
+      const [x, z] = at ?? [0, 0];
+      const gy = Math.max(0, W.groundY(x, z));
+      const ease = (u) => u * u * (3 - 2 * u);
+      globalThis.__yonetmen = () => {
+        const u = ease(Math.min(1, (globalThis.__shotT ?? 0) / sure));
+        const a = yorunge.a0 + (yorunge.a1 - yorunge.a0) * u;
+        A.camera.position.set(x + Math.sin(a) * yorunge.r, gy + yorunge.h, z + Math.cos(a) * yorunge.r);
+        A.controls.target.set(x, gy + (yorunge.bak ?? 2), z);
+        A.camera.lookAt(A.controls.target);
+      };
+      return;
+    }
     if (takip?.yakin) {
       // Yürüyen bir sakini önden-yandan, yakından izler; etiketi ("@sen") ve işareti görünür.
       const P = A.people;
@@ -184,7 +215,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
       A.camera.position.set(L(1), L(2), L(3));
       A.camera.lookAt(A.controls.target);
     };
-  }, { kamera: shot.kamera, takip: shot.takip });
+  }, { kamera: shot.kamera, takip: shot.takip, yorunge: shot.yorunge, sure: shot.sure });
 
   const frames = Math.round(shot.sure * fps);
   const enc = ffmpeg(["-f", "image2pipe", "-framerate", String(fps), "-c:v", "mjpeg", "-i", "-",
@@ -197,7 +228,13 @@ for (const [ci, shot] of S.cekimler.entries()) {
       // Altyazı: genel zamana göre (çekim geçişlerinde iki çekimde de aynı yazı); cümle bitince 0,2 sn kalır.
       const c = cues.find((c) => g >= c.bas - 0.05 && g < c.son + 0.2);
       const sub = document.querySelector("#kayit .altyazi");
-      if (sub.textContent !== (c?.yazi ?? "")) sub.textContent = c?.yazi ?? "";
+      if (sub.textContent !== (c?.yazi ?? "")) {
+        sub.textContent = c?.yazi ?? "";
+        // En fazla iki satır (standart): sığmazsa yazı küçülür.
+        let fs = 64;
+        sub.style.fontSize = fs + "px";
+        while (fs > 40 && sub.offsetHeight > fs * 1.18 * 2 + 6) sub.style.fontSize = (fs -= 4) + "px";
+      }
       // Yazılar: 0,3 sn'de belirir ve kaybolur.
       document.querySelectorAll("#kayit .yazi").forEach((d, k) => {
         const y = yazilar[k];
@@ -228,7 +265,7 @@ if (only == null || joinOnly) {
     chain += `${prev}[${k}:v]xfade=transition=fade:duration=${X}:offset=${offset.toFixed(3)}${lab};`;
     prev = lab;
   }
-  const final = `${out}/${S.ad}${preview ? "-onizleme" : ""}.mp4`;
+  const final = `${out}/${S.ad.split("/").pop()}${preview ? "-onizleme" : ""}.mp4`;
   let audio = {};
   if (ses) {
     // Ses: cümle öncesi aralar sessizlikle eklenir, video boyunca uzatılır, −14 LUFS / ≤ −1 dBTP'ye getirilir.
@@ -269,7 +306,7 @@ if (only == null || joinOnly) {
       p.stderr.on("data", (d) => (log += d));
       await new Promise((ok) => p.on("close", ok));
       const mI = Number([...log.matchAll(/^\s+I:\s+(-?[\d.]+) LUFS/gm)].at(-1)[1]);
-      input.push("-i", muzik);
+      input.push("-stream_loop", "-1", "-i", muzik); // video müzikten uzunsa müzik döner
       af += `;[ham]${sik},volume=${kazanc}dB,aresample=48000,aformat=channel_layouts=stereo[ko]`
         + `;[${parts.length + 1}:a]aresample=48000,aformat=channel_layouts=stereo,volume=${(-28 - mI).toFixed(2)}dB,apad,atrim=0:${total.toFixed(3)},`
         + `afade=t=in:d=0.6,afade=t=out:st=${(total - 1.8).toFixed(3)}:d=1.8[mz]`
