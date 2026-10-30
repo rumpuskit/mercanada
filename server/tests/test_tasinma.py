@@ -45,6 +45,15 @@ class TasinmaTest(unittest.TestCase):
     def published(self) -> dict:
         return json.loads((Path(self.root) / "public" / "sakinler.json").read_text())
 
+    def test_bos_ada(self):
+        # Yeni hesap: 0 takipçi, boş liste. Hata değil; iskelede kimse beklemez.
+        code, out = self.send({"tur": "liste", "takipci": 0, "liste": []})
+        self.assertEqual((code, out["nufus"], out["gelen"]), (0, 0, 0), out)
+        # Profilde 1 takipçi ama listede yok (gizli hesap): beklemez, hata da değil.
+        code, out = self.send({"tur": "liste", "takipci": 1, "liste": []})
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.published()["bekleyen"], 0)
+
     def test_tasinma_akisi(self):
         # Saatlik sayı: henüz kimse taşınmadı, hepsi iskelede bekliyor.
         code, out = self.send({"tur": "sayi", "takipci": 10})

@@ -1,15 +1,15 @@
 // Yayın ayarları: hesap adı, veri adresi, taşınma saatleri, deneme bayrağı.
-// Sakinlerin geldiği TikTok hesabı (kullanıcı adı, @ olmadan). Hesap açılana kadar null: site takip
-// bağlantısı göstermez. Açılınca burası, public/gizlilik.html ve Mac'teki takip aracının config.toml'u
-// ([mercanada] hesap) birlikte güncellenir.
-export const TIKTOK = null;
+// Sakinlerin geldiği TikTok hesabı (kullanıcı adı, @ olmadan; null: takip bağlantısı gösterilmez).
+// Değişirse burası, public/gizlilik.html ve Mac'teki takip aracının config.toml'u ([mercanada] hesap)
+// birlikte güncellenir.
+export const TIKTOK = "livemercanada";
 export const TIKTOK_URL = TIKTOK ? `https://www.tiktok.com/@${TIKTOK}` : null;
 export const VERI_URL = "https://sayac.rumpuskit.com/sakinler.json";
 // Taşınmalar (Türkiye saati): Mac'teki takip aracı bu saatlerde tam listeyi sunucuya yollar
 // (config.toml tasinma_saatleri ile aynı olmalı). Mac uyuyorsa taşınma uyanınca yapılır.
 export const TASINMA_SAATLERI = [9, 15, 21];
-// Açılış: TikTok hesabı açılınca. O ana kadar deneme süreci: 60×/600× düğmeleri herkese görünür;
-// sonra yalnız ?test ile.
+// Açılış: TikTok hesabı açılınca (30 Ekim 2026). O ana kadar deneme süreci: 60×/600× düğmeleri herkese
+// görünür; sonra yalnız ?test ile.
 export const LAUNCH = Date.parse("2026-10-28T12:30:00+03:00");
 export const TEST_PHASE = !TIKTOK || Date.now() < LAUNCH;
 

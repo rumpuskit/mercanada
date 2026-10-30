@@ -44,11 +44,17 @@ def sayi(takipci: int) -> dict:
 
 def liste(takipci: int, items: list) -> dict:
     followers = _tikninja_json({"liste": items})
+    nufus = int(psql("SELECT count(*) FROM sakinler WHERE left_day IS NULL"))
+    if not followers and nufus == 0:
+        # Ada henüz boş ve takipçi yok (ya da hepsi listede görünmeyen hesaplar): hata değil.
+        durum_yaz("tt_takipci", takipci)
+        durum_yaz("disarida", takipci)
+        return {"gelen": 0, "ayrilan": 0, "donen": 0, "nufus": 0, "acilan": [], "yayin": publish()}
     # Özet içeriğe göre: değişmeyen liste ikinci kez işlenmez (aktarimlar.dosya_sha256).
     sha = hashlib.sha256(json.dumps(sorted(followers.items())).encode()).hexdigest()
     sonuc = aktar(followers, sha, yayinla=False)
     if sonuc.get("atlandi"):
-        sonuc = {"atlandi": True, "nufus": int(psql("SELECT count(*) FROM sakinler WHERE left_day IS NULL"))}
+        sonuc = {"atlandi": True, "nufus": nufus}
     # Profilde sayılıp listede hiç görünmeyenler (gizli/kısıtlı hesaplar, çıkanlar) iskelede beklemez.
     durum_yaz("tt_takipci", takipci)
     durum_yaz("disarida", max(0, takipci - sonuc["nufus"]))
