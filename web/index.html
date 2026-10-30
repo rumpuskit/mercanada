@@ -25,16 +25,6 @@
   <body>
     <canvas id="scene"></canvas>
 
-    <header id="hud">
-      <div class="brand">Mercanada</div>
-      <div class="line" id="clock">--:--</div>
-      <div class="line muted" id="stats"></div>
-      <div class="line online" id="online" hidden><span class="dot"></span><span id="online-n">1</span> kişi şu an adada</div>
-      <button class="line waiting" id="waiting" hidden></button>
-      <button class="line waiting next" id="next" hidden></button>
-      <div class="line links"><a id="cta" target="_blank" rel="noopener">TikTok'ta takip et, adaya taşın</a><span class="sep"> · </span><a href="/gizlilik.html">Gizlilik</a></div>
-    </header>
-
     <div id="speed" role="group" aria-label="Zaman hızı (geliştirme)" hidden>
       <button data-speed="1" class="on">1×</button>
       <button data-speed="60">60×</button>
@@ -48,22 +38,45 @@
       <button id="floor-exit">Dışarı çık</button>
     </div>
 
-    <section id="card" hidden>
-      <button id="card-close" aria-label="Kapat">×</button>
-      <div class="handle" id="card-handle"></div>
-      <div class="title" id="card-title"></div>
-      <div class="dream" id="card-dream" hidden></div>
-      <div class="now" id="card-now"></div>
-      <div id="card-tabs" role="tablist">
-        <button data-tab="simdi" class="on">Şimdi</button>
-        <button data-tab="bugun">Bugün</button>
-        <button data-tab="hikaye">Hikâye</button>
-      </div>
-      <div id="card-traits"></div>
-      <dl id="card-facts"></dl>
-      <div id="card-actions"></div>
-    </section>
-
+    <!-- Sol sütun: üst bilgi ve altında açılan kart aynı akışta (üst üste binmezler). -->
+    <div id="sol">
+      <header id="hud">
+        <div class="hud-top">
+          <div class="brand"><img src="/favicon.svg" alt="" width="22" height="22" />Mercanada</div>
+          <div class="clock" id="clock">--:--</div>
+        </div>
+        <div class="stats" id="stats"></div>
+        <div class="online" id="online" hidden><span class="dot"></span><span id="online-n">1</span> kişi şu an adada</div>
+        <button class="goal" id="next" hidden>
+          <span class="goal-head"><span class="goal-label">🏗️ Sıradaki</span><span class="goal-need" id="next-need"></span></span>
+          <span class="goal-name" id="next-name"></span>
+          <span class="bar"><i id="next-bar"></i></span>
+        </button>
+        <button class="waiting" id="waiting" hidden></button>
+        <div class="links"><a id="cta" class="cta" target="_blank" rel="noopener">TikTok'ta takip et, adaya taşın</a><a class="priv" href="/gizlilik.html">Gizlilik</a></div>
+      </header>
+      <section id="card" hidden>
+        <div class="grip" aria-hidden="true"></div>
+        <button id="card-close" aria-label="Kapat">×</button>
+        <div class="card-head">
+          <div class="avatar" id="card-icon" aria-hidden="true"></div>
+          <div class="card-names">
+            <div class="handle" id="card-handle"></div>
+            <div class="title" id="card-title"></div>
+          </div>
+        </div>
+        <div class="dream" id="card-dream" hidden></div>
+        <div class="now" id="card-now"></div>
+        <div id="card-tabs" role="tablist">
+          <button data-tab="simdi" class="on">Şimdi</button>
+          <button data-tab="bugun">Bugün</button>
+          <button data-tab="hikaye">Hikâye</button>
+        </div>
+        <div id="card-traits"></div>
+        <dl id="card-facts"></dl>
+        <div id="card-actions"></div>
+      </section>
+    </div>
 
     <div id="navbtns">
       <button id="sound" aria-label="Ortam sesleri">🔇</button>
@@ -77,14 +90,40 @@
       <canvas id="minimap-canvas"></canvas>
     </div>
 
-    <nav id="places" aria-label="Yerler"></nav>
+    <div id="arama">
+      <div id="yerler" hidden>
+        <div class="yerler-head">Yerler</div>
+        <div class="yerler-grid" id="yerler-grid"></div>
+      </div>
+      <ul id="oneriler" role="listbox" hidden></ul>
+      <form id="search" autocomplete="off">
+        <button type="button" id="yerler-btn" aria-expanded="false" aria-controls="yerler"><span aria-hidden="true">📍</span><span class="lbl">Yerler</span></button>
+        <input id="search-input" type="search" inputmode="search" enterkeyhint="search" spellcheck="false" placeholder="@kullanıcıadı ya da yer ara" aria-label="Kullanıcı adı ya da yer" aria-controls="oneriler" />
+        <button type="submit" class="go">Bul</button>
+      </form>
+    </div>
 
-    <form id="search" autocomplete="off">
-      <input id="search-input" type="search" inputmode="search" enterkeyhint="search" spellcheck="false" placeholder="@kullanıcıadı ile kendini bul" aria-label="Kullanıcı adı" />
-      <button type="submit">Bul</button>
-    </form>
-
-    <div id="loading">Ada hazırlanıyor…</div>
+    <div id="loading">
+      <div class="load-sky" aria-hidden="true">
+        <div class="load-sun"></div>
+        <svg class="load-island" viewBox="0 0 400 140" preserveAspectRatio="xMidYMax meet">
+          <path d="M40 120c40-46 90-70 160-70s120 24 160 70z" fill="#8fcf7a"/>
+          <path d="M120 96c24-18 50-27 80-27s56 9 80 27" stroke="#f6f1e9" stroke-width="7" fill="none" stroke-linecap="round"/>
+          <rect x="300" y="52" width="10" height="44" rx="2" fill="#f4f1ea"/><rect x="300" y="62" width="10" height="9" fill="#d9534f"/><rect x="300" y="80" width="10" height="9" fill="#d9534f"/><path d="M297 52h16l-8-10z" fill="#3c4a5c"/>
+          <circle cx="150" cy="70" r="13" fill="#5fa35a"/><rect x="148" y="78" width="4" height="14" fill="#7a5a3c"/>
+          <circle cx="250" cy="66" r="11" fill="#5fa35a"/><rect x="248" y="72" width="4" height="14" fill="#7a5a3c"/>
+        </svg>
+        <svg class="load-waves" viewBox="0 0 1200 60" preserveAspectRatio="none"><path d="M0 30c100-20 200 20 300 0s200-20 300 0 200 20 300 0 200-20 300 0v30H0z" fill="#5aaed6"/></svg>
+      </div>
+      <div class="load-box">
+        <h1>Mercanada</h1>
+        <p class="load-sub">TikTok'ta takip eden herkesin evi, mesleği ve günü olan ada</p>
+        <div class="load-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="load-fill"></i></div>
+        <div class="load-step" id="load-step">Sakin listesi alınıyor…</div>
+        <button id="enter" hidden>Adaya gir</button>
+        <p class="load-tip" id="load-tip"></p>
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -1648,7 +1648,7 @@ export class People {
           x = p.x - sx * 0.75 + fx * 0.5; z = p.z - sz * 0.75 + fz * 0.5;
           if (w.inCarriage(x, z) || !w.isWalkable(x, z)) { x = p.x - fx * 0.9; z = p.z - fz * 0.9; }
         }
-        if (w.isWalkable(x, z)) crowd.addDog(x, w.groundY(x, z), z, p.heading + (p.moving ? 0 : 0.6), (p.phase ?? 0) * 1.6, DOG_COLORS[this.residents[i].seed % DOG_COLORS.length], !!p.moving, time, this.residents[i].seed % 97);
+        if (w.isWalkable(x, z)) crowd.addDog(x, w.groundY(x, z), z, p.heading + (p.moving ? 0 : 0.6), (p.phase ?? 0) * 1.6, DOG_COLORS[this.residents[i].seed % DOG_COLORS.length], !!p.moving, time, this.residents[i].seed % 97, i);
       }
     }
     // Taksi, otobüs ve hizmet aracı şoförleri (sakin değil).
@@ -1925,14 +1925,23 @@ export class People {
   }
 
   /** Dokunulan figürün sakin indeksi. */
+  /** Dokunulan sakin (köpeğe dokunulduysa sahibi); en yakın isabet geçer. */
   pick(raycaster) {
+    let best = null, bd = Infinity;
     for (const mesh of this.crowd.pickTargets()) {
       const hit = raycaster.intersectObject(mesh)[0];
-      if (hit?.instanceId != null) {
+      if (hit?.instanceId != null && hit.distance < bd) {
         const i = this.crowd.drawToIndex[hit.instanceId];
-        return i >= 0 ? i : null;
+        if (i >= 0) { best = i; bd = hit.distance; }
       }
     }
-    return null;
+    for (const mesh of this.crowd.dogTargets()) {
+      const hit = raycaster.intersectObject(mesh)[0];
+      if (hit?.instanceId != null && hit.distance < bd) {
+        const i = this.crowd.dogOwner[hit.instanceId];
+        if (i >= 0) { best = i; bd = hit.distance; }
+      }
+    }
+    return best;
   }
 }

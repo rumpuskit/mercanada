@@ -199,6 +199,7 @@ export class Crowd {
     const dog = dogGeometries();
     const dogCap = Math.max(16, Math.ceil(capacity / 4));
     this.dogBody = make(dog.body, true, dogCap);
+    this.dogOwner = new Int32Array(dogCap); // köpek → sahibinin sırası (dokununca sahibi seçilir)
     this.dogHead = make(dog.head, false, dogCap);
     this.dogTail = make(dog.tail, false, dogCap);
     this.dogLegs = make(dog.leg, false, dogCap * 4);
@@ -370,10 +371,11 @@ export class Crowd {
    * Köpek. moving: sahibiyle yürüyor mu; durunca sırayla oturur, yatar, yeri koklar ya da etrafına
    * bakınıp kuyruk sallar (köpeğe ve zamana göre).
    */
-  addDog(x, y, z, heading, phase, color, moving = true, t = 0, seed = 0) {
+  addDog(x, y, z, heading, phase, color, moving = true, t = 0, seed = 0, owner = -1) {
     const i = this.dogCount;
     if (i >= this.dogBody.instanceMatrix.count) return;
     this.dogCount++;
+    this.dogOwner[i] = owner;
     const [root, leg, head, tail, tmp] = this._m;
     const slot = Math.floor((t + seed * 13) / 25);
     const state = moving ? "walk" : ["stand", "sit", "sniff", "lie", "sit", "stand"][(slot + seed) % 6];
@@ -456,5 +458,9 @@ export class Crowd {
 
   pickTargets() {
     return [this.torso, this.head, this.thighL, this.thighR];
+  }
+
+  dogTargets() {
+    return [this.dogBody, this.dogHead];
   }
 }

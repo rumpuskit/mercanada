@@ -37,13 +37,18 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       flyTo(0, P0.top, P0.z0 + 14, 45);
     });
   }
-  // Sıradaki gelişim adımı: kaç sakin daha gelince ne açılacak. Dokununca yerine (şantiyeye) uçar.
+  // Sıradaki gelişim adımı: kaç sakin daha gelince ne açılacak; çubuk bir önceki adımdan bu yana ilerleme.
+  // Dokununca yerine (şantiyeye) uçar.
   const ns = world.nextStage;
   if (ns) {
     const btn = $("next");
     const need = Math.max(1, ns.nufus - residents.length);
+    const prev = Math.max(0, ...sim.cat().gelisim.map((g) => g.nufus).filter((n) => n < ns.nufus));
     btn.hidden = false;
-    btn.textContent = waiting >= need ? `🏗️ ${ns.name} ${nextMove()} taşınmasında açılıyor` : `🏗️ Sıradaki: ${ns.name} · ${fmt.format(need)} sakin daha`;
+    $("next-name").textContent = ns.name;
+    $("next-need").textContent = waiting >= need ? `${nextMove()} taşınmasında` : `${fmt.format(need)} sakin daha`;
+    // Adımın başında da çubuk görünsün (en az %4).
+    $("next-bar").style.width = `${Math.round(Math.min(1, Math.max(0.04, (residents.length - prev) / (ns.nufus - prev))) * 100)}%`;
     if (ns.at) btn.addEventListener("click", () => flyTo(ns.at[0], world.groundY(ns.at[0], ns.at[1]), ns.at[1], 110));
   }
   let selected = null;
@@ -126,6 +131,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const day = today();
     const t = sim.tenure(r, day);
     $("card-handle").textContent = at(r);
+    icon(r.hidden ? "?" : r.handle[0].toLocaleUpperCase("tr"), `hsl(${r.seed % 360} 62% 58%)`);
     // İş yerinin adı yalnızca gerçek bir iş yeri varsa (emekli ve evden çalışanlarda yok).
     const wk = people.works[selected];
     $("card-title").textContent = wk.wp.kind === "ev" ? (wk.job === "emekli" ? "Emekli" : `${sim.title(r, day)} · evinden çalışıyor`) : `${sim.title(r, day)} · ${wk.loc.name}`;
@@ -141,7 +147,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     $("card-tabs").hidden = false;
     $("card-traits").replaceChildren();
     const f = follow.get();
-    followActions(f?.kind === "sakin" && f.i === selected ? f.view : null, { kind: "sakin", i: selected }, "Gözünden bak");
+    followActions(f?.kind === "sakin" && f.i === selected ? f.view : null, { kind: "sakin", i: selected }, "👁 Gözünden bak");
     if (tab === "bugun") {
       const homeLabel = (k) => {
         const seg = people.plans[selected][k];
@@ -230,6 +236,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   }
 
   const KIND_NAMES = { car: "Otomobil", taxi: "Taksi", bus: "Otobüs", ambulans: "Ambulans", itfaiye: "İtfaiye aracı", cop: "Çöp kamyonu" };
+  const KIND_ICONS = { car: "🚗", taxi: "🚕", bus: "🚌", ambulans: "🚑", itfaiye: "🚒", cop: "🚛" };
+  const PLACE_ICONS = { cami: "🕌", liman: "⛴", ambar: "📦", tersane: "⚓", kulube: "🎣", ahir: "🐄", itfaiye: "🚒", garaj: "🚛", bufe: "🥤" };
 
   // Kart birkaç karede bir yeniden çizilir; düğmeler değişmediyse yerinde kalır (yoksa basılırken
   // DOM'dan kopar ve dokunuş boşa gider). Yalnızca tıklama işlevleri tazelenir.
@@ -262,6 +270,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const r = vehicle;
     const live = r.key ? traffic.active.get(r.key) : null;
     $("card-handle").textContent = KIND_NAMES[r.kind] ?? "Araç";
+    icon(KIND_ICONS[r.kind] ?? "🚗");
     const rows = [];
     if (r.kind === "bus") {
       const line = traffic.lines[r.line];
@@ -282,18 +291,20 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     facts(rows);
     const f = follow.get();
     const on = f?.kind === "arac" && f.key === r.key;
-    if (live && (!live.parked || on)) followActions(on ? f.view : null, { kind: "arac", key: r.key }, "Arkasından izle");
+    if (live && (!live.parked || on)) followActions(on ? f.view : null, { kind: "arac", key: r.key }, "🎥 Arkasından izle");
   }
 
-  /** Takip düğmeleri: haritada takip, omuz (arkasından) görünümü ya da bırak. */
+  /** Dokununca takip kendiliğinden başlar; kartta yalnız bakış açısı seçilir (haritadan ya da gözünden). */
   function followActions(view, target, shoulderLabel) {
-    if (view) {
-      action(view === "omuz" ? "Haritaya dön" : shoulderLabel, () => { follow.set(target, view === "omuz" ? "harita" : "omuz"); render(); });
-      action("Takibi bırak", () => { follow.set(null); render(); });
-    } else {
-      action("Takip et", () => { follow.set(target, "harita"); render(); }, true);
-      action(shoulderLabel, () => { follow.set(target, "omuz"); render(); });
-    }
+    if (view === "omuz") action("🗺 Haritaya dön", () => { follow.set(target, "harita"); render(); });
+    else action(shoulderLabel, () => { follow.set(target, "omuz"); render(); });
+  }
+
+  /** Kart başlığındaki yuvarlak simge: harf (sakin) ya da emoji. */
+  function icon(text, color = null) {
+    const el = $("card-icon");
+    el.textContent = text;
+    el.style.background = color ?? "";
   }
 
   function renderPlace() {
@@ -302,23 +313,32 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const names = { cami: "Cami", liman: "Vapur iskelesi", ambar: "Liman ambarı", tersane: "Tersane", kulube: "Balıkçı kulübesi", ahir: "Çiftlik", itfaiye: "İtfaiye istasyonu", garaj: "Belediye garajı", bufe: "Büfe" };
     const wp = Object.values(world.workplaces).flat().find((w) => w?.building === place);
     $("card-handle").textContent = wp?.name ?? names[place.kind] ?? "Bina";
+    icon(PLACE_ICONS[place.kind] ?? "🏛");
     $("card-title").textContent = place.address ?? "";
     $("card-now").textContent = `${place.floors} katlı`;
     facts([]);
   }
 
-  /** Araca dokununca: kimin aracı, hızı; isterse takip. */
+  /** Araca dokununca: yoldaysa takip edilir, park halindeyse ona odaklanılır. */
   function selectVehicle(record) {
     if (!record) return;
     selected = null;
     mode = "arac";
     vehicle = record;
     dollhouse.close();
+    const live = record.key ? traffic.active.get(record.key) : null;
+    if (live && !live.parked) follow.set({ kind: "arac", key: record.key }, "harita");
+    else {
+      follow.set(null);
+      const at = record.slot != null ? traffic.slots[record.slot] : live?.route.position(live.s);
+      if (at) flyTo(at.x, world.groundY(at.x, at.z), at.z, 45);
+    }
     showCard();
   }
 
   function showCard() {
     $("card").hidden = false;
+    document.body.classList.add("kart-acik");
     render();
   }
 
@@ -335,9 +355,12 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   }
 
   /** Sakini seçer; evdeyse evinin içini açar. */
-  function select(i, fly = true) {
+  /** Sakini seçer ve takip eder (takip: false, takipteki kişi bir binaya girip çıkınca yalnız kartı tazelemek için). */
+  function select(i, fly = true, takip = true) {
     selected = i;
     mode = "sakin";
+    // Evdeyse ya da işteyse iç mekâna uçulur (takip yine sürer, yaklaşma uçuştan gelir); dışarıdaysa takip kamerayı getirir.
+    if (takip) follow.set({ kind: "sakin", i }, "harita", { yaklas: false });
     const seg = people.activities[i];
     const atHome = seg && (seg.ne === "ev" || seg.ne === "uyku");
     const home = homeOf(i);
@@ -352,7 +375,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       if (fly) flyToFloor();
     } else {
       dollhouse.close();
-      if (fly) {
+      if (takip) follow.set({ kind: "sakin", i }, "harita");
+      else if (fly) {
         const [x, z] = people.focusPoint(i);
         flyTo(x, world.groundY(x, z), z, innerWidth < innerHeight ? 30 : 18);
       }
@@ -360,12 +384,14 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     showCard();
   }
 
-  /** Bir apartmana dokununca: içini aç. */
+  /** Bir binaya dokununca: içini aç (iç mekânı olmayanlara yalnız odaklan). Takip biter. */
   function openBuilding(b) {
     if (!b) return;
+    follow.set(null);
     if (["kulube", "ahir", "liman", "tersane", "ambar", "cami", "itfaiye", "garaj"].includes(b.kind)) {
       selected = null; mode = "yer"; place = b;
       dollhouse.close();
+      flyTo(b.x, world.groundY(b.x, b.z), b.z, Math.max(45, Math.max(b.w, b.d) * 2.2));
       showCard();
       return;
     }
@@ -417,14 +443,10 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     follow.set(null);
     dollhouse.close();
     $("card").hidden = true;
+    document.body.classList.remove("kart-acik");
     $("floorbar").hidden = true;
   }
 
-  $("search").addEventListener("submit", (e) => {
-    e.preventDefault();
-    find($("search-input").value);
-    $("search-input").blur();
-  });
   $("card-close").addEventListener("click", close);
   $("floor-up").addEventListener("click", () => changeFloor(1));
   $("floor-down").addEventListener("click", () => changeFloor(-1));
@@ -439,8 +461,9 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     selected: () => (mode === "sakin" ? selected : null),
     selectedVehicle: () => (mode === "arac" && !$("card").hidden ? vehicle : null),
     tick(unix, minuteNow, day, times) {
-      const sun = times?.rise != null ? ` · ☀ ${sim.formatMinute(times.rise)}–${sim.formatMinute(times.set)}` : "";
-      $("clock").textContent = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}${sun}`;
+      // Gün doğumu/batımı yalnız geniş ekranda (telefonda saat kutusu kısa kalsın).
+      const sun = times?.rise != null ? `<span class="sun"> · ☀ ${sim.formatMinute(times.rise)}–${sim.formatMinute(times.set)}</span>` : "";
+      $("clock").innerHTML = `${sim.formatMinute(minuteNow)} · ${DAYS[sim.weekday(day)]}${sun}`;
       // Döküm benzetimden: işte, evde (uyuyanlar dahil) ve dışarıda (yolda, çarşıda, hobisinde).
       let work = 0, home = 0;
       for (const seg of people.activities) {
@@ -450,8 +473,13 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       }
       const out = residents.length - work - home;
       // Toplam, dar ekranda gizlenir (satır kesilmesin).
-      if (!residents.length) $("stats").textContent = listError === "none" ? "Sakin listesi şu an alınamadı" : waiting ? "Ada ilk sakinlerini bekliyor" : "Ada ilk sakinini bekliyor";
-      else $("stats").innerHTML = `<span class="total">${fmt.format(residents.length)} sakin · </span>${fmt.format(work)} işte · ${fmt.format(home)} evde · ${fmt.format(out)} dışarıda`;
+      if (!residents.length) {
+        $("stats").innerHTML = `<span class="bos"></span>`;
+        $("stats").firstChild.textContent = listError === "none" ? "Sakin listesi şu an alınamadı" : waiting ? "🏝️ Ada ilk sakinlerini bekliyor" : "🏝️ Ada ilk sakinini bekliyor";
+      } else {
+        const chip = (ic, n, t, cls = "") => `<span class="chip ${cls}"><b>${ic} ${fmt.format(n)}</b><small>${t}</small></span>`;
+        $("stats").innerHTML = chip("👥", residents.length, "sakin", "ana") + chip("💼", work, "işte") + chip("🏠", home, "evde") + chip("🚶", out, "dışarıda");
+      }
       if (!$("card").hidden) render();
     },
   };

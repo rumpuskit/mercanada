@@ -1,7 +1,12 @@
-// Harita ve gezinme: mini harita (dokununca oraya gider), yer kısayolları, yakınlaştırma ve pusula.
-const $ = (id) => document.getElementById(id);
+// Harita ve gezinme: mini harita (dokununca oraya gider), yer paneli, arama (kullanıcı adı ya da yer,
+// yazarken öneri), yakınlaştırma ve pusula.
+import { at } from "./ui.js";
 
-export function createMapUI({ world, camera, controls, flyTo }) {
+const $ = (id) => document.getElementById(id);
+// Arama için: büyük/küçük harf ve Türkçe karakter farkı gözetilmez.
+const fold = (t) => t.replace(/İ/g, "i").replace(/I/g, "ı").toLocaleLowerCase("tr").replace(/[çğıöşü]/g, (c) => "cgiosu"["çğıöşü".indexOf(c)]).trim();
+
+export function createMapUI({ world, camera, controls, flyTo, ui, residents }) {
   const { x0, x1, z0, z1 } = world.bounds;
   const pad = 140;
   const wx0 = x0 - pad, wz0 = z0 - pad, ww = x1 - x0 + 2 * pad, wd = z1 - z0 + 2 * pad + 160;
@@ -68,23 +73,33 @@ export function createMapUI({ world, camera, controls, flyTo }) {
     ctx.fillStyle = "#7cc3d6";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(base, (wx0 - view.x) * k, (wz0 - view.z) * k, ww * k, wd * k);
-    // Kameranın baktığı yer ve yönü.
+    // Kameranın baktığı yer ve yönü (Google Haritalar gibi): yakınlaşmadan bağımsız sabit boyutlu nokta ve
+    // bakış yönünde solan ışın.
     const t = controls.target;
     const px = (t.x - view.x) * k, pz = (t.z - view.z) * k;
     const dir = Math.atan2(t.x - camera.position.x, t.z - camera.position.z);
-    const dist = camera.position.distanceTo(t);
-    const span = Math.max(10, dist * 0.9) * k;
-    ctx.fillStyle = "rgba(224,96,122,0.25)";
-    ctx.strokeStyle = "rgba(224,96,122,0.9)";
-    ctx.lineWidth = 2;
+    // Haritada +x sağ, +z aşağı: açı ekranda atan2(dz, dx).
+    const a = Math.atan2(Math.cos(dir), Math.sin(dir));
+    const R = 36 * dpr, half = 0.5;
+    const beam = ctx.createRadialGradient(px, pz, 0, px, pz, R);
+    beam.addColorStop(0, "rgba(224,96,122,0.8)");
+    beam.addColorStop(0.55, "rgba(224,96,122,0.35)");
+    beam.addColorStop(1, "rgba(224,96,122,0)");
+    ctx.fillStyle = beam;
     ctx.beginPath();
-    ctx.moveTo(px - Math.sin(dir) * span * 0.6, pz - Math.cos(dir) * span * 0.6);
-    ctx.lineTo(px + Math.sin(dir + 0.6) * span, pz + Math.cos(dir + 0.6) * span);
-    ctx.lineTo(px + Math.sin(dir - 0.6) * span, pz + Math.cos(dir - 0.6) * span);
+    ctx.moveTo(px, pz);
+    ctx.arc(px, pz, R, a - half, a + half);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(px, pz, 4, 0, Math.PI * 2);
+    ctx.arc(px, pz, 6.5 * dpr, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.shadowColor = "rgba(0,0,0,0.3)";
+    ctx.shadowBlur = 4 * dpr;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(px, pz, 4.5 * dpr, 0, Math.PI * 2);
     ctx.fillStyle = "#e0607a";
     ctx.fill();
   }
@@ -95,7 +110,7 @@ export function createMapUI({ world, camera, controls, flyTo }) {
   });
   $("minimap-toggle").addEventListener("click", () => $("minimap").classList.toggle("open"));
 
-  // Yer kısayolları (yalnızca adada açılmış olanlar).
+  // Yerler (yalnızca adada açılmış olanlar): panelde simgeli düğmeler, aramada öneri.
   const prom = world.promenade, park = world.plazas.find((q) => q.kind === "park"), tarla = world.workplaces.tarla?.find(Boolean);
   const places = [
     ["Meydan", 0, 0, 90],
@@ -108,13 +123,90 @@ export function createMapUI({ world, camera, controls, flyTo }) {
     tarla && ["Tarlalar", ...tarla.anchor, 160],
     ...world.labels.filter((l) => /Mahallesi$/.test(l.text)).map((l) => [l.text.replace(" Mahallesi", ""), l.x, l.z, 220]),
   ].filter(Boolean);
-  const chips = $("places");
-  chips.replaceChildren(...places.map(([name, x, z, d]) => {
+  const ICONS = { Meydan: "⛲", İskele: "⛴️", Sahil: "🌊", Park: "🌳", Plaj: "🏖️", Tepe: "⛰️", Fener: "🗼", Tarlalar: "🌾" };
+  const icon = (name) => ICONS[name] ?? "🏘️";
+  const go = ([, x, z, d]) => {
+    ui.close();
+    flyTo(x, Math.max(0, world.height(x, z)), z, d);
+  };
+  const panel = $("yerler"), panelBtn = $("yerler-btn");
+  const showPanel = (open) => {
+    panel.hidden = !open;
+    panelBtn.setAttribute("aria-expanded", String(open));
+    if (open) hideSuggest();
+  };
+  $("yerler-grid").replaceChildren(...places.map((pl) => {
     const btn = document.createElement("button");
-    btn.textContent = name;
-    btn.addEventListener("click", () => flyTo(x, Math.max(0, world.height(x, z)), z, d));
+    btn.innerHTML = `<span class="ic"></span><span></span>`;
+    btn.firstChild.textContent = icon(pl[0]);
+    btn.lastChild.textContent = pl[0];
+    btn.addEventListener("click", () => { showPanel(false); go(pl); });
     return btn;
   }));
+  panelBtn.addEventListener("click", () => showPanel(panel.hidden));
+  // Haritaya dokununca açık panel ve öneriler kapanır.
+  $("scene").addEventListener("pointerdown", () => { showPanel(false); hideSuggest(); });
+
+  // Arama: yazarken yerler ve sakinler önerilir (ok tuşları ve Enter ile seçilir).
+  const input = $("search-input"), list = $("oneriler");
+  const placeKeys = places.map((pl) => [fold(pl[0]), pl]);
+  let items = [], cursor = -1;
+  function hideSuggest() {
+    list.hidden = true;
+    items = [];
+    cursor = -1;
+  }
+  function suggest() {
+    const q = fold(input.value.replace(/^@/, ""));
+    if (!q) return hideSuggest();
+    items = placeKeys.filter(([k]) => k.includes(q)).slice(0, 4).map(([, pl]) => ({ kind: "yer", pl }));
+    for (let i = 0; i < residents.length && items.length < 8; i++) {
+      const r = residents[i];
+      if (!r.hidden && r.handle.startsWith(q)) items.push({ kind: "sakin", i });
+    }
+    cursor = -1;
+    list.replaceChildren(...items.map((it, n) => {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      const ic = document.createElement("span"), name = document.createElement("span"), note = document.createElement("small");
+      if (it.kind === "yer") { ic.textContent = icon(it.pl[0]); name.textContent = it.pl[0]; note.textContent = "yer"; }
+      else { ic.textContent = "👤"; name.textContent = at(residents[it.i]); note.textContent = "sakin"; }
+      li.append(ic, name, note);
+      li.addEventListener("pointerdown", (e) => { e.preventDefault(); choose(n); });
+      return li;
+    }));
+    list.hidden = items.length === 0;
+    if (items.length) showPanel(false);
+  }
+  function choose(n) {
+    const it = items[n];
+    hideSuggest();
+    input.blur();
+    if (!it) return;
+    input.value = it.kind === "yer" ? it.pl[0] : "@" + residents[it.i].handle;
+    if (it.kind === "yer") go(it.pl);
+    else ui.select(it.i);
+  }
+  input.addEventListener("input", suggest);
+  input.addEventListener("blur", () => setTimeout(hideSuggest, 150));
+  input.addEventListener("keydown", (e) => {
+    if (list.hidden || !items.length) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      cursor = (cursor + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+      [...list.children].forEach((li, n) => li.setAttribute("aria-selected", String(n === cursor)));
+    } else if (e.key === "Escape") hideSuggest();
+  });
+  $("search").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (cursor >= 0) return choose(cursor);
+    const q = fold(input.value.replace(/^@/, ""));
+    const place = placeKeys.find(([k]) => k === q);
+    hideSuggest();
+    input.blur();
+    if (place) return go(place[1]);
+    ui.find(input.value);
+  });
 
   // Yakınlaştırma ve pusula.
   const zoom = (f) => {

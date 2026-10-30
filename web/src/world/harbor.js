@@ -27,8 +27,9 @@ export function merged(parts) {
 export const MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8 });
 export const METAL = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.4, metalness: 0.5 });
 
-/** Tahta iskele: x merkez, z başlangıç (kıyı), +z yönünde len metre, w genişlik, döşeme üstü top. */
-function pier(f, top) {
+/** Tahta iskele: x merkez, z başlangıç (kıyı), +z yönünde len metre, w genişlik, döşeme üstü top.
+ *  kopru: {side, z, half} vapur köprüsünün indiği yer (iskelenin başından z, o yanda korkuluk açık). */
+function pier(f, top, kopru = null) {
   const parts = [];
   const plank = 0.28, gap = 0.04;
   const woods = ["#a77e57", "#9b7350", "#b08760", "#8f6a49"];
@@ -48,14 +49,22 @@ function pier(f, top) {
     // Büyük iskele: korkuluk, babalar ve fener direkleri.
     for (const side of [-1, 1]) {
       const x = f.x + side * (f.w / 2 - 0.08);
-      for (let z = 2; z < f.len - 1; z += 2.5) metal.push(cyl(0.035, 0.035, 1.05, x, top + 0.52, f.z + z, "#2f3540", 6));
-      metal.push(box(0.06, 0.05, f.len - 3, x, top + 1.05, f.z + f.len / 2 + 0.5, "#2f3540"));
-      metal.push(box(0.04, 0.04, f.len - 3, x, top + 0.6, f.z + f.len / 2 + 0.5, "#2f3540"));
+      const open = (z, extra = 0) => kopru && kopru.side === side && Math.abs(z - kopru.z) < kopru.half + extra;
+      for (let z = 2; z < f.len - 1; z += 2.5) if (!open(z)) metal.push(cyl(0.035, 0.035, 1.05, x, top + 0.52, f.z + z, "#2f3540", 6));
+      // Korkuluk boruları; vapur köprüsünün indiği yerde açıklık.
+      const runs = kopru && kopru.side === side ? [[2, kopru.z - kopru.half], [kopru.z + kopru.half, f.len - 1]] : [[2, f.len - 1]];
+      for (const [a, b] of runs) {
+        if (b - a < 0.3) continue;
+        metal.push(box(0.06, 0.05, b - a, x, top + 1.05, f.z + (a + b) / 2, "#2f3540"));
+        metal.push(box(0.04, 0.04, b - a, x, top + 0.6, f.z + (a + b) / 2, "#2f3540"));
+      }
       for (let z = 6; z < f.len; z += 12) {
+        if (open(z, 1.2)) continue;
         metal.push(cyl(0.16, 0.2, 0.45, f.x + side * (f.w / 2 - 0.6), top + 0.22, f.z + z, "#25282e", 10));
         metal.push(cyl(0.24, 0.24, 0.08, f.x + side * (f.w / 2 - 0.6), top + 0.48, f.z + z, "#25282e", 10));
       }
       for (let z = 10; z < f.len; z += 20) {
+        if (open(z, 0.6)) continue;
         metal.push(cyl(0.06, 0.09, 3.4, f.x + side * (f.w / 2 - 0.6), top + 1.7, f.z + z, "#2f3540", 8));
         metal.push(colored(new THREE.CylinderGeometry(0.18, 0.13, 0.4, 6).translate(f.x + side * (f.w / 2 - 0.6), top + 3.6, f.z + z), "#fff3c4"));
       }
@@ -398,8 +407,15 @@ export function buildHarbor(world) {
   const group = new THREE.Group();
   let ferryObj = null, ferryPlank = null;
   const floating = [];
+  // Vapur köprüsü (aşağıda, vapurun 7,2 m batısında ve 4 m kıyı tarafında) hangi iskeleye iniyorsa o yanda
+  // korkuluk açılır.
+  const vapur = world.features.find((f) => f.type === "vapur");
   for (const f of world.features) {
-    if (f.type === "iskele") group.add(pier(f, 1.53));
+    let kopru = null;
+    if (f.type === "iskele" && vapur && Math.abs(vapur.x - 7.2 - f.x) < f.w / 2 + 4.5 && vapur.z - 4 > f.z && vapur.z - 4 < f.z + f.len) {
+      kopru = { side: Math.sign(vapur.x - f.x) || 1, z: vapur.z - 4 - f.z, half: 1.35 };
+    }
+    if (f.type === "iskele") group.add(pier(f, 1.53, kopru));
     else if (f.type === "vapur") {
       const m = ferry();
       m.position.set(f.x, 0.2, f.z);
@@ -407,7 +423,13 @@ export function buildHarbor(world) {
       floating.push({ obj: m, base: 0.2, amp: 0.06, roll: 0.006, ph: 0.3 });
       ferryObj = { obj: m, x: f.x, z: f.z };
       // İskele köprüsü (vapurdan iskeleye).
-      const plank = new THREE.Mesh(merged([box(2.2, 0.12, 4.2, 0, 0, 0, "#9aa1a8"), box(0.05, 0.9, 4.2, -1.08, 0.45, 0, "#2f3540"), box(0.05, 0.9, 4.2, 1.08, 0.45, 0, "#2f3540")]), METAL);
+      // Açık gri döşeme, iki yanda ince dikmeli çift borulu korkuluk (dolu levha değil).
+      const gw = [box(2.2, 0.1, 4.2, 0, 0, 0, "#b9c0c7"), box(2.24, 0.05, 0.08, 0, 0.04, -2.06, "#8d949b"), box(2.24, 0.05, 0.08, 0, 0.04, 2.06, "#8d949b")];
+      for (const sx of [-1.05, 1.05]) {
+        for (let z = -2; z <= 2.01; z += 1) gw.push(cyl(0.025, 0.025, 1.0, sx, 0.5, z, "#e6e9ec", 6));
+        gw.push(box(0.05, 0.05, 4.1, sx, 1.0, 0, "#e6e9ec"), box(0.035, 0.035, 4.1, sx, 0.55, 0, "#e6e9ec"));
+      }
+      const plank = new THREE.Mesh(merged(gw), METAL);
       plank.position.set(f.x - 7.2, 1.7, f.z - 4);
       plank.rotation.y = Math.PI / 2;
       group.add(plank);

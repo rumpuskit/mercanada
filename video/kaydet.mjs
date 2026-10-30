@@ -166,7 +166,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
         A.follower.start({ kind: "sakin", i: best }, "omuz");
         A.follower.dist = takip.uzaklik ?? 4.2;
         A.follower.pitch = takip.egim ?? 0.28;
-        A.ui.select?.(best);
+        A.ui.select?.(best, false, false); // takip burada omuz görünümünde başladı; seçim onu bozmasın
       }
       globalThis.__yonetmen = null;
       return;

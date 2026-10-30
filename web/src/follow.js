@@ -32,7 +32,8 @@ export class Follower {
     return this.target ? { ...this.target, view: this.view } : null;
   }
 
-  start(target, view = "harita") {
+  /** yaklas: false, kamera başka bir uçuşla (iç mekân) yaklaşırken takip kendi yaklaşmasını yapmasın. */
+  start(target, view = "harita", { yaklas = true } = {}) {
     this.target = target;
     this.view = view;
     this.t = 0;
@@ -46,6 +47,10 @@ export class Follower {
     this.pitch = innerWidth < innerHeight ? 0.42 : 0.32;
     this.controls.custom = view === "omuz" ? this._custom : null;
     this.controls.lockTarget = true;
+    // Harita görünümünde uzaktan dokunulduysa hedefe yaklaşılır (sakin 40 m, araç 80 m); yakınsa olduğu gibi.
+    const want = kind === "sakin" ? 40 : 80;
+    const cd = this.camera.position.distanceTo(this.controls.target);
+    this.zoomTo = yaklas && view === "harita" && cd > want * 1.25 ? want : null;
   }
 
   stop() {
@@ -102,8 +107,11 @@ export class Follower {
       const k = this.t >= 1 ? 1 : 1 - Math.exp(-dt * 14);
       const d = new THREE.Vector3((p.x - controls.target.x) * k, 0, (p.z - controls.target.z) * k);
       controls.target.add(d); camera.position.add(d);
-      const cd = camera.position.distanceTo(controls.target);
-      if (this.t < 1 && cd > 220) controls._zoom(Math.pow(140 / cd, Math.min(1, dt * 4)));
+      if (this.zoomTo) {
+        const cd = camera.position.distanceTo(controls.target);
+        if (Math.abs(cd - this.zoomTo) < 1.5) this.zoomTo = null;
+        else controls._zoom(Math.pow(this.zoomTo / cd, Math.min(1, dt * 3.5)));
+      }
       return true;
     }
     // Omuz kamerası.

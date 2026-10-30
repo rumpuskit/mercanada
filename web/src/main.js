@@ -31,12 +31,41 @@ sim.setCatalog(catalog);
 const params = new URLSearchParams(location.search);
 const nowUnix = () => Date.now() / 1000;
 
+// --- yükleme ekranı: gerçek aşamalarla ilerleyen çubuk ve ipuçları; ada hazır olunca "Adaya gir" ---
+const loadFill = document.getElementById("load-fill"), loadStep = document.getElementById("load-step");
+function progress(f, text) {
+  loadFill.style.width = `${Math.round(f * 100)}%`;
+  loadFill.parentElement.setAttribute("aria-valuenow", String(Math.round(f * 100)));
+  if (text) loadStep.textContent = text;
+}
+// Ağır kurulum adımları arasında tarayıcıya bir kare çizdirir (çubuk ilerlesin).
+const paint = () => new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 0)));
+const TIPS = [
+  "TikTok'ta takip eden herkes bir sonraki taşınmada adaya yerleşir: 09:00, 15:00 ve 21:00.",
+  "Aşağıdaki aramaya @kullanıcıadını yaz, evini ve gününü gör.",
+  "Bir sakine dokun: kamera onu izler. \"Gözünden bak\" ile arkasından yürü.",
+  "Videolarımıza \"meslek: balıkçı\" yaz, sonraki taşınmada balıkçı ol.",
+  "Her yeni sakinle adada yeni bir yer açılıyor: kahvehane, fırın, okul, liman…",
+  "Adada saat Türkiye saatiyle akar: gece ışıklar yanar, sabah vapur kalkar.",
+];
+{
+  const tip = document.getElementById("load-tip");
+  let n = Math.floor(Math.random() * TIPS.length);
+  const show = () => { tip.style.opacity = 0; setTimeout(() => { tip.textContent = "💡 " + TIPS[n++ % TIPS.length]; tip.style.opacity = 1; }, 300); };
+  show();
+  const timer = setInterval(show, 4200);
+  document.getElementById("enter").addEventListener("click", () => clearInterval(timer), { once: true });
+}
+progress(0.06, "Sakin listesi alınıyor…");
+
 // Sakinler: TikTok takipçileri. Asıl liste sunucudaki veritabanındadır; her aktarımdan sonra Cloudflare'e
 // yollanır, site oradan okur. ?nufus=N örnek sakinlerle N kişilik ada kurar (video ve testler için),
 // ?bekleyen=N iskelede N bekleyen gösterir.
 const today = sim.dayOf(nowUnix());
 const sample = Number(params.get("nufus"));
 const { residents, waiting, listError, peak = 0 } = sample > 0 ? sampleTown(Math.min(60000, sample)) : await loadResidents();
+progress(0.16, "Ada kuruluyor…");
+await paint();
 // Ada, en büyük sıra numarasına kadar kurulur: ayrılanların boş kalan evleri de durur (yeni gelen yerleşir).
 const population = residents.reduce((m, r) => Math.max(m, r.slot + 1), 0);
 // Gelişim düzeyi: adanın ulaştığı en yüksek nüfus (ayrılanlar yüzünden açılmış yer kapanmaz). Neyin açık
@@ -113,13 +142,17 @@ function fitDepth(dist) {
 }
 const controls = new MapControls2(camera, canvas);
 // Kaydırınca uçuş da takip de biter; yakınlaştırıp döndürmek takibi bozmaz (hedef aracın üstünde kalır).
-controls.onUserMove = (kind) => { flight = null; if (kind === "pan") follower?.stop(); };
+controls.onUserMove = (kind) => { flight = null; if (follower) follower.zoomTo = null; if (kind === "pan") follower?.stop(); };
 
 const T0 = performance.now();
 const world = new World(population);
 const T1 = performance.now();
+progress(0.3, "Yollar döşeniyor…");
+await paint();
 const roads = buildRoads(world);
 const T2 = performance.now();
+progress(0.42, "Kıyılar ve tepeler şekilleniyor…");
+await paint();
 const terrain = buildTerrain(world);
 const T3 = performance.now();
 const grounds = buildGrounds(world);
@@ -127,13 +160,19 @@ const water = buildWater(world);
 const harbor = buildHarbor(world);
 scene.add(water, terrain, roads, grounds, harbor);
 const T6 = performance.now();
+progress(0.54, "Trafik ışıkları kuruluyor…");
+await paint();
 const traffic = new Traffic(world);
 const T7 = performance.now();
 scene.add(buildStops(traffic, world));
 const signals = buildSignals(traffic, world);
 scene.add(signals);
+progress(0.62, "Evler ve dükkânlar yapılıyor…");
+await paint();
 const city = buildCity(world);
 const T4 = performance.now();
+progress(0.76, "Ağaçlar dikiliyor…");
+await paint();
 const trees = buildTrees(world);
 const T5 = performance.now();
 const lampLight = createLampLight(world, world.lampSpots,
@@ -147,6 +186,8 @@ const labels = buildLabels(world);
 scene.add(clouds, labels);
 const vehicles = new Vehicles(Math.ceil(population * 0.4) + 80);
 scene.add(vehicles.group);
+progress(0.86, residents.length ? "Sakinler evlerine yerleşiyor…" : "Ada ilk sakinini bekliyor…");
+await paint();
 const people = new People(world, residents, traffic);
 people.waiting = waiting;
 const stories = new Stories(people);
@@ -159,12 +200,19 @@ people.dollhouse = dollhouse;
 const sky = createSky(scene);
 sky.sun.shadow.mapSize.set(2048, 2048);
 
-// Ortam sesleri: düğmeyle açılır (tarayıcılar sesi ancak bir dokunuşla başlatır).
+// Ortam sesleri: varsayılan açık; tarayıcılar sesi ancak bir dokunuşla başlatır, o dokunuş "Adaya gir".
+// Kapatan kişinin tercihi bu cihazda hatırlanır.
 const ambience = new Ambience();
 const soundBtn = document.getElementById("sound");
+const pref = { get: () => { try { return localStorage.getItem("ses") !== "kapali"; } catch { return true; } },
+  set: (on) => { try { localStorage.setItem("ses", on ? "acik" : "kapali"); } catch {} } };
+let soundWanted = pref.get();
+soundBtn.textContent = soundWanted ? "🔊" : "🔇";
 soundBtn.addEventListener("click", () => {
-  if (ambience.enabled) { ambience.stop(); soundBtn.textContent = "🔇"; }
-  else { ambience.start(); soundBtn.textContent = "🔊"; }
+  soundWanted = !ambience.enabled;
+  if (soundWanted) ambience.start(); else ambience.stop();
+  soundBtn.textContent = soundWanted ? "🔊" : "🔇";
+  pref.set(soundWanted);
 });
 const limanZ = world.coastPoint(0, 60, 0, 1)[1];
 function soundEnv(dist, light, minute) {
@@ -239,11 +287,11 @@ function setSpeed(next) {
 // --- kamera uçuşu ---
 let flight = null;
 let follower = null; // takip (araç ya da sakin; harita ya da omuz görünümü), aşağıda kurulur
-function flyTo(x, y, z, distance = 120, direction = null) {
+function flyTo(x, y, z, distance = 120, direction = null, sure = 1.3) {
   const dir = direction ? direction.clone().normalize() : camera.position.clone().sub(controls.target).normalize();
   if (!direction && dir.y < 0.45) dir.setY(0.45).normalize();
   flight = {
-    t: 0,
+    t: 0, sure,
     fromT: controls.target.clone(), toT: new THREE.Vector3(x, y, z),
     fromC: camera.position.clone(), toC: new THREE.Vector3(x, y, z).addScaledVector(dir, distance),
   };
@@ -254,13 +302,13 @@ if (params.has("denetle")) globalThis.__ada = { world, people, traffic, resident
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic });
-const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => follower.get(), set: (t, view) => { if (t) follower.start(t, view); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
 // Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
-follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false); };
+follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false, false); };
 // Çevrimiçi sayacı yalnızca yayındaki sitede (ya da ?sayac ile denerken).
 if (["mercanada.rumpuskit.com", "ada.rumpuskit.com"].includes(location.hostname) || params.has("sayac")) startOnline();
-const mapUI = createMapUI({ world, camera, controls, flyTo });
+const mapUI = createMapUI({ world, camera, controls, flyTo, ui, residents });
 
 // Bir sakine dokununca kartını aç.
 const raycaster = new THREE.Raycaster();
@@ -282,10 +330,40 @@ canvas.addEventListener("pointerup", (e) => {
   const inside = index != null ? traffic.active.get(people.poses[index].vehicleKey) : null;
   if (inside) return ui.selectVehicle({ kind: inside.kind, key: inside.key, owner: inside.owner, line: inside.line, dep: inside.dep });
   if (index != null) return ui.select(index, false);
-  if (follower.target) return; // takipteyken binaya dokunmak kamerayı kaçırmaz
   const building = city.pickBuilding(raycaster);
-  if (building) ui.openBuilding(building);
+  if (building) return ui.openBuilding(building);
+  // Yol, meydan, kumsal: oraya odaklan (seçim ve takip biter).
+  const g = groundHit(raycaster.ray);
+  if (g) {
+    ui.close();
+    const cd = camera.position.distanceTo(controls.target);
+    flyTo(g.x, g.y, g.z, THREE.MathUtils.clamp(cd * 0.75, 35, cd));
+  }
 });
+
+/** Işının araziye (ya da denize) değdiği nokta: kameradan uzaklaştıkça büyüyen adımlarla. */
+function groundHit(ray) {
+  const p = new THREE.Vector3();
+  let t = 0, prev = 0;
+  for (let k = 0; k < 400 && t < 4000; k++) {
+    ray.at(t, p);
+    const gy = Math.max(0, world.groundY(p.x, p.z));
+    if (p.y <= gy) {
+      // Son iki adım arasında ikiye bölerek incelt.
+      let a = prev, b = t;
+      for (let j = 0; j < 12; j++) {
+        const m = (a + b) / 2;
+        ray.at(m, p);
+        if (p.y <= Math.max(0, world.groundY(p.x, p.z))) b = m; else a = m;
+      }
+      ray.at(b, p);
+      return { x: p.x, y: Math.max(0, world.groundY(p.x, p.z)), z: p.z };
+    }
+    prev = t;
+    t += Math.max(0.5, t * 0.02);
+  }
+  return null;
+}
 
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
@@ -318,6 +396,30 @@ function updateWindows(minute, light, sunDeg) {
   city.setFlood(stadium, on ? 1 : 0);
   lampLight.setStadium(stadium);
   harbor.userData.setNight(on ? 1 : 0);
+}
+
+// --- giriş: yükleme bitince "Adaya gir"; dokununca ses açılır ve kamera yüksekten adaya süzülür ---
+// Paylaşılan bağlantıda (?bul, ?bak, ?takip) ve video kaydında giriş uçuşu yapılmaz.
+const intro = !["bul", "bak", "takip", "denetle"].some((k) => params.has(k));
+const homeView = { target: controls.target.clone(), pos: camera.position.clone() };
+if (intro) camera.position.copy(homeView.target).add(new THREE.Vector3(-120, 900, 1100));
+function ready() {
+  progress(1, "Ada hazır");
+  if (params.has("denetle")) return enter();
+  const btn = document.getElementById("enter");
+  btn.hidden = false;
+  btn.focus({ preventScroll: true });
+  btn.addEventListener("click", enter, { once: true });
+}
+function enter() {
+  const el = document.getElementById("loading");
+  el.classList.add("done");
+  setTimeout(() => el.remove(), 1200);
+  if (soundWanted && !params.has("denetle")) ambience.start();
+  if (intro) {
+    const off = homeView.pos.clone().sub(homeView.target);
+    flyTo(homeView.target.x, homeView.target.y, homeView.target.z, off.length(), off, 2.6);
+  }
 }
 
 // --- döngü ---
@@ -385,7 +487,7 @@ function tick() {
   for (const c of people.staticCars) vehicles.addCar(c.x, world.surfaceY(c.x, c.z) + 0.06, c.z, c.heading, 0, { taxi: c.taxi, record: { kind: "taxi" } });
 
   if (flight) {
-    flight.t = Math.min(1, flight.t + dt / 1.3);
+    flight.t = Math.min(1, flight.t + dt / flight.sure);
     const k = 1 - (1 - flight.t) ** 3;
     controls.target.lerpVectors(flight.fromT, flight.toT, k);
     camera.position.lerpVectors(flight.fromC, flight.toC, k);
@@ -466,8 +568,8 @@ function tick() {
   mapUI.update(real);
   renderer.render(scene, camera);
   if (frame === 1) {
-    document.getElementById("loading").classList.add("done");
     console.info(`Mercanada hazır: ${Math.round(performance.now())} ms`);
+    ready();
   }
   adaptQuality(real);
   frame++;
