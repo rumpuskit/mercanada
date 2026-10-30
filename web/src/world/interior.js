@@ -14,6 +14,7 @@ import { homeActivity } from "./life.js";
 import { idleGesture, keepExtra, resetPose, sitPose, walkPose } from "./people.js";
 import { buildWorkInterior, workPose } from "./workinterior.js";
 import { phonePose } from "./human.js";
+import { doubleStair } from "./stairs.js";
 import * as P from "./palette.js";
 import { Color } from "three";
 
@@ -185,19 +186,8 @@ export class Dollhouse {
     // Çekirdek duvarları; koridor yoksa daire kapıları bu duvarlarda.
     for (const x of [cx0, cx1]) this._wallZ(add, zb, hd - 0.15, x, CUT, "#ece6da", plan.corridor ? [] : [[1.6, DOOR]]);
     add(cx1 - cx0 - 0.1, 0.06, hd - 0.15 - zb, 0, 0, (zb + hd - 0.15) / 2, "#cfc8bc", 0, { shadow: false });
-    // Merdiven: sol kol arkaya doğru yarım kata çıkar, sahanlık, sağ kol öne doğru üst kata.
-    const zTop = zb + 1.0, zBot = 0.6;
-    const steps = 9, rise = FLOOR_H / 2 / steps, run = (zBot - zTop) / steps;
-    const stone = "#d9d2c6";
-    for (let i = 0; i < steps; i++) {
-      add(1.0, rise * (i + 1), run, -0.6, 0, zBot - (i + 0.5) * run, stone);
-      add(1.0, 0.12, run, 0.6, FLOOR_H / 2 + rise * (i + 1) - 0.12, zTop + (i + 0.5) * run, stone, 0, { shadow: false });
-    }
-    add(2.3, 0.15, 1.0, 0, FLOOR_H / 2 - 0.15, zb + 0.5, stone);
-    // Kollar arası korkuluk.
-    const metal = { metalness: 0.5, roughness: 0.4 };
-    add(0.05, 0.05, zBot - zTop, 0, 1.4, (zTop + zBot) / 2, "#3a3f47", 0, { mat: metal, shadow: false });
-    for (let z = zTop; z <= zBot; z += 0.6) add(0.03, 0.9, 0.03, 0, 0.5, z, "#3a3f47", 0, { mat: metal, shadow: false });
+    // Merdiven: sol kol arkaya doğru yarım kata çıkar, sahanlık, sağ kol öne doğru üst kata (stairs.js).
+    doubleStair(add, { xa: -0.6, xb: 0.6, zFront: 0.6, zBack: zb + 1.0, land: 0.85, H: FLOOR_H, upper: f < b.floors - 1 });
     // Asansör yalnız 4 ve daha çok katlı apartmanda (yönetmelik gibi); 3 katlıda o köşede saksı.
     const ez0 = 2.4, ez1 = Math.min(hd - 0.3, 4.2);
     if (b.floors < 4) {

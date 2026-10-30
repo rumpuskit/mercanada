@@ -613,6 +613,7 @@ function buildFeatures(world) {
   };
 
   const fenerLamps = [];
+  const glowSigns = []; // gece yanan tabelalar (hastanenin "ACİL" bandı)
   const fruit = [];
   const fountains = [];
   for (const f of world.features) {
@@ -750,7 +751,11 @@ function buildFeatures(world) {
         };
         add(new THREE.BoxGeometry(7, 0.35, 12), white, f.x + 3.5, y0 + 4.2, f.z);
         // Bant saçağın ön kenarında, boyu z ekseninde (yazı +x yüzünde okunur).
-        add(new THREE.BoxGeometry(0.1, 0.8, 12), label("ACİL", 12, 0.8, "#d8342b", "#ffffff"), f.x + 7.05, y0 + 3.85, f.z, 0, false);
+        // Gece ışıklı tabela: yazı dokusu kendi ışığıyla parlar (setFlood).
+        const acil = label("ACİL", 12, 0.8, "#d8342b", "#ffffff");
+        acil.emissive = new THREE.Color("#ffffff"); acil.emissiveMap = acil.map; acil.emissiveIntensity = 0;
+        glowSigns.push(acil);
+        add(new THREE.BoxGeometry(0.1, 0.8, 12), acil, f.x + 7.05, y0 + 3.85, f.z, 0, false);
         for (const dz of [-5.5, 5.5]) add(new THREE.CylinderGeometry(0.2, 0.2, 4.1, 10), white, f.x + 6.5, y0 + 2.05, f.z + dz);
         add(new THREE.BoxGeometry(0.08, 2.6, 4), new THREE.MeshStandardMaterial({ color: "#a9cbe0", roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.6 }), f.x + 0.12, y0 + 1.3, f.z, 0, false);
         add(new THREE.BoxGeometry(0.1, 0.12, 4.2), metal, f.x + 0.14, y0 + 2.65, f.z, 0, false);
@@ -1169,6 +1174,7 @@ function buildFeatures(world) {
     floodLens.emissiveIntensity = 3.2 * stadium;
     floodGlareMat.opacity = 0.75 * stadium;
     for (const f of fenerLamps) { f.lensMat.emissiveIntensity = 0.15 + 3.5 * fener; f.beamMat.uniforms.uOpacity.value = 0.35 * fener; f.beam.visible = fener > 0; }
+    for (const m of glowSigns) m.emissiveIntensity = 0.9 * fener;
   };
   group.userData.tick = (t) => {
     for (const f of fenerLamps) f.beam.rotation.y = t * 0.6;

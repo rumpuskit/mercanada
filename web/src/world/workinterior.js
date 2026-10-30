@@ -7,6 +7,7 @@
 import * as THREE from "three";
 import { roll } from "../sim.js";
 import { FLOOR_H } from "./layout.js";
+import { doubleStair } from "./stairs.js";
 
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, ...extra });
 const GOODS = ["#d8433d", "#e8b93a", "#3e8a86", "#2f6fb5", "#8a62d1", "#f28c28", "#7fae45", "#f4f1ea"];
@@ -411,15 +412,7 @@ function core(b, f, add, CW, katlar) {
   add(CW - 0.15, 1.05, 0.12, sx - 0.07, 0, coreEnd, wall);
   add(CW - 0.2, 0.02, coreEnd + hd - 0.3, sx, 0.06, (coreEnd - hd) / 2 + 0.15, "#cfc8bc", 0, { shadow: false });
   // Merdiven: ilk kol arkaya doğru yarım kata çıkar, sahanlık, ikinci kol öne doğru üst kata (en üst katta yok).
-  const zTop = -hd + 1.3, zBot = stairEnd - 0.35;
-  const steps = 9, rise = FLOOR_H / 2 / steps, run = (zBot - zTop) / steps;
-  for (let i = 0; i < steps; i++) {
-    add(1.0, rise * (i + 1), run, sx - 0.62, 0, zBot - (i + 0.5) * run, stone);
-    if (f < katlar - 1) add(1.0, 0.12, run, sx + 0.62, FLOOR_H / 2 + rise * (i + 1) - 0.12, zTop + (i + 0.5) * run, stone, 0, { shadow: false });
-  }
-  add(CW - 0.3, 0.15, 1.0, sx, FLOOR_H / 2 - 0.15, -hd + 0.8, stone);
-  add(0.05, 0.05, zBot - zTop, sx, 1.4, (zTop + zBot) / 2, "#3a3f47", 0, { mat: metal, shadow: false });
-  for (let k = zTop; k <= zBot + 0.01; k += 0.6) add(0.03, 0.9, 0.03, sx, 0.5, k, "#3a3f47", 0, { mat: metal, shadow: false });
+  doubleStair(add, { xa: sx - 0.62, xb: sx + 0.62, zFront: stairEnd - 0.35, zBack: -hd + 1.3, land: 1.0, H: FLOOR_H, upper: f < katlar - 1 });
   if (lift) {
     // Asansör kuyusu (alçak kesik duvarlar), ana alana bakan çelik kapı ve üstünde kat göstergesi.
     const steel = { metalness: 0.6, roughness: 0.3 };
