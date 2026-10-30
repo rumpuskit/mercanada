@@ -9,6 +9,7 @@
 // atlanır (--zorla ile yine üretilir). Uydurma olay yok: her cümle simülasyondan ya da listeden gelir ve sitede
 // doğrulanır. Kullanıcı adları seste okunmaz; ekranda ve açıklamada yazılır.
 // Çıktı: cikti/gunluk/<tarih>-<yuva>/ (senaryo.json, ses, video, ACIKLAMA.txt); durum: cikti/gunluk/durum.json.
+// TikTok bağlıysa (tiktok.mjs) video ayrıca hesabın gelen kutusuna taslak olarak gönderilir.
 // Seslendirme için ELEVENLABS_API_KEY gerekir (gunluk.sh verir).
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -17,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import * as sim from "../web/src/sim.js";
 import { VERI_URL, TIKTOK } from "../web/src/config.js";
 import { seslendir } from "./seslendir.mjs";
+import { yukle } from "./tiktok.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 process.chdir(HERE);
@@ -309,10 +311,23 @@ if (!args.includes("--onizleme")) {
   writeFileSync(durumYolu, JSON.stringify(durum, null, 2));
 }
 
+// TikTok bağlıysa (node tiktok.mjs baglan) video gelen kutusuna taslak olarak gider; olmazsa dosyadan yüklenir.
+let taslak = null;
+if (!args.includes("--onizleme") && existsSync(resolve(HERE, "../secret/tiktok-dev/token.json"))) {
+  try {
+    taslak = await yukle(video);
+    console.log("TikTok taslağı:", taslak.publish_id);
+  } catch (e) {
+    console.log("TikTok'a yüklenemedi:", e.message);
+  }
+}
+
 if (args.includes("--bildir")) {
   // Açıklama panoya; bildirim paylaşma saatini söyler.
   try { execFileSync("pbcopy", { input: aciklama }); } catch {}
-  const msg = `Video hazır (${tur}). Açıklama panoda. Paylaşım: ${SAAT[yuva]}`;
+  const msg = taslak
+    ? `Video TikTok gelen kutunda (taslak). Açıklama panoda. Paylaşım: ${SAAT[yuva]}`
+    : `Video hazır (${tur}), dosyadan yükle. Açıklama panoda. Paylaşım: ${SAAT[yuva]}`;
   try { execFileSync("osascript", ["-e", `display notification ${JSON.stringify(msg)} with title "Mercanada" subtitle ${JSON.stringify(video.split("/").pop())}`]); } catch {}
 }
 console.log("video:", video);
