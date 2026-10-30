@@ -67,9 +67,8 @@ const GEO = {
   hand: () => merge([tint(new THREE.IcosahedronGeometry(0.042, 0).scale(0.75, 1.2, 0.55).translate(0, -0.04, 0), W)]),
 };
 
-// Giysi ve aksesuar: etek (kalçaya), sakal ve gözlük (başa) bağlı.
+// Aksesuar: sakal ve gözlük (başa bağlı). Etek yok: sakinin cinsiyetini bilmiyoruz, rastgele etek herkese düşmesin.
 const EXTRAS = {
-  skirt: () => merge([tint(new THREE.CylinderGeometry(0.168, 0.3, 0.52, 8).scale(1, 1, 0.78).translate(0, HIP_Y - 0.17, 0), W)]),
   beard: () => merge([
     tint(new THREE.IcosahedronGeometry(0.1, 1).scale(1.0, 0.75, 0.9).translate(0, HY - 0.07, 0.03), W),
   ]),
@@ -193,7 +192,7 @@ export class Crowd {
     }
     this.parts = parts.map((p) => this[p]);
     this.hair = hairGeometries().map((g) => (g ? make(g, false) : null));
-    this.extras = Object.fromEntries(Object.entries(EXTRAS).map(([k, f]) => [k, make(f(), k === "skirt")]));
+    this.extras = Object.fromEntries(Object.entries(EXTRAS).map(([k, f]) => [k, make(f(), false)]));
     const propCap = Math.max(16, Math.ceil(capacity / 3));
     this.props = Object.fromEntries(Object.entries(PROPS).map(([k, f]) => [k, make(f(), k === "bisiklet" || k === "sovale", propCap)]));
     const dog = dogGeometries();
@@ -219,7 +218,7 @@ export class Crowd {
   begin() {
     this.count = 0;
     this.hairCounts = this.hair.map(() => 0);
-    this.extraCounts = { skirt: 0, beard: 0, glasses: 0 };
+    this.extraCounts = { beard: 0, glasses: 0 };
     this.propCounts = Object.fromEntries(Object.keys(this.props).map((k) => [k, 0]));
     this.dogCount = 0;
   }
@@ -292,8 +291,8 @@ export class Crowd {
       [this.head, p.skin], [this.handL, p.skin], [this.handR, p.skin],
       [this.torso, p.top], [this.upperArmL, p.top], [this.upperArmR, p.top],
       [this.forearmL, p.sleeves ? p.top : p.skin], [this.forearmR, p.sleeves ? p.top : p.skin],
-      [this.hips, p.bottom], [this.thighL, p.skirt ? p.skin : p.bottom], [this.thighR, p.skirt ? p.skin : p.bottom],
-      [this.shinL, p.shorts || p.skirt ? p.skin : p.bottom], [this.shinR, p.shorts || p.skirt ? p.skin : p.bottom],
+      [this.hips, p.bottom], [this.thighL, p.bottom], [this.thighR, p.bottom],
+      [this.shinL, p.shorts ? p.skin : p.bottom], [this.shinR, p.shorts ? p.skin : p.bottom],
     ]) mesh.setColorAt(d, color);
 
     const extra = (name, matrix, color) => {
@@ -302,7 +301,6 @@ export class Crowd {
       mesh.setMatrixAt(n, matrix);
       if (color) mesh.setColorAt(n, color);
     };
-    if (p.skirt) extra("skirt", root, p.bottom);
     if (p.beard) extra("beard", head, p.hairColor);
     if (p.glasses) extra("glasses", head);
 

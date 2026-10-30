@@ -128,8 +128,8 @@ mercanada.rumpuskit.com
       takip: {
         yakin: true, x: 0, z: 30, ad: "sen", uzaklik: 5.2, aci: 0.8, yukseklik: 1.7, bak: 0.75,
         // Saç biçimi uzun, at kuyruğu ya da küt (kahküllü kısa saç uzaktan şapka gibi duruyor); saç kahve tonu
-        // (siyah saç yüzle birleşip maske gibi görünüyor), canlı renkli üst, etek/sakal/gözlük yok.
-        secim: { sac: [2, 4, 7], ust: ["#b8423c", "#d9a441", "#3e8a86", "#d98ca0", "#8fb6d9"], etek: false, sakal: false,
+        // (siyah saç yüzle birleşip maske gibi görünüyor), canlı renkli üst, sakal/gözlük yok.
+        secim: { sac: [2, 4, 7], ust: ["#b8423c", "#d9a441", "#3e8a86", "#d98ca0", "#8fb6d9"], sakal: false,
           gozluk: false, sacRenk: ["#3b2a20", "#5e4128", "#8c5a32"] },
       },
     },

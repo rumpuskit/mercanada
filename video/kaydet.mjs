@@ -156,7 +156,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
       // ust: üst giysi renkleri). Video karakteri izleyiciyi temsil ediyor: göze hoş görünmeli.
       const s = takip.secim, hex = (c) => "#" + c.getHexString();
       const uygun = (c) => !s || ((!s.sac || s.sac.includes(c.style)) && (!s.ust || s.ust.includes(hex(c.top)))
-        && (s.etek == null || c.skirt === s.etek) && (s.sakal == null || c.beard === s.sakal)
+        && (s.sakal == null || c.beard === s.sakal)
         && (s.gozluk == null || c.glasses === s.gozluk) && !c.uniform && (!s.sacRenk || s.sacRenk.includes(hex(c.hairColor))));
       let best = -1, bd = Infinity;
       for (let i = 0; i < P.n; i++) {

@@ -604,7 +604,7 @@ export class Dollhouse {
     const dress = (seed, adult = true) => Object.assign(v, {
       style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length],
       top: adult ? P.CLOTHES[(seed * 7) % P.CLOTHES.length] : SCHOOL_TOP[seed % 2], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length],
-      sleeves: seed % 3 !== 0, skirt: seed % 2 === 1 && seed % 4 === 1, beard: adult && seed % 5 === 0, glasses: seed % 6 === 0,
+      sleeves: seed % 3 !== 0, beard: adult && seed % 5 === 0, glasses: seed % 6 === 0,
     });
     const k = 1.75;
     if (kind === "okul") {

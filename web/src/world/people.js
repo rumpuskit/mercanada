@@ -178,7 +178,6 @@ export class People {
         skin: P.SKIN[l.ten % P.SKIN.length], hairColor: P.HAIR[l.sac_renk % P.HAIR.length],
         top: P.CLOTHES[l.ust % P.CLOTHES.length], bottom: P.BOTTOMS[l.alt % P.BOTTOMS.length],
         sleeves: roll(r.seed, "kol") % 3 !== 0,
-        skirt: roll(r.seed, "etek") % 5 === 0,
         beard: roll(r.seed, "sakal") % 5 === 0,
         glasses: roll(r.seed, "gozluk") % 6 === 0,
         uniform: uniform ? new Color(uniform) : null,
@@ -1629,14 +1628,12 @@ export class People {
       this.visible[i] = 1;
       this.positions[i * 3] = p.x; this.positions[i * 3 + 1] = p.y; this.positions[i * 3 + 2] = p.z;
       p.style = c.style; p.skin = c.skin; p.hairColor = c.hairColor;
-      p.skirt = c.skirt && !(p.atWork && c.uniform) && !p.props?.includes("bisiklet");
       p.beard = c.beard; p.glasses = c.glasses;
       p.top = p.atWork && c.uniform ? c.uniform : c.top;
       p.bottom = c.bottom;
       if (p.team != null) {
         p.top = TEAM_COLORS[p.team];
         p.bottom = p.team === 2 ? TEAM_COLORS[2] : WHITE;
-        p.skirt = false;
         p.team = null;
       }
       crowd.add(i, p);
@@ -1657,7 +1654,7 @@ export class People {
       resetPose(drv);
       drv.height = 1.74; drv.t = time;
       this._seatIn(veh, lx, lz, seat, drv);
-      Object.assign(drv, { style: 1, skin: P.SKIN[1], hairColor: P.HAIR[0], top, bottom: P.BOTTOMS[1], sleeves: true, skirt: false, beard: false, glasses: false });
+      Object.assign(drv, { style: 1, skin: P.SKIN[1], hairColor: P.HAIR[0], top, bottom: P.BOTTOMS[1], sleeves: true, beard: false, glasses: false });
       crowd.add(-1, drv);
     };
     for (const e of this.extras) addDriver(e.veh, e.lx, e.lz, 0.42, DRIVER_TOP);
@@ -1700,7 +1697,7 @@ export class People {
             v.heading = Math.atan2(gx - v.x, gz - v.z);
             idleGesture(v, time, ph, true);
           }
-          Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: SCHOOL_TOPS[seed % 3], bottom: P.BOTTOMS[1], sleeves: true, skirt: seed % 2 === 1 && seed % 3 === 0, beard: false, glasses: seed % 9 === 0 });
+          Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: SCHOOL_TOPS[seed % 3], bottom: P.BOTTOMS[1], sleeves: true, beard: false, glasses: seed % 9 === 0 });
           crowd.add(-1, v);
         }
       }
@@ -1711,7 +1708,7 @@ export class People {
     const parkOpen = minute < 1170 && (schoolDay ? minute >= 940 : minute >= 600);
     if (parkOpen) {
       const v = (this._parkKid ??= {});
-      const dressKid = (seed, adult) => Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: P.CLOTHES[(seed * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length], sleeves: seed % 3 !== 0, skirt: seed % 4 === 1, beard: adult && seed % 5 === 0, glasses: adult && seed % 6 === 0 });
+      const dressKid = (seed, adult) => Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: P.CLOTHES[(seed * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length], sleeves: seed % 3 !== 0, beard: adult && seed % 5 === 0, glasses: adult && seed % 6 === 0 });
       let pi = 0;
       for (const f of this.world.features) {
         if (f.type !== "oyun") continue;
@@ -1842,7 +1839,7 @@ export class People {
           const shoot = attack && Math.sin(time * 0.8 + k * 2) > 0.92;
           if (shoot) { v.y += 0.35 * Math.sin((time * 0.8 + k * 2) * 6) ** 2; v.shL = v.shR = 2.8; v.elL = v.elR = 0.4; }
           else { walkPose(v, time * 7 + k, 1); if (!attack) { v.shL = v.shR = 1.2; v.abL = v.abR = 0.6; } }
-          Object.assign(v, { style: seed % 3 === 0 ? 1 : 0, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: attack ? TEAM_COLORS[0] : TEAM_COLORS[1], bottom: P.BOTTOMS[1], sleeves: false, skirt: false, beard: false, glasses: false, shorts: true });
+          Object.assign(v, { style: seed % 3 === 0 ? 1 : 0, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: attack ? TEAM_COLORS[0] : TEAM_COLORS[1], bottom: P.BOTTOMS[1], sleeves: false, beard: false, glasses: false, shorts: true });
           crowd.add(-1, v);
         }
       }
@@ -1861,7 +1858,7 @@ export class People {
         const ph = k * 1.7;
         if (Math.sin(time * 0.2 + ph) > 0.5) { v.lean = 0.45; v.shL = v.shR = 1.0; v.elL = v.elR = 0.5; }
         else idleGesture(v, time, ph, k % 2 === 0);
-        Object.assign(v, { style: k % 2, skin: P.SKIN[k % P.SKIN.length], hairColor: P.HAIR[(k * 3) % P.HAIR.length], top: P.CLOTHES[(k * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[k % P.BOTTOMS.length], sleeves: k % 3 !== 0, skirt: false, beard: k % 4 === 1, glasses: k % 5 === 2 });
+        Object.assign(v, { style: k % 2, skin: P.SKIN[k % P.SKIN.length], hairColor: P.HAIR[(k * 3) % P.HAIR.length], top: P.CLOTHES[(k * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[k % P.BOTTOMS.length], sleeves: k % 3 !== 0, beard: k % 4 === 1, glasses: k % 5 === 2 });
         crowd.add(-1, v);
         k++;
       }
@@ -1918,7 +1915,7 @@ export class People {
         v.props = ["valiz"];
         if (seed % 5 === 1) { v.shR = 0.7; v.elR = 1.8; v.headPitch = 0.45; v.props = ["telefon", "valiz"]; }
         v.propColor = SUITCASES[seed % SUITCASES.length];
-        Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: P.CLOTHES[(seed * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length], sleeves: seed % 3 !== 0, skirt: seed % 4 === 1, beard: seed % 5 === 2, glasses: seed % 6 === 0 });
+        Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: P.CLOTHES[(seed * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length], sleeves: seed % 3 !== 0, beard: seed % 5 === 2, glasses: seed % 6 === 0 });
         crowd.add(-1, v);
       }
     });
