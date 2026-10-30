@@ -27,6 +27,7 @@ class CozumleTest(unittest.TestCase):
             "okul müdürü olmak istiyorum": {"meslek": "okul_muduru"},
             "hâkim olmak istiyorum": {"meslek": "hakim"},
             "okul müdürü": {"meslek": "okul_muduru"},
+            "meslek: fener bekçisi": {"meslek": "fener_bekcisi"},  # tek koltuk (8. sakin avukatlığı seçti)
             "Polis 👮": {"meslek": "polis"},
             "Meslek çaycı/kahveci": {"meslek": "kahveci"},
         }
@@ -37,7 +38,7 @@ class CozumleTest(unittest.TestCase):
         for text in ("çok güzel olmuş", "balıkçı amca çok iyi", "balıkçı olmak istemiyorum",
                      "itfaiyeci olmak istiyorum", "kahve içmek istiyorum", "meslek: şef", "meslek: müdür",
                      # Kadrolu işler (kontenjanlı) ve "anakara" istenemez.
-                     "meslek: fener bekçisi", "meslek: cankurtaran", "meslek: uzman"):
+                     "meslek: cankurtaran", "meslek: uzman"):
             self.assertEqual(cozumle(text), {}, text)
 
     def test_katla(self):

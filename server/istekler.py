@@ -5,8 +5,9 @@ ya da elle (DM, canlı yayın) gelir ve sakinin overrides alanına işlenir.
 Yorumdaki biçim (büyük/küçük harf ve Türkçe karakter fark etmez, birkaçı aynı yorumda olabilir):
     meslek: balıkçı      mesleğim yazılımcı olsun      balıkçı olmak istiyorum
     hobi: satranç        evcil: kedi                   adımı gizle / adımı göster
-Yalnız katalogdaki seçenekler geçer (kadrolu işler, ör. fener bekçisi, istenemez; "istenebilir" olanlar, ör. polis, hariç). İstek yalnız
-yorumu yazanın kendisi için ve yalnız adada oturuyorsa uygulanır; henüz taşınmamışsa 7 gün bekler.
+Yalnız katalogdaki seçenekler geçer (kadrolu işler, ör. cankurtaran, istenemez; "istenebilir" olanlar, ör. polis ve
+fener bekçisi, hariç). İstek yalnız yorumu yazanın kendisi için ve yalnız adada oturuyorsa uygulanır; henüz
+taşınmamışsa 7 gün bekler.
 Aynı konuda birden çok istek varsa en son yazılan geçer.
 
 Yorum metni saklanmaz: yalnız ayrıştırılmış istek (kullanıcı adı, tür, değer, yorum kimliği) tutulur
@@ -178,8 +179,8 @@ def kaydet(satirlar: list, kaynak: str, db: str = DB) -> int:
 def uygula(db: str = DB) -> list:
     """Bekleyen istekleri adada oturanlara uygular, 7 günden eski kayıtları siler (yayın yapmaz)."""
     c = sim.catalog()
-    # Tek koltuklu meslekler (muhtar, okul müdürü): koltuk, mahallenin şubesidir (sim.workplace ile aynı:
-    # mahalle % şube sayısı; okul sayısı mahalleden azsa iki mahalle aynı okulu paylaşır).
+    # Tek koltuklu meslekler (muhtar, okul müdürü, fener bekçisi): koltuk, mahallenin şubesidir (sim.workplace ile aynı:
+    # mahalle % şube sayısı; okul sayısı mahalleden azsa iki mahalle aynı okulu paylaşır; tek fener: adada bir koltuk).
     tekler = [j for j in c["meslekler"] if j.get("tek") == "mahalle"]
     tek = ", ".join(f"'{j['id']}'" for j in tekler) or "NULL"
     mahalle = sim.cap("daire_per_bina") * sim.cap("bina_per_sokak") * sim.cap("sokak_per_mahalle")

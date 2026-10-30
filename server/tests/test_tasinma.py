@@ -165,6 +165,10 @@ class TasinmaTest(unittest.TestCase):
         code, out = self.send({"tur": "yorumlar", "yorumlar": [
             ["m6", "k04", t, "meslek: okul müdürü"], ["m7", "k05", t + 5, "okul müdürü olmak istiyorum"]]})
         self.assertEqual((out["uygulanan"], out["dolu"]), ([["k04", "meslek", "okul_muduru"]], [["k05", "okul_muduru"]]))
+        # Fener bekçisi: adada tek koltuk (8. sakinin kadrosu, isteyen olursa isteyen alır).
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [
+            ["m8", "k06", t, "meslek: fener bekçisi"], ["m9", "k08", t + 5, "fener bekçisi"]]})
+        self.assertEqual((out["uygulanan"], out["dolu"]), ([["k06", "meslek", "fener_bekcisi"]], [["k08", "fener_bekcisi"]]))
 
     def test_korumalar(self):
         liste = [[f"k{i:02d}", 300 + i, 0] for i in range(10)]
