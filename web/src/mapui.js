@@ -1,5 +1,6 @@
 // Harita ve gezinme: mini harita (dokununca oraya gider), yer paneli, arama (kullanıcı adı ya da yer,
 // yazarken öneri), yakınlaştırma ve pusula.
+import { svg, YER_SIMGE } from "./icons.js";
 import { at } from "./ui.js";
 
 const $ = (id) => document.getElementById(id);
@@ -123,8 +124,7 @@ export function createMapUI({ world, camera, controls, flyTo, ui, residents }) {
     tarla && ["Tarlalar", ...tarla.anchor, 160],
     ...world.labels.filter((l) => /Mahallesi$/.test(l.text)).map((l) => [l.text.replace(" Mahallesi", ""), l.x, l.z, 220]),
   ].filter(Boolean);
-  const ICONS = { Meydan: "⛲", İskele: "⛴️", Sahil: "🌊", Park: "🌳", Plaj: "🏖️", Tepe: "⛰️", Fener: "🗼", Tarlalar: "🌾" };
-  const icon = (name) => ICONS[name] ?? "🏘️";
+  const icon = (name) => svg(YER_SIMGE[name] ?? "mahalle");
   const go = ([, x, z, d]) => {
     ui.close();
     flyTo(x, Math.max(0, world.height(x, z)), z, d);
@@ -138,7 +138,7 @@ export function createMapUI({ world, camera, controls, flyTo, ui, residents }) {
   $("yerler-grid").replaceChildren(...places.map((pl) => {
     const btn = document.createElement("button");
     btn.innerHTML = `<span class="ic"></span><span></span>`;
-    btn.firstChild.textContent = icon(pl[0]);
+    btn.firstChild.innerHTML = icon(pl[0]);
     btn.lastChild.textContent = pl[0];
     btn.addEventListener("click", () => { showPanel(false); go(pl); });
     return btn;
@@ -169,8 +169,8 @@ export function createMapUI({ world, camera, controls, flyTo, ui, residents }) {
       const li = document.createElement("li");
       li.setAttribute("role", "option");
       const ic = document.createElement("span"), name = document.createElement("span"), note = document.createElement("small");
-      if (it.kind === "yer") { ic.textContent = icon(it.pl[0]); name.textContent = it.pl[0]; note.textContent = "yer"; }
-      else { ic.textContent = "👤"; name.textContent = at(residents[it.i]); note.textContent = "sakin"; }
+      if (it.kind === "yer") { ic.innerHTML = icon(it.pl[0]); name.textContent = it.pl[0]; note.textContent = "yer"; }
+      else { ic.innerHTML = svg("kisi"); name.textContent = at(residents[it.i]); note.textContent = "sakin"; }
       li.append(ic, name, note);
       li.addEventListener("pointerdown", (e) => { e.preventDefault(); choose(n); });
       return li;

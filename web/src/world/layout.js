@@ -283,7 +283,7 @@ export class World {
       this.nextStage = { nufus: next, keys: open, name: entry?.ad ?? stageName(open[0]), at: this._stageSpot(open) };
       this._before = null;
       const at = this.nextStage.at;
-      if (at) this.labels.push({ text: `🏗️ ${this.nextStage.name} · ${next}. sakinde`, x: at[0], z: at[1], h: 22, site: true });
+      if (at) this.labels.push({ text: `${this.nextStage.name} · ${next}. sakinde`, x: at[0], z: at[1], h: 22, site: true });
     }
   }
 

@@ -19,6 +19,7 @@ import { NameTags } from "./world/nametags.js";
 import { Traffic, Vehicles, buildSignals, buildStops } from "./world/traffic.js";
 import { buildHarbor } from "./world/harbor.js";
 import { buildBeach } from "./world/beach.js";
+import { svg } from "./icons.js";
 import { buildBayram } from "./world/bayram.js";
 import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
@@ -33,9 +34,10 @@ const params = new URLSearchParams(location.search);
 const nowUnix = () => Date.now() / 1000;
 
 // --- yükleme ekranı: gerçek aşamalarla ilerleyen çubuk ve ipuçları; ada hazır olunca "Adaya gir" ---
-const loadFill = document.getElementById("load-fill"), loadStep = document.getElementById("load-step");
+const loadFill = document.getElementById("load-fill"), loadStep = document.getElementById("load-step"), loadPct = document.getElementById("load-pct");
 function progress(f, text) {
   loadFill.style.width = `${Math.round(f * 100)}%`;
+  loadPct.textContent = `%${Math.round(f * 100)}`;
   loadFill.parentElement.setAttribute("aria-valuenow", String(Math.round(f * 100)));
   if (text) loadStep.textContent = text;
 }
@@ -52,7 +54,10 @@ const TIPS = [
 {
   const tip = document.getElementById("load-tip");
   let n = Math.floor(Math.random() * TIPS.length);
-  const show = () => { tip.style.opacity = 0; setTimeout(() => { tip.textContent = "💡 " + TIPS[n++ % TIPS.length]; tip.style.opacity = 1; }, 300); };
+  const show = () => {
+    tip.style.opacity = 0;
+    setTimeout(() => { tip.innerHTML = svg("ampul"); tip.append(TIPS[n++ % TIPS.length]); tip.style.opacity = 1; }, 300);
+  };
   show();
   const timer = setInterval(show, 4200);
   document.getElementById("enter").addEventListener("click", () => clearInterval(timer), { once: true });
@@ -210,11 +215,11 @@ const soundBtn = document.getElementById("sound");
 const pref = { get: () => { try { return localStorage.getItem("ses") !== "kapali"; } catch { return true; } },
   set: (on) => { try { localStorage.setItem("ses", on ? "acik" : "kapali"); } catch {} } };
 let soundWanted = pref.get();
-soundBtn.textContent = soundWanted ? "🔊" : "🔇";
+soundBtn.innerHTML = svg(soundWanted ? "sesAcik" : "sesKapali");
 soundBtn.addEventListener("click", () => {
   soundWanted = !ambience.enabled;
   if (soundWanted) ambience.start(); else ambience.stop();
-  soundBtn.textContent = soundWanted ? "🔊" : "🔇";
+  soundBtn.innerHTML = svg(soundWanted ? "sesAcik" : "sesKapali");
   pref.set(soundWanted);
 });
 const limanZ = world.coastPoint(0, 60, 0, 1)[1];
