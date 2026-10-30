@@ -29,6 +29,7 @@ class CozumleTest(unittest.TestCase):
             "okul müdürü": {"meslek": "okul_muduru"},
             "meslek: fener bekçisi": {"meslek": "fener_bekcisi"},  # tek koltuk (8. sakin avukatlığı seçti)
             "Polis 👮": {"meslek": "polis"},
+            "Meslek Football": {"meslek": "futbolcu"},
             "Meslek çaycı/kahveci": {"meslek": "kahveci"},
         }
         for text, want in cases.items():

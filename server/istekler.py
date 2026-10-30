@@ -33,7 +33,8 @@ TURLER = ("meslek", "hobi", "evcil", "gizle")
 MAX_METIN = 300
 # Katalogda adı geçmeyen ama sık yazılacak karşılıklar.
 EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilimci", "hekim": "doktor",
-             "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis"}
+             "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis",
+             "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
