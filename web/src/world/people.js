@@ -45,6 +45,7 @@ const UNIFORMS = {
   rehber: { top: "#3e8a86", sleeves: true },
   muhtar: { top: "#3a3f4a", bottom: "#3a3f4a", sleeves: true },
   okul_muduru: { top: "#2c3a52", bottom: "#2c3a52", sleeves: true },
+  kahveci: { top: "#f4f4f2", bottom: "#1d1d22", sleeves: true },
   hakim: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true }, // cübbe
   savci: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true },
 };

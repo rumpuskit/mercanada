@@ -103,6 +103,12 @@ def cozumle(text: str) -> dict[str, str]:
             if deger:
                 out["meslek"] = deger
                 break
+    if not out:
+        # Yorumun tamamı bir meslek adıysa ("okul müdürü", "polis 👮") o da istektir; cümle içinde geçen
+        # ad ("balıkçı amca çok iyi") istek sayılmaz.
+        tam = dict(secenekler()["meslek"]).get(t)
+        if tam:
+            out["meslek"] = tam
     g = GIZLE.search(t)
     if g:
         out["gizle"] = "1" if (g.group("ne") or g.group("ne2")) == "gizle" else "0"

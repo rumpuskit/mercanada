@@ -714,6 +714,7 @@ export class World {
       const path = [street, HUB];
       if (kind === "kahvehane") {
         this._place("kahvehane", { anchors: [door], spread: 3, path, building: b });
+        this._addWorkplace("kahvehane", index, { door, path, anchor: door, spread: 2, building: b }); // çaycı
         const outside = front.axis === "x" ? [door[0], front.side * (av / 2 + 1)] : [front.side * (av / 2 + 1), door[1]];
         this.addTables(outside[0], outside[1], 3, front.axis, -front.side, "kahvehane");
       } else {
