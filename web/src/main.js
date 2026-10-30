@@ -264,11 +264,25 @@ marker.add(pin, ring);
 marker.visible = false;
 scene.add(marker);
 
-// Başlangıç görünümü: merkez ve ilk mahalleler.
+// Başlangıç görünümü adanın o anki büyüklüğüne göre: küçük adada yerleşik yere (meydan, evler, açılmış yerler)
+// yakın ve ortalı, şehir büyüdükçe uzak (en çok merkez ve ilk mahalleler). Sabit uzak açı ilk günlerde adayı
+// boş bir orman gibi gösteriyordu.
 const home = new THREE.Vector3(0, 0, -60);
-controls.target.copy(home);
 const aspectBoost = innerWidth < innerHeight ? 1.9 : 1;
-camera.position.set(260 * aspectBoost, 230 * aspectBoost, 330 * aspectBoost).add(home);
+let homeDist = 480;
+{
+  // Adada baştan duran altyapı (vapur iskelesi binası, fener bekçisinin evi, liman) yerleşimden sayılmaz.
+  const built = world.buildings.filter((b) => !["liman", "kulube", "ambar", "tersane"].includes(b.kind) && Math.hypot(b.x, b.z) < 700);
+  if (built.length) {
+    const pts = [[0, 0], ...built.map((b) => [b.x, b.z])]; // meydan hep dahil
+    const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cz = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    const r = Math.max(35, ...built.map((b) => Math.hypot(b.x - cx, b.z - cz) + Math.max(b.w, b.d) / 2));
+    homeDist = Math.min(480, Math.max(140, r * 2.4));
+    if (homeDist < 480) home.set(cx, 0, cz);
+  }
+}
+controls.target.copy(home);
+camera.position.copy(new THREE.Vector3(260, 230, 330).normalize().multiplyScalar(homeDist * aspectBoost)).add(home);
 controls.update();
 
 // --- zaman ---

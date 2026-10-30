@@ -13,6 +13,7 @@ import { FLAT_Y, FLOOR_H, unitLayout } from "./layout.js";
 import { homeActivity } from "./life.js";
 import { idleGesture, keepExtra, resetPose, sitPose, walkPose } from "./people.js";
 import { buildWorkInterior, workPose } from "./workinterior.js";
+import { phonePose } from "./human.js";
 import * as P from "./palette.js";
 import { Color } from "three";
 
@@ -570,7 +571,7 @@ export class Dollhouse {
         sitPose(p, u.y0 + (dest.seat ?? 0.42), k);
         const atDesk = dest === u.spots.desk;
         p.lean = atDesk ? 0.15 : -0.18;
-        if (act === "telefon") { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
+        if (act === "telefon") { phonePose(p); p.props = ["telefon"]; }
         else if (act === "kitap") { p.shL = p.shR = 0.7; p.elL = p.elR = 1.5; p.headPitch = 0.45; p.props = ["kitap"]; }
         else if (act === "dinlenme") { p.shL = p.shR = 0.2; p.elL = p.elR = 0.6; p.headPitch = -0.15; }
         else if (atDesk || act === "calisma") { p.shL = p.shR = 0.75; p.elL = p.elR = 1.35 + 0.08 * Math.sin(time * 9); p.lean = 0.15; p.headPitch = 0.25 + 0.1 * Math.sin(time * 0.2); }

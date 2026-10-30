@@ -125,8 +125,19 @@ function hairGeometries() {
 // Eşyalar: yerel kökleri tutulduğu yere göre.
 const PROPS = {
   olta: () => merge([tint(new THREE.CylinderGeometry(0.012, 0.022, 3.4, 5).translate(0, 1.7, 0), "#3a3a3a"), tint(new THREE.CylinderGeometry(0.035, 0.035, 0.06, 8).rotateZ(Math.PI / 2).translate(0.04, 0.35, 0), "#c0c0c0")]),
-  kitap: () => merge([tint(new THREE.BoxGeometry(0.16, 0.22, 0.03), "#ffffff")]),
-  telefon: () => merge([tint(new THREE.BoxGeometry(0.07, 0.14, 0.012), "#1c1c22")]),
+  // Açık kitap: renkli kapak (−z, okurun karşısına bakar), +z yüzde okura dönük iki sayfa (ortadan hafif kırık).
+  kitap: () => merge([
+    tint(new THREE.BoxGeometry(0.3, 0.22, 0.012), "#2f5d8a"),
+    tint(new THREE.BoxGeometry(0.142, 0.205, 0.016).rotateY(-0.12).translate(-0.072, 0, 0.012), "#f4efe2"),
+    tint(new THREE.BoxGeometry(0.142, 0.205, 0.016).rotateY(0.12).translate(0.072, 0, 0.012), "#f4efe2"),
+    tint(new THREE.BoxGeometry(0.008, 0.2, 0.02).translate(0, 0, 0.006), "#d9d0bc"),
+  ]),
+  // Telefon: koyu gövde, bir yüzünde açık ekran (+z), kenarında kamera (−z yüzde).
+  telefon: () => merge([
+    tint(new THREE.BoxGeometry(0.072, 0.145, 0.012), "#1c1c22"),
+    tint(new THREE.BoxGeometry(0.062, 0.128, 0.002).translate(0, 0, 0.0065), "#9fd0f5"),
+    tint(new THREE.BoxGeometry(0.014, 0.014, 0.003).translate(-0.022, 0.055, -0.0068), "#3a3a44"),
+  ]),
   fotograf: () => merge([tint(new THREE.BoxGeometry(0.15, 0.1, 0.08), "#222226"), tint(new THREE.CylinderGeometry(0.035, 0.035, 0.08, 10).rotateX(Math.PI / 2).translate(0, 0, 0.07), "#111114"), tint(new THREE.BoxGeometry(0.04, 0.03, 0.02).translate(-0.04, 0.06, 0), "#c0c0c0")]),
   durbun: () => merge([tint(new THREE.CylinderGeometry(0.03, 0.035, 0.16, 8).rotateX(Math.PI / 2).translate(-0.04, 0, 0), "#1c1c22"), tint(new THREE.CylinderGeometry(0.03, 0.035, 0.16, 8).rotateX(Math.PI / 2).translate(0.04, 0, 0), "#1c1c22"), tint(new THREE.BoxGeometry(0.05, 0.03, 0.05), "#2a2a30")]),
   gitar: () => merge([
@@ -344,9 +355,11 @@ export class Crowd {
     const handR = hands[1];
     for (const prop of p.props ?? []) {
       switch (prop) {
-        case "olta": this._prop("olta", this._joint(propM, handR, 0, -0.05, 0, -1.9)); break;
-        case "kitap": this._prop("kitap", this._joint(propM, handR, -0.08, -0.06, 0.06, -1.1)); break;
-        case "telefon": this._prop("telefon", this._joint(propM, handR, 0, -0.07, 0.03, -1.3)); break;
+        // Olta ucu suya doğru yukarı (−1,9'da kuma batıyordu); kitap iki elin arasında, sayfalar okura dönük.
+        case "olta": this._prop("olta", this._joint(propM, handR, 0, -0.05, 0, 2.4)); break;
+        case "kitap": this._prop("kitap", this._joint(propM, handR, -0.12, -0.06, 0.06, -0.7)); break;
+        // Ekran (+z) yüze dönük, telefon 45°'ye yakın eğik (−1,3'te dimdik, +1,6'da ekran karşıya bakıyordu).
+        case "telefon": this._prop("telefon", this._joint(propM, handR, 0, -0.07, 0.03, -0.6)); break;
         case "fotograf": this._prop("fotograf", this._joint(propM, handR, -0.08, -0.06, 0.04, -1.57)); break;
         case "durbun": this._prop("durbun", this._joint(propM, handR, -0.09, -0.07, 0.05, -1.57)); break;
         case "gitar": this._prop("gitar", this._joint(propM, torso, 0.02, 1.12, 0.17, 0, 0, 1.15)); break;
@@ -490,4 +503,12 @@ export class Crowd {
   dogTargets() {
     return [this.dogBody, this.dogHead];
   }
+}
+
+/**
+ * Telefona bakma duruşu: sağ el göğüs önünde, çene hizasının altında; telefonun ekranı yüze dönük, baş öne eğik.
+ * (Eski duruşta kol omuz hizasına kalkıyor, telefon başın yanında dışarı bakıyordu.)
+ */
+export function phonePose(p) {
+  p.shR = 0.35; p.elR = 1.45; p.headPitch = 0.55;
 }

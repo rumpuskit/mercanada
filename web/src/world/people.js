@@ -10,7 +10,7 @@
 //  - Yürüyenler birbirine çok yaklaşırsa yana çekilir; durağan insanların ve engellerin içinden geçilmez.
 import { Color } from "three";
 import { activityAt, dayPlan, dreamJob, hobby, isHoliday, job, look, pet, roll, workplace, worksOn } from "../sim.js";
-import { Crowd, HAT_HAIR } from "./human.js";
+import { Crowd, HAT_HAIR, phonePose } from "./human.js";
 import { PedNav } from "./nav.js";
 import { pedWait } from "./signals.js";
 import { nextArrival, nextDeparture } from "./ferry.js";
@@ -932,7 +932,7 @@ export class People {
               const r = pingPong([[PT.stack.x0, z], [PT.stack.x1, z]], 0.35, ph * 40);
               const stop = Math.sin(sec * 0.11 + ph * 5) > 0.5;
               stand(at.x, at.z, stop ? Math.PI : r.heading);
-              if (stop) { p.shR = 0.7; p.elR = 1.8; p.shL = 0.6; p.elL = 1.6; p.headPitch = 0.4; p.props = ["telefon"]; }
+              if (stop) { phonePose(p); p.shL = 0.6; p.elL = 1.6; p.props = ["telefon"]; }
               else walkPose(p, r.d / (0.72 * kk) * Math.PI);
               return true;
             }
@@ -955,7 +955,7 @@ export class People {
             case "sofor": {
               stand(it.x, it.z, it.heading);
               idleGesture(p, t, ph, false);
-              p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"];
+              phonePose(p); p.props = ["telefon"];
               return true;
             }
             case "mola": {
@@ -1097,7 +1097,7 @@ export class People {
             default: {
               stand(it.x, it.z, it.heading);
               idleGesture(p, t, ph, false);
-              p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.4; p.props = ["telefon"];
+              phonePose(p); p.props = ["telefon"];
               return true;
             }
           }
@@ -1132,8 +1132,9 @@ export class People {
           p.shL = p.shR = 0.1; p.abL = p.abR = 0.2; p.elL = p.elR = 0.25; p.kneeL = 0.15;
           p.headYaw = 0.35 * Math.sin(t * 0.05 + ph);
         } else {
-          p.shL = p.shR = 0.7; p.elL = p.elR = 1.5; p.headPitch = 0.45;
-          p.props = [roll(s, "okur") % 2 ? "kitap" : "telefon"];
+          const okur = roll(s, "okur") % 2;
+          if (okur) { p.shL = p.shR = 0.7; p.elL = p.elR = 1.5; p.headPitch = 0.45; } else phonePose(p);
+          p.props = [okur ? "kitap" : "telefon"];
         }
         return true;
       }
@@ -1151,7 +1152,7 @@ export class People {
         } else {
           idleGesture(p, t, ph, roll(s, "konuskan") % 2 === 0);
           p.shL = 0.35; p.elL = 0.9;
-          if (roll(s, "telefoncu") % 4 === 0) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
+          if (roll(s, "telefoncu") % 4 === 0) { phonePose(p); p.props = ["telefon"]; }
         }
       } else {
         p.moving = since < 1.6 || until < 1.6;
@@ -1463,7 +1464,7 @@ export class People {
           if (u < 1) walkPose(p, u * 6);
           else {
             idleGesture(p, time, i, (this.residents[i].seed >> 3) % 3 === 0);
-            if (this.residents[i].seed % 3 === 0) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
+            if (this.residents[i].seed % 3 === 0) { phonePose(p); p.props = ["telefon"]; }
           }
           return true;
         }
@@ -1485,7 +1486,7 @@ export class People {
         const [wx, wz] = this._queuePos(i, leg, Math.min(1, (minute - leg.t0) * 30));
         p.x = wx; p.z = wz; p.y = w.groundY(wx, wz); p.heading = leg.heading ?? 0;
         idleGesture(p, time, i, false);
-        if (roll(this.residents[i].seed, "durakTel") % 2) { p.shR = 0.7; p.elR = 1.8; p.headPitch = 0.45; p.props = ["telefon"]; }
+        if (roll(this.residents[i].seed, "durakTel") % 2) { phonePose(p); p.props = ["telefon"]; }
         // Taksi son yarım dakikada gelip kaldırım kenarında bekler.
         if (leg.taxi && (leg.t1 - minute) * 60 < 30) this.staticCars.push({ x: leg.taxi.at[0], z: leg.taxi.at[1], heading: leg.taxi.heading, taxi: true });
         return true;
@@ -1970,7 +1971,7 @@ export class People {
         v.y = P0.top;
         idleGesture(v, time, seed % 23, size > 1 && m % 2 === 0);
         v.props = ["valiz"];
-        if (seed % 5 === 1) { v.shR = 0.7; v.elR = 1.8; v.headPitch = 0.45; v.props = ["telefon", "valiz"]; }
+        if (seed % 5 === 1) { phonePose(v); v.props = ["telefon", "valiz"]; }
         v.propColor = SUITCASES[seed % SUITCASES.length];
         Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: P.CLOTHES[(seed * 7) % P.CLOTHES.length], bottom: P.BOTTOMS[(seed * 5) % P.BOTTOMS.length], sleeves: seed % 3 !== 0, beard: seed % 5 === 2, glasses: seed % 6 === 0 });
         crowd.add(-1, v);
