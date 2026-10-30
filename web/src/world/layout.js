@@ -1188,7 +1188,10 @@ export class World {
       const x0 = kx - 200 + i * 190, z0 = -125;
       for (let f = 0; f < 4; f++) {
         const fx0 = x0 + (f % 2) * 88, fz0 = z0 + Math.floor(f / 2) * 54;
-        this.plazas.push({ x0: fx0, z0: fz0, x1: fx0 + 82, z1: fz0 + 48, kind: "tarla", crop: (f + i) % 3 });
+        // Ekin: çiftliğin adına göre (Zeytinlik: zeytin, Bağ Evi: bağ) iki tarla, ayrıca buğday ve sebze. Zemin
+        // rengi (crop) ekine göre: buğday sarı, sebze yeşil, zeytin ve bağ sürülmüş toprak. Çizim: fields.js.
+        const ekin = [i === 0 ? "zeytin" : "bag", i === 0 ? "zeytin" : "bag", "bugday", "sebze"][f];
+        this.plazas.push({ x0: fx0, z0: fz0, x1: fx0 + 82, z1: fz0 + 48, kind: "tarla", ekin, crop: { bugday: 0, sebze: 1 }[ekin] ?? 2 });
         this.block(fx0, fz0, fx0 + 82, fz0 + 48, 0);
       }
       const barn = this.addBuilding({ kind: "ahir", x: x0 + 85, z: -14, rot: 0, w: 18, d: 12, floors: 2, roofType: "gable", wall: "#b5563f", roof: "#6d6a66", workplace: true, industrial: true, style: { door: "#7a3a2a" }, address: `${name}, Köy Yolu` });

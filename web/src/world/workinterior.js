@@ -82,7 +82,17 @@ export function buildWorkInterior(b0, f, add0, spot0) {
         add(b.w - 3, 0.04, 0.3, 0, 1.9, -hd + 0.25, "#6b4a35");
       }
       const cols = Math.max(1, Math.floor((b.w - 2) / 2.6));
-      for (let c = 0; c < cols; c++) for (let r = 0; r < 2; r++) table(-hw + 1.6 + c * 2.6, 0.6 + r * 2.4, kind === "kahvehane" ? 4 : 2);
+      for (let c = 0; c < cols; c++) for (let r = 0; r < 2; r++) {
+        const tx = -hw + 1.6 + c * 2.6, tz = 0.6 + r * 2.4;
+        table(tx, tz, kind === "kahvehane" ? 4 : 2);
+        if (kind === "kahvehane") {
+          // Kahvehane: masalarda açık tavla tahtası ve ince belli çay bardakları.
+          add(0.52, 0.04, 0.36, tx, 0.79, tz, "#6b4a35", 0.3 * ((c + r) % 2), { shadow: false });
+          add(0.46, 0.012, 0.3, tx, 0.83, tz, "#d9c49a", 0.3 * ((c + r) % 2), { shadow: false });
+          for (const dx of [-0.28, 0.28]) add(0.05, 0.08, 0.05, tx + dx, 0.79, tz + 0.25, "#b5532f", 0, { shadow: false });
+        }
+      }
+      if (kind === "kahvehane") add(0.06, 0.62, 1.05, -hw + 0.2, 1.75, -0.5, "#1d1f24"); // duvarda televizyon (maç yayını)
       S(-1.2, -hd + 2.2, Math.PI, "counter");
       S(1.5, -hd + 2.2, Math.PI, "counter");
       S(0, 1.8, 0, "waiter");

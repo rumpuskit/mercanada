@@ -1,7 +1,7 @@
 // Baş üstü adları: kamera yeterince yaklaşınca en yakındaki sakinlerin başında @kullanıcıadı görünür.
 import * as THREE from "three";
 
-const MAX_TAGS = 36;
+const MAX_TAGS = 20; // kalabalıkta etiket ormanı olmasın: en yakın 20 (çakışanlar zaten elenir)
 const SHOW_WITHIN = 55; // metre (kamera hedefine uzaklık)
 
 function makeTexture(text, selected) {
@@ -94,7 +94,7 @@ export class NameTags {
       if (v.z > 1 || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1) continue;
       const sx = (v.x * 0.5 + 0.5) * W, sy = (-v.y * 0.5 + 0.5) * H;
       const ph = Math.max(k1, (0.28 / Math.max(d, 0.1)) * (k1 / 0.022)), pw = ph * aspect;
-      const r = [sx - pw / 2 - 3, sy - ph / 2 - 2, sx + pw / 2 + 3, sy + ph / 2 + 2];
+      const r = [sx - pw / 2 - 8, sy - ph / 2 - 5, sx + pw / 2 + 8, sy + ph / 2 + 5];
       if (i !== selected && placed.some((q) => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) continue;
       placed.push(r);
       const s = this.sprites[k++];

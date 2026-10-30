@@ -350,6 +350,7 @@ button {
   position: fixed;
   right: max(12px, env(safe-area-inset-right));
   top: calc(max(12px, env(safe-area-inset-top)) + 52px);
+  white-space: nowrap; /* dar ekranda "1. kat" ve "Dışarı çık" iki satıra bölünüyordu */
   display: flex;
   align-items: center;
   gap: 4px;

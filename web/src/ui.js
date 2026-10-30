@@ -229,6 +229,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   }
 
   function renderBuilding() {
+    $("card-dream").hidden = true; // sakin kartından kalan "açılınca adada çalışacak" satırı binada/araçta görünmesin
     $("card-tabs").hidden = true;
     $("card-traits").replaceChildren();
     const b = dollhouse.building;
@@ -315,6 +316,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   }
 
   function renderVehicle() {
+    $("card-dream").hidden = true; // sakin kartından kalan "açılınca adada çalışacak" satırı binada/araçta görünmesin
     $("card-tabs").hidden = true;
     $("card-traits").replaceChildren();
     const r = vehicle;

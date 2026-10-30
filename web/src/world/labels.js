@@ -39,13 +39,17 @@ export function buildLabels(world) {
   return group;
 }
 
-/** Levhaları ekranda hep aynı boyda tutar; çok yakındayken gizler. */
+/**
+ * Levhaları ekranda hep aynı boyda tutar; çok yakındayken ve kamera sokak seviyesindeyken (yerden 35 m'den
+ * alçak) gizler: aşağıdan bakınca uzaktaki yerlerin adları binaların yanında havada asılı duruyordu.
+ */
 export function scaleLabels(labels, camera) {
+  const low = camera.position.y < 36;
   for (const s of labels.children) {
     const d = camera.position.distanceTo(s.position);
     // Dikey (telefon) ekranda yatay görüş dar: etiketler orantılı küçülür.
     const h = d * 0.035 * Math.min(1, Math.max(0.55, camera.aspect));
     s.scale.set(h * s.userData.aspect, h, 1);
-    s.visible = d > 120;
+    s.visible = d > 120 && !low;
   }
 }
