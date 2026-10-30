@@ -20,13 +20,19 @@ class CozumleTest(unittest.TestCase):
             "adımı gizle": {"gizle": "1"},
             "ADIMI GÖSTERİN": {"gizle": "0"},
             "ismimi gizler misiniz": {"gizle": "1"},
+            # Polis kadrolu ama istenebilir; muhtar mahalle başına tek (koltuk sunucuda denetlenir).
+            "polis olmak istiyorum": {"meslek": "polis"},
+            "meslek: komiser": {"meslek": "polis"},
+            "Meslek:muhtar": {"meslek": "muhtar"},
+            "okul müdürü olmak istiyorum": {"meslek": "okul_muduru"},
+            "hâkim olmak istiyorum": {"meslek": "hakim"},
         }
         for text, want in cases.items():
             self.assertEqual(cozumle(text), want, text)
 
     def test_istek_degil(self):
         for text in ("çok güzel olmuş", "balıkçı amca çok iyi", "balıkçı olmak istemiyorum",
-                     "polis olmak istiyorum", "kahve içmek istiyorum", "meslek: şef", "meslek: müdür",
+                     "itfaiyeci olmak istiyorum", "kahve içmek istiyorum", "meslek: şef", "meslek: müdür",
                      # Kadrolu işler (kontenjanlı) ve "anakara" istenemez.
                      "meslek: fener bekçisi", "meslek: cankurtaran", "meslek: uzman"):
             self.assertEqual(cozumle(text), {}, text)

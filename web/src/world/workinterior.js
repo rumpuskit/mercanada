@@ -14,7 +14,7 @@ const GOODS = ["#d8433d", "#e8b93a", "#3e8a86", "#2f6fb5", "#8a62d1", "#f28c28",
 export function buildWorkInterior(b, f, add, spot) {
   const hw = b.w / 2, hd = b.d / 2;
   const kind = b.kind;
-  const floorCol = { kafe: "#b58a63", kahvehane: "#9c7353", firin: "#d8c6a8", market: "#e6e2da", plaza: "#c9ccd1", okul: "#c79f74", saglik: "#e9edf0", belediye: "#cfc4b6", kutuphane: "#a98b6f", muze: "#d9d2c6", otel: "#b58a63", atolye: "#bfb3a2", bufe: "#d8c6a8", carsi: "#d8c6a8" }[kind] ?? "#cfc4b6";
+  const floorCol = { kafe: "#b58a63", kahvehane: "#9c7353", firin: "#d8c6a8", market: "#e6e2da", plaza: "#c9ccd1", okul: "#c79f74", saglik: "#e9edf0", belediye: "#cfc4b6", karakol: "#cfd5dc", muhtarlik: "#c9b79c", adliye: "#a98b6f", kutuphane: "#a98b6f", muze: "#d9d2c6", otel: "#b58a63", atolye: "#bfb3a2", bufe: "#d8c6a8", carsi: "#d8c6a8" }[kind] ?? "#cfc4b6";
   add(b.w - 0.3, 0.06, b.d - 0.3, 0, 0, 0, floorCol, 0, { shadow: false });
   const counter = (x, z, w, color = "#8a6a52", top = "#4a4f57") => {
     add(w, 1.0, 0.7, x, 0.06, z, color);
@@ -97,7 +97,7 @@ export function buildWorkInterior(b, f, add, spot) {
       S(hw - 2, 2.3, Math.PI, "bench");
       break;
     }
-    case "plaza": case "belediye": {
+    case "plaza": case "belediye": case "karakol": case "muhtarlik": case "adliye": {
       // Açık ofis: masa sıraları, toplantı masası.
       const rows = Math.max(1, Math.floor((b.d - 3) / 2.6)), cols = Math.max(1, Math.floor((b.w - 2) / 2.4));
       for (let r = 0; r < rows; r++) {
@@ -107,7 +107,7 @@ export function buildWorkInterior(b, f, add, spot) {
           if ((r * cols + c) % 2 === 0) S(x, z + 0.55, Math.PI, "desk");
         }
       }
-      if (kind === "belediye") counter(0, hd - 2, Math.min(8, b.w - 4), "#f4f1ea");
+      if (kind === "belediye" || kind === "karakol" || kind === "adliye") counter(0, hd - 2, Math.min(8, b.w - 4), kind === "karakol" ? "#c9d3df" : "#f4f1ea");
       break;
     }
     case "okul": {

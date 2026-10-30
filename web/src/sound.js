@@ -37,7 +37,12 @@ export class Ambience {
     const ctx = (this.ctx = new (window.AudioContext || window.webkitAudioContext)());
     this.out = ctx.createGain();
     this.out.gain.value = this.master;
-    this.out.connect(ctx.destination);
+    // Yumuşak sıkıştırıcı: kalabalık, trafik ve tek seferlik sesler üst üste binince tepe yapmasın.
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -20; comp.knee.value = 12; comp.ratio.value = 3;
+    comp.attack.value = 0.02; comp.release.value = 0.3;
+    this.out.connect(comp);
+    comp.connect(ctx.destination);
     const loop = (buf, filters, gain0 = 0) => {
       const src = ctx.createBufferSource();
       src.buffer = buf;
@@ -155,45 +160,71 @@ export class Ambience {
   }
 
   /**
-   * Her karede (seyrek) çağrılır. env: {dist (kamera-hedef), coast (kıyıya uzaklık), people (yakındaki
-   * görünür insan sayısı), fountain, harbor, nature (ağaçlık), traffic (yakın araç), day (0-1),
-   * match (yakında canlı maç), minute}.
+   * Her karede (seyrek) çağrılır. env: {dist (kamera-hedef), coast (hedefin kıyıya uzaklığı), people
+   * (hedef çevresindeki insanlar, yakın olan ağır basar), fountain, harbor, nature (ağaçlık), traffic
+   * (yakın araçlar, ağırlıklı), day (0-1), match (yakında canlı maç), minute}.
    */
   update(env) {
     if (!this.enabled || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    const m = mixLevels(env, t);
+    for (const [name, v] of Object.entries(m.ch)) this._set(name, v, name === "seaWash" ? 0.6 : 0.35);
+    const { prox, ear } = m;
     const near = (d, r) => Math.max(0, 1 - d / r);
-    const zoom = Math.max(0, Math.min(1, 1 - (env.dist - 25) / 450)); // yakına inildikçe sesler açılır
-    const sea = near(env.coast, 160);
-    this._set("sea", (0.25 + 0.75 * sea) * (0.35 + 0.5 * zoom) * (0.85 + 0.15 * Math.sin(this.ctx.currentTime * 0.8)));
-    this._set("seaWash", sea * zoom * 0.35 * Math.max(0, Math.sin(this.ctx.currentTime * 0.9)) ** 2, 0.6);
-    this._set("wind", 0.05 + 0.12 * (1 - zoom));
-    const crowd = Math.min(1, env.people / 40) * zoom;
-    this._set("crowd", crowd * 0.55);
-    this._set("crowd2", crowd * 0.18 * (0.6 + 0.4 * Math.sin(this.ctx.currentTime * 3.1)));
-    this._set("fountain", near(env.fountain, 45) * zoom * 0.22);
-    this._set("traffic", Math.min(1, env.traffic / 6) * zoom * 0.5);
     const now = this.ctx.currentTime;
     if (now > this.next.bird && env.day > 0.5) {
-      if (env.nature > 0 && Math.random() < 0.7) this._bird(env.nature * zoom * env.day);
+      if (env.nature > 0 && Math.random() < 0.7) this._bird(env.nature * env.day * att(ear, 30));
       this.next.bird = now + 1.2 + Math.random() * 3.5;
     }
     if (now > this.next.cricket && env.day < 0.3) {
-      if (env.nature > 0) this._cricket(env.nature * zoom * (1 - env.day));
+      if (env.nature > 0) this._cricket(env.nature * (1 - env.day) * att(ear, 30));
       this.next.cricket = now + 0.5 + Math.random() * 0.8;
     }
     if (now > this.next.gull && env.harbor < 220 && env.day > 0.3) {
-      this._gull(near(env.harbor, 220) * zoom);
+      this._gull(att(Math.hypot(env.harbor, ear), 60));
       this.next.gull = now + 6 + Math.random() * 14;
     }
     // Vapur düdüğü: her yarım saatte bir, limana yakınsan.
     const slot = Math.floor(env.minute / 30);
     if (slot !== this.next.horn && env.minute % 30 < 0.6 && env.harbor < 600) {
       this.next.horn = slot;
-      this._horn(near(env.harbor, 600) * (0.4 + 0.6 * zoom));
+      this._horn(near(env.harbor, 600) * (0.4 + 0.6 * prox));
     }
     if (env.match && now > this.next.cheer) {
-      this._cheer(near(env.match, 180) * zoom);
+      this._cheer(att(Math.hypot(env.match, ear), 50));
       this.next.cheer = now + 8 + Math.random() * 25;
     }
   }
+}
+
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+/** Ters uzaklık yasası (ref metreye kadar tam ses): uzaklık iki katına çıkınca ses yarıya iner. */
+const att = (d, ref) => ref / Math.max(ref, d);
+
+/**
+ * Sürekli seslerin düzeyleri (0-1). Kulak kameradadır: yakınlık logaritmik ölçülür (12 m sokak düzeyi = 1,
+ * 600 m ada görünümü = 0), çünkü kulak sesi oranla duyar; 300 m'den 150 m'ye inmek, 24 m'den 12 m'ye inmek
+ * kadar fark eder. Yerel kaynaklar (kalabalık, trafik, çeşme, kıyıya vuran dalga) kameraya uzaklıkla
+ * ters orantılı söner; deniz ve rüzgâr her yükseklikte duyulan zemin sesidir (yükseldikçe rüzgâr artar).
+ * Toplam bir bütçeyi aşarsa hepsi orantılı kısılır: yakına inmek sesi açar ama gürültüye boğmaz.
+ */
+export function mixLevels(env, t = 0) {
+  const dist = Math.max(4, env.dist);
+  const prox = clamp01((Math.log(600) - Math.log(dist)) / (Math.log(600) - Math.log(12)));
+  const ear = dist * 0.75; // hedef yere yakın, kamera eğik: kulağın sahneye ortalama uzaklığı
+  const ch = {};
+  // Kalabalık doyar: 6 yakın kişiden sonra artış yavaşlar (pazar yeri ile meydan arasında fark kalır).
+  const crowd = (1 - Math.exp(-env.people / 6)) * att(ear, 14);
+  ch.crowd = crowd * 0.42;
+  ch.crowd2 = crowd * 0.13 * (0.6 + 0.4 * Math.sin(t * 3.1));
+  ch.traffic = (1 - Math.exp(-env.traffic / 3)) * att(ear, 20) * 0.32;
+  ch.fountain = att(Math.hypot(env.fountain, ear), 9) * 0.2;
+  const sea = att(Math.hypot(env.coast, ear * 0.6), 45);
+  ch.sea = (0.07 + 0.05 * (1 - prox) + 0.42 * sea) * (0.85 + 0.15 * Math.sin(t * 0.8));
+  ch.seaWash = att(Math.hypot(env.coast, ear), 22) * 0.28 * Math.max(0, Math.sin(t * 0.9)) ** 2;
+  ch.wind = 0.03 + 0.08 * (1 - prox) ** 1.5;
+  const total = Object.values(ch).reduce((a, b) => a + b, 0);
+  const budget = 0.75;
+  if (total > budget) for (const k in ch) ch[k] *= budget / total;
+  return { ch, prox, ear };
 }

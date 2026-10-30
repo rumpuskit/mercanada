@@ -30,6 +30,10 @@ def python_vectors(day: int, handles: list[str]) -> list[dict]:
     out = []
     for i, handle in enumerate(handles, start=1):
         r = {"handle": handle, "seed": sim.seed_of(handle), "slot": i * 977, "arrived_day": day - i % 60}
+        if i % 7 == 3:
+            r["overrides"] = {"meslek": "polis" if i % 2 else "muhtar"}
+        elif i % 11 == 5:
+            r["overrides"] = {"meslek": "okul_muduru" if i % 2 else "hakim"}
         out.append({
             "seed": r["seed"],
             "address": sim.address_text(r["slot"]),

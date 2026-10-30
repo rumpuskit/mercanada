@@ -53,11 +53,15 @@ const STYLES = {
   kafe: { w: 10, d: 12, floors: 3, roof: "gable", wall: "#f6e3d8", roofColor: "#b5563f", shop: true, awning: "#2f4a6d" },
   atolye: { w: 16, d: 14, floors: 2, roof: "gable", wall: "#e6e1d6", roofColor: "#8c4b3a", shop: true, awning: "#6f7d4a" },
   kahvehane: { w: 11, d: 12, floors: 2, roof: "gable", wall: "#eadfcf", roofColor: "#a85a44", shop: true, awning: "#b8423c" },
+  karakol: { w: 22, d: 14, floors: 3, roof: "flat", wall: "#eef1f4", roofColor: "#c9c4bb", band: "#1f3f73", plate: "#1f3f73", flag: true },
+  adliye: { w: 28, d: 18, floors: 3, roof: "flat", wall: "#efe9df", roofColor: "#c9c4bb", columns: true, plate: "#5a4636", flag: true },
+  muhtarlik: { w: 11, d: 6, floors: 1, roof: "hip", wall: "#f4efe6", roofColor: "#b5563f", plate: "#2f5d8a", flag: true },
 };
 
 // Merkezdeki iş yerleri; sırayla meydana en yakın boş cepheye yerleşir.
 const CENTER_ORDER = [
   ["belediye", 0], ["kahvehane", 0], ["kafe", 0], ["muze", 0], ["firin", 0], ["kafe", 1], ["market", 0],
+  ["karakol", 0], ["adliye", 0], // sonradan eklendi: buradan önce açılanların yeri değişmesin diye marketin arkasında
   ["kutuphane", 0], ["kafe", 2], ["plaza", 0], ["firin", 1], ["otel", 0], ["kafe", 3], ["market", 1],
   ["plaza", 1], ["atolye", 0], ["kafe", 4], ["market", 2], ["firin", 2], ["otel", 1], ["atolye", 1],
   ["kafe", 5], ["plaza", 2], ["market", 3], ["atolye", 2], ["atolye", 3],
@@ -1318,7 +1322,8 @@ export class World {
     // bağlanır. Mahalle caddesi de en uzak sokağa kadar gider.
     const reach = new Map(); // sokak sırası -> şeride uzanacağı yanlar
     for (const a of this._amenityPlan(cell)) {
-      if (!this.has(a.key)) continue;
+      // Muhtarlık çay bahçesi şeridindedir: çay bahçesi açılmadan da yolu ona kadar uzanır.
+      if (!this.has(a.key) && !(a.kind === "cay" && a.side > 0 && this.has(`muhtarlik:${cell.mahalle}`))) continue;
       if (!reach.has(a.row)) reach.set(a.row, new Set());
       reach.get(a.row).add(a.side);
     }
@@ -1376,7 +1381,7 @@ export class World {
       const a = this.rowZ(cell, r, x).z + ROADS.sokak.width / 2 + 1, b = this.rowZ(cell, r + 1, x).z - ROADS.sokak.width / 2 - 1;
       return { z: (a + b) / 2, h: b - a };
     };
-    for (const { side, kind, r, key } of this._amenityPlan(cell)) {
+    for (const { side, kind, r, row, key } of this._amenityPlan(cell)) {
       const x = stripX(side);
       this._tag(key, () => {
         const g = gap(r, x);
@@ -1449,6 +1454,21 @@ export class World {
             anchorKeys.push(this._key);
           }
         }
+      });
+      // Muhtarlık: doğudaki çay bahçesi şeridinde, mahalle girişine yakın sokağa bakan tek katlı ofis
+      // (o uçta büfe varsa büfeden uzak yanda).
+      if (kind === "cay" && side > 0) this._tag(`muhtarlik:${m}`, () => {
+        const g = gap(r, x), st = STYLES.muhtarlik;
+        const near = row === r ? -1 : 1; // yakın sokak şeridin kuzeyinde (-1) ya da güneyinde (+1)
+        const bx = near < 0 ? x - 4 : x, bz = g.z + near * (g.h / 2 - st.d / 2 - 1);
+        this.block(bx - st.w / 2 - 1, bz - st.d / 2 - 1, bx + st.w / 2 + 2.5, bz + st.d / 2 + 1, 0);
+        const names = cat().isyerleri.muhtarlik;
+        const b = this.addBuilding({
+          kind: "muhtarlik", x: bx, z: bz, rot: near < 0 ? Math.PI : 0, w: st.w, d: st.d, floors: st.floors, roofType: st.roof,
+          wall: st.wall, roof: st.roofColor, workplace: true, style: st, address: `Çay Bahçesi yanı, ${mahalleName(m)}`,
+        });
+        const door = [bx, bz + near * (st.d / 2 - 0.35)];
+        this._addWorkplace("muhtarlik", m % names.length, { door, path: [door, [bx, g.z + near * (g.h / 2 + 1)], HUB], anchor: door, spread: 1.5, building: b });
       });
     }
     const pathPoint = [stripX(-1), this.rowZ(cell, 2, stripX(-1)).z];

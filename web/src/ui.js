@@ -129,14 +129,15 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     icon(r.hidden ? "?" : r.handle[0].toLocaleUpperCase("tr"), `hsl(${r.seed % 360} 62% 58%)`);
     // İş yerinin adı yalnızca gerçek bir iş yeri varsa (emekli ve evden çalışanlarda yok).
     const wk = people.works[selected];
-    $("card-title").textContent = wk.wp.kind === "ev" ? (wk.job === "emekli" ? "Emekli" : `${sim.title(r, day)} · evinden çalışıyor`) : `${sim.title(r, day)} · ${wk.loc.name}`;
-    // Asıl mesleğinin iş yeri adada henüz yoksa: hangi yer açılınca ne olacağı.
+    // Asıl mesleğinin iş yeri adada henüz yoksa mesleğini anakarada yapar (vapurla gidip gelir).
     const dream = sim.dreamJob(r);
+    const dreamTitle = dream.kademeler[Math.min(sim.rank(r, day), dream.kademeler.length - 1)];
+    $("card-title").textContent = wk.wp.kind === "ev" ? (wk.job === "emekli" ? "Emekli" : `${sim.title(r, day)} · evinden çalışıyor`)
+      : dream.id !== wk.job ? `${dreamTitle} · anakarada, vapurla` : `${sim.title(r, day)} · ${wk.loc.name}`;
     $("card-dream").hidden = dream.id === wk.job;
     if (dream.id !== wk.job) {
       const opens = sim.cat().isyerleri[dream.yer].map((name, k) => [sim.stageOf(`${dream.yer}:${k}`), name]).sort((a, b) => a[0] - b[0])[0];
-      const t = dream.kademeler[Math.min(sim.rank(r, day), dream.kademeler.length - 1)];
-      $("card-dream").textContent = `🏗️ ${opens[1]} açılınca ${t.toLocaleLowerCase("tr")} olacak (${fmt.format(opens[0])}. sakinde)`;
+      $("card-dream").textContent = `🏗️ ${opens[1]} açılınca adada çalışacak (${fmt.format(opens[0])}. sakinde)`;
     }
     $("card-now").textContent = nowText(selected);
     $("card-tabs").hidden = false;
@@ -199,7 +200,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         if (people.activities[i]?.ne !== "is") continue;
         rows.push([sim.title(residents[i], today()), at(residents[i]), () => select(i)]);
       }
-      $("card-now").textContent = rows.length ? `Şu an ${rows.length} kişi çalışıyor (bu katın kadrosu ${total})` : total ? `Şu an kimse çalışmıyor (kadro ${total})` : "Bu katta çalışan yok";
+      $("card-now").textContent = rows.length ? `Şu an ${rows.length} kişi çalışıyor (bu katın kadrosu ${total})` : total ? `Şu an kimse çalışmıyor (kadro ${total})`
+        : b.kind === "muhtarlik" ? "Mahallenin muhtarı yok. İlk isteyen muhtar olur: videomuza “meslek: muhtar” yaz." : "Bu katta çalışan yok";
       facts(rows.slice(0, 12));
       if (rows.length > 12) facts([...rows.slice(0, 12), ["", `ve ${rows.length - 12} kişi daha`]]);
       return;

@@ -12,6 +12,9 @@ sim.setTown(levelArg === "inf" ? Infinity : Number(levelArg));
 const out = handles.map((handle, i) => {
   const n = i + 1;
   const r = { handle, seed: sim.seedOf(handle), slot: n * 977, arrived_day: day - (n % 60) };
+  // Bazılarına yorum isteği: kadrolu ama istenebilir (polis) ve mahalleye bağlı (muhtar) meslekler.
+  if (n % 7 === 3) r.overrides = { meslek: n % 2 ? "polis" : "muhtar" };
+  else if (n % 11 === 5) r.overrides = { meslek: n % 2 ? "okul_muduru" : "hakim" };
   const plans = [];
   for (let d = day; d < day + 7; d++) plans.push(sim.dayPlan(r, d));
   return {

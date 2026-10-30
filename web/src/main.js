@@ -217,15 +217,20 @@ soundBtn.addEventListener("click", () => {
 const limanZ = world.coastPoint(0, 60, 0, 1)[1];
 function soundEnv(dist, light, minute) {
   const t = controls.target;
+  // Yakındaki insanlar ve araçlar ağırlıkla sayılır: odaktaki kişi tam, 12 m ötedeki yarım (araçta 25 m).
   let near = 0;
   const P = people.positions;
   for (let i = 0; i < residents.length; i++) {
     if (!people.visible[i]) continue;
-    const dx = P[i * 3] - t.x, dz = P[i * 3 + 2] - t.z;
-    if (dx * dx + dz * dz < 35 * 35) near++;
+    const dx = P[i * 3] - t.x, dz = P[i * 3 + 2] - t.z, d2 = dx * dx + dz * dz;
+    if (d2 < 60 * 60) near += 1 / (1 + d2 / 144);
   }
   let traffic = 0;
-  for (const v of trafficRef.active.values()) if (!v.parked) { const q = v.route.position(v.s); if (Math.hypot(q.x - t.x, q.z - t.z) < 70) traffic++; }
+  for (const v of trafficRef.active.values()) {
+    if (v.parked) continue;
+    const q = v.route.position(v.s), d2 = (q.x - t.x) ** 2 + (q.z - t.z) ** 2;
+    if (d2 < 100 * 100) traffic += 1 / (1 + d2 / 625);
+  }
   const cell = world.cellByKey.get(`${Math.round(t.x / 560)},${Math.round(t.z / 270)}`);
   const inPark = world.parks.some((q) => t.x > q.x0 - 20 && t.x < q.x1 + 20 && t.z > q.z0 - 20 && t.z < q.z1 + 20) || world.plazas.some((q) => q.kind === "park" && t.x > q.x0 && t.x < q.x1 && t.z > q.z0 && t.z < q.z1);
   return {
@@ -298,7 +303,7 @@ function flyTo(x, y, z, distance = 120, direction = null, sure = 1.3) {
 }
 
 const nameTags = new NameTags(scene);
-if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents };
+if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents, scene };
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic });
@@ -381,7 +386,7 @@ function updateWindows(minute, light, sunDeg) {
     const o = windowOwners[i];
     let lit;
     if (o.slot != null) lit = o.slot < population && people.athome[o.slot] === 1;
-    else if (o.workplace === "otel" || o.workplace === "saglik") lit = (o.seed * 7) % 5 < 3;
+    else if (o.workplace === "otel" || o.workplace === "saglik" || o.workplace === "karakol") lit = (o.seed * 7) % 5 < 3;
     else lit = minute > 470 && minute < 1380 && (o.seed * 5) % 7 < 5;
     tmpColor.copy(P.WINDOW_DAY).lerp(lit ? P.WINDOW_NIGHT : P.WINDOW_DARK, night);
     windows.setColorAt(i, tmpColor);

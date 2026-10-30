@@ -404,14 +404,23 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   }
   if (st.columns) for (let i = 0; i < 6; i++) B.trims.add(local(b, -b.w / 2 + 2 + i * ((b.w - 4) / 5), 0.6, b.d / 2 + 1.5), b.rot, s.set(0.8, h - 0.6, 0.8), "#f4f1ea");
   if (st.columns) B.slabs.add(local(b, 0, h - 0.4, b.d / 2 + 1.5), b.rot, s.set(b.w, 0.6, 3));
+  // Resmî binalar (polis merkezi, muhtarlık): zemin kat üstünde renk şeridi, girişin üstünde tabela.
+  if (st.band) B.signs.add(local(b, 0, FLOOR_H - 0.15, b.d / 2 + 0.14), b.rot, s.set(b.w + 0.1, 0.4, 0.1), st.band);
+  if (st.plate) {
+    if (floors > 1) B.signs.add(local(b, 0, h - 1.5, b.d / 2 + 0.14), b.rot, s.set(7, 1.1, 0.12), st.plate);
+    else B.signs.add(local(b, 0, h - 0.42, b.d / 2 + 0.14), b.rot, s.set(4, 0.36, 0.1), st.plate);
+  }
   if (st.sign) {
     B.signs.add(local(b, 0, h - 1.6, b.d / 2 + 0.12), b.rot, s.set(2.6, 0.8, 0.12), st.sign);
     B.signs.add(local(b, 0, h - 2.5, b.d / 2 + 0.12), b.rot, s.set(0.8, 2.6, 0.12), st.sign);
   }
-  if (b.kind === "belediye") { // okulun bayrağı bahçede (okul_bahce)
+  if (b.kind === "belediye" || (st.flag && floors > 1)) { // okulun bayrağı bahçede (okul_bahce)
     // Bayrak direği ve bayrak.
     B.rails.add(local(b, b.w / 2 - 2, 0, b.d / 2 + 4), b.rot, s.set(0.12, 10, 0.12));
     B.signs.add(local(b, b.w / 2 - 2 + 1.2, 8.4, b.d / 2 + 4), b.rot, s.set(2.4, 1.6, 0.04), "#d8233a");
+  } else if (st.flag) { // küçük yapı (muhtarlık): yan duvarın dibinde kısa direk
+    B.rails.add(local(b, b.w / 2 + 1, 0, b.d / 2 - 0.5), b.rot, s.set(0.08, 5.5, 0.08));
+    B.signs.add(local(b, b.w / 2 + 1 + 0.75, 4.6, b.d / 2 - 0.5), b.rot, s.set(1.5, 1.0, 0.03), "#d8233a");
   }
 }
 

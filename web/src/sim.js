@@ -230,9 +230,11 @@ export function job(r) {
 }
 
 export function workplace(r) {
-  const kind = job(r).yer;
+  const j = job(r);
+  const kind = j.yer;
   const names = catalog.isyerleri[kind];
-  let index = roll(r.seed, "isyeri") % names.length;
+  // Yerel işler (muhtar): kendi mahallesinin şubesi; diğerleri kişiye göre bir şube.
+  let index = j.yerel ? addressParts(r.slot).mahalle % names.length : roll(r.seed, "isyeri") % names.length;
   if (!isOpen(`${kind}:${index}`)) {
     // Kendi şubesi açılana kadar açık olanlardan birinde çalışır.
     const open = openBranches(kind);

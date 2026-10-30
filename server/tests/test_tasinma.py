@@ -143,6 +143,29 @@ class TasinmaTest(unittest.TestCase):
         self.assertEqual(self.send({"tur": "yorumlar", "yorumlar": [["x"], 5, ["c", "b", "t", "m"]]})[1]["istek"], 0)
         self.assertEqual(self.send({"tur": "yorumlar", "yorumlar": "x"})[0], 1)
 
+    def test_muhtar_koltugu(self):
+        # Muhtar mahalle başına tek: önce isteyen olur, sonrakiler "dolu"; muhtar ayrılınca koltuk boşalır.
+        liste = [[f"k{i:02d}", 300 + i, 0] for i in range(10)]
+        self.assertEqual(self.send({"tur": "liste", "takipci": 10, "liste": liste})[0], 0)
+        t = int(time.time()) - 3600
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [
+            ["m1", "k01", t + 60, "meslek: muhtar"], ["m2", "k00", t, "Meslek:muhtar"], ["m3", "k02", t, "meslek: polis"]]})
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sorted(out["uygulanan"]), [["k00", "meslek", "muhtar"], ["k02", "meslek", "polis"]])
+        self.assertEqual(out["dolu"], [["k01", "muhtar"]])
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [["m4", "k03", t + 120, "muhtar olmak istiyorum"]]})
+        self.assertEqual((out["uygulanan"], out["dolu"]), ([], [["k03", "muhtar"]]))
+        # Muhtar takibi bırakır: koltuk boşalır, yeni istek geçer.
+        self.assertEqual(self.send({"tur": "liste", "takipci": 9, "liste": liste[1:]})[0], 0)
+        self.assertEqual(self.q("SELECT overrides FROM sakinler WHERE handle = 'k00'"), "{}")
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [["m5", "k03", t + 180, "meslek: muhtar"]]})
+        self.assertEqual(out["uygulanan"], [["k03", "meslek", "muhtar"]])
+        self.assertNotIn("dolu", out)
+        # Okul müdürü de tek koltuk; muhtarlıktan bağımsız.
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [
+            ["m6", "k04", t, "meslek: okul müdürü"], ["m7", "k05", t + 5, "okul müdürü olmak istiyorum"]]})
+        self.assertEqual((out["uygulanan"], out["dolu"]), ([["k04", "meslek", "okul_muduru"]], [["k05", "okul_muduru"]]))
+
     def test_korumalar(self):
         liste = [[f"k{i:02d}", 300 + i, 0] for i in range(10)]
         self.assertEqual(self.send({"tur": "liste", "takipci": 10, "liste": liste})[0], 0)

@@ -207,9 +207,11 @@ def job(r: dict) -> dict:
 
 
 def workplace(r: dict) -> dict:
-    kind = job(r)["yer"]
+    j = job(r)
+    kind = j["yer"]
     names = catalog()["isyerleri"][kind]
-    index = roll(r["seed"], "isyeri") % len(names)
+    # Yerel işler (muhtar): kendi mahallesinin şubesi; diğerleri kişiye göre bir şube.
+    index = address_parts(int(r["slot"]))["mahalle"] % len(names) if j.get("yerel") else roll(r["seed"], "isyeri") % len(names)
     if not is_open(f"{kind}:{index}"):
         open_ = _open_branches(kind)
         index = open_[roll(r["seed"], "isyeri") % len(open_)]

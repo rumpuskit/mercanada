@@ -9,8 +9,8 @@
 //    Erken kalırsa yolda kısa molalar verir. Kapıdan girerken kapı açılır.
 //  - Yürüyenler birbirine çok yaklaşırsa yana çekilir; durağan insanların ve engellerin içinden geçilmez.
 import { Color } from "three";
-import { activityAt, dayPlan, hobby, isHoliday, job, look, pet, roll, workplace, worksOn } from "../sim.js";
-import { Crowd } from "./human.js";
+import { activityAt, dayPlan, dreamJob, hobby, isHoliday, job, look, pet, roll, workplace, worksOn } from "../sim.js";
+import { Crowd, HAT_HAIR } from "./human.js";
 import { PedNav } from "./nav.js";
 import { pedWait } from "./signals.js";
 import { nextArrival, nextDeparture } from "./ferry.js";
@@ -19,9 +19,38 @@ import { pointAt } from "./traffic.js";
 import { playgroundItems } from "./layout.js";
 import * as P from "./palette.js";
 
+// Meslek kıyafetleri: işte ve işe gidip gelirken giyilir. top/bottom yoksa kişinin kendi giysisi; hat: başlık
+// (human.js EXTRAS). Ofis çalışanı, öğretmen, kütüphaneci, ressam gibi işlerde kıyafet serbest.
 const UNIFORMS = {
-  cankurtaran: "#e0463c", liman_iscisi: "#f28c28", balikci: "#f2c230", gemi_ustasi: "#33507a",
-  bahcivan: "#6a8f3c", zeytinci: "#7d8a4e", fener_bekcisi: "#2f3f5f", rehber: "#3e8a86",
+  polis: { top: "#1f3f73", bottom: "#1a2a48", sleeves: true, hat: "kep", hatColor: "#1f3f73" },
+  doktor: { top: "#f4f6f8", sleeves: true },
+  hemsire: { top: "#4fa3a5", bottom: "#4fa3a5" },
+  asci: { top: "#f4f4f2", bottom: "#2a2a2e", sleeves: true, hat: "asci", hatColor: "#f4f4f2" },
+  firinci: { top: "#f4f4f2", bottom: "#f0ece4", hat: "asci", hatColor: "#f4f4f2" },
+  garson: { top: "#f4f4f2", bottom: "#1d1d22", sleeves: true },
+  barista: { top: "#5a3e2b", bottom: "#2a2a2e" },
+  kasiyer: { top: "#2f8a57" },
+  resepsiyonist: { top: "#2f4a6d", bottom: "#1d1d22", sleeves: true },
+  memur: { top: "#dfe7ee", bottom: "#2c3a52", sleeves: true },
+  avukat: { top: "#2b2b30", bottom: "#2b2b30", sleeves: true },
+  liman_iscisi: { top: "#f28c28", bottom: "#2c3a52", hat: "kask", hatColor: "#f2c230" },
+  gemi_ustasi: { top: "#33507a", bottom: "#33507a", sleeves: true, hat: "kask", hatColor: "#f4f4f2" },
+  balikci: { top: "#f2c230", bottom: "#2c3a52", sleeves: true, hat: "bere", hatColor: "#2f3f5f" },
+  fener_bekcisi: { top: "#2f3f5f", bottom: "#2c3a52", sleeves: true, hat: "bere", hatColor: "#8a2f2f" },
+  cankurtaran: { top: "#e0463c", bottom: "#e0463c", shorts: true, sleeves: false, hat: "sapka", hatColor: "#e0463c" },
+  bahcivan: { top: "#6a8f3c", bottom: "#5a4636", hat: "sapka", hatColor: "#4f6d2c" },
+  zeytinci: { top: "#7d8a4e", bottom: "#5a4636", hat: "hasir", hatColor: "#e3c77e" },
+  marangoz: { top: "#8a6a4a", bottom: "#4a6589" },
+  seramikci: { top: "#bfb3a2" },
+  rehber: { top: "#3e8a86", sleeves: true },
+  muhtar: { top: "#3a3f4a", bottom: "#3a3f4a", sleeves: true },
+  okul_muduru: { top: "#2c3a52", bottom: "#2c3a52", sleeves: true },
+  hakim: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true }, // cübbe
+  savci: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true },
+};
+const uniformOf = (u) => u && {
+  top: new Color(u.top), bottom: u.bottom ? new Color(u.bottom) : null, sleeves: u.sleeves,
+  shorts: !!u.shorts, hat: u.hat ?? null, hatColor: u.hatColor ? new Color(u.hatColor) : null,
 };
 const TEAM_COLORS = ["#c8312f", "#2f5fb5", "#1d1d22"].map((c) => new Color(c));
 const WHITE = new Color("#f4f4f2");
@@ -172,7 +201,8 @@ export class People {
     this.speeds = residents.map((r) => 1.1 + frac(roll(r.seed, "hiz")) * 0.4);
     this.colors = residents.map((r, i) => {
       const l = look(r);
-      const uniform = UNIFORMS[this.works[i].job];
+      // Asıl mesleğin kıyafeti: iş yeri henüz adada yoksa da (anakarada çalışırken) giyilir.
+      const uniform = uniformOf(UNIFORMS[dreamJob(r).id]);
       return {
         style: l.sac % 8, height: 1.75 * (l.boy / 100),
         skin: P.SKIN[l.ten % P.SKIN.length], hairColor: P.HAIR[l.sac_renk % P.HAIR.length],
@@ -180,7 +210,7 @@ export class People {
         sleeves: roll(r.seed, "kol") % 3 !== 0,
         beard: roll(r.seed, "sakal") % 5 === 0,
         glasses: roll(r.seed, "gozluk") % 6 === 0,
-        uniform: uniform ? new Color(uniform) : null,
+        uniform,
       };
     });
 
@@ -1519,7 +1549,7 @@ export class People {
       const c = this.colors[i];
       const p = this.poses[i];
       resetPose(p);
-      p.height = c.height; p.t = time; p.sleeves = c.sleeves; p.shorts = false;
+      p.height = c.height; p.t = time; p.sleeves = c.sleeves; p.shorts = false; p.atWork = false;
       let atWork = false;
 
       if (seg.ne === "uyku" || seg.ne === "ev") {
@@ -1541,13 +1571,13 @@ export class People {
         const leg = trip.legs.find((l) => minute < l.t1) ?? trip.legs[trip.legs.length - 1];
         p.mode = trip.mode;
         if (!this._travelState(i, k, trip, leg, minute, time, p, c)) { this.visible[i] = 0; continue; }
-        atWork = trip.fromWork;
+        atWork = trip.fromWork || seg.nereye === "is"; // işe giderken de üniformalı
       } else {
         if (seg.ne === "is" && !this.works[i].loc.outdoor) {
           // İçeride çalışıyor: iş yerinin içi açıksa masasında/tezgâhında görünür.
           if (this.dollhouse?.contains(i) && this.dollhouse.workPoseFor(i, seg, time, p)) {
             p.indoor = true;
-            p.atWork = false;
+            p.atWork = true;
             shown.push(i);
             continue;
           }
@@ -1627,13 +1657,18 @@ export class People {
       const c = this.colors[i];
       this.visible[i] = 1;
       this.positions[i * 3] = p.x; this.positions[i * 3 + 1] = p.y; this.positions[i * 3 + 2] = p.z;
-      p.style = c.style; p.skin = c.skin; p.hairColor = c.hairColor;
+      const u = p.atWork ? c.uniform : null;
+      p.style = u?.hat ? HAT_HAIR[c.style] ?? c.style : c.style; p.skin = c.skin; p.hairColor = c.hairColor;
       p.beard = c.beard; p.glasses = c.glasses;
-      p.top = p.atWork && c.uniform ? c.uniform : c.top;
-      p.bottom = c.bottom;
+      p.top = u ? u.top : c.top;
+      p.bottom = u?.bottom ?? c.bottom;
+      p.hat = u?.hat ?? null; p.hatColor = u?.hatColor ?? null;
+      if (u?.sleeves != null) p.sleeves = u.sleeves;
+      if (u?.shorts) p.shorts = true;
       if (p.team != null) {
         p.top = TEAM_COLORS[p.team];
         p.bottom = p.team === 2 ? TEAM_COLORS[2] : WHITE;
+        p.hat = null;
         p.team = null;
       }
       crowd.add(i, p);

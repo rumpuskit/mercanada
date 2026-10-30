@@ -76,7 +76,35 @@ const EXTRAS = {
     ...[-0.038, 0.038].map((x) => tint(new THREE.TorusGeometry(0.024, 0.005, 3, 8).translate(x, HY + 0.014, 0.108), "#222228")),
     tint(new THREE.BoxGeometry(0.03, 0.005, 0.005).translate(0, HY + 0.016, 0.11), "#222228"),
   ]),
+  // İş başlıkları (üniformayla gelir; renk kişiden). Saçın tepesini örter, yanlardan ve arkadan saç görünür.
+  kep: () => merge([ // polis kepi: tepe, koyu bant, siperlik
+    tint(new THREE.CylinderGeometry(0.132, 0.118, 0.07, 10).scale(1, 1, 1.08).translate(0, HY + 0.115, -0.006), W),
+    tint(new THREE.CylinderGeometry(0.12, 0.12, 0.034, 10).scale(1, 1, 1.08).translate(0, HY + 0.073, -0.006), "#3a3a44"),
+    tint(new THREE.BoxGeometry(0.15, 0.012, 0.075).rotateX(0.3).translate(0, HY + 0.064, 0.118), "#3a3a44"),
+  ]),
+  asci: () => merge([ // aşçı ve fırıncı börkü
+    tint(new THREE.CylinderGeometry(0.115, 0.118, 0.17, 10).translate(0, HY + 0.15, -0.006), W),
+    tint(new THREE.IcosahedronGeometry(0.13, 1).scale(1, 0.45, 1).translate(0, HY + 0.24, -0.006), W),
+  ]),
+  kask: () => merge([ // baret
+    tint(new THREE.SphereGeometry(0.13, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.95, 1.08).translate(0, HY + 0.045, -0.006), W),
+    tint(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 12).scale(1, 1, 1.12).translate(0.0, HY + 0.05, 0.012), W),
+  ]),
+  bere: () => merge([ // yün bere (balıkçı, fener bekçisi)
+    tint(new THREE.SphereGeometry(0.123, 9, 5, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.1, 1.08).translate(0, HY + 0.03, -0.01), W),
+    tint(new THREE.CylinderGeometry(0.126, 0.126, 0.045, 9).scale(1, 1, 1.08).translate(0, HY + 0.035, -0.01), "#d0d0d0"),
+  ]),
+  sapka: () => merge([ // siperlikli şapka (cankurtaran, bahçıvan)
+    tint(new THREE.SphereGeometry(0.122, 9, 5, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.85, 1.08).translate(0, HY + 0.05, -0.006), W),
+    tint(new THREE.BoxGeometry(0.13, 0.012, 0.1).rotateX(0.12).translate(0, HY + 0.055, 0.125), W),
+  ]),
+  hasir: () => merge([ // geniş kenarlı hasır şapka (zeytinci)
+    tint(new THREE.CylinderGeometry(0.1, 0.118, 0.09, 10).translate(0, HY + 0.12, -0.006), W),
+    tint(new THREE.CylinderGeometry(0.25, 0.25, 0.012, 14).translate(0, HY + 0.078, -0.006), W),
+  ]),
 };
+// Başlık takanlarda tepeden taşan saç (topuz, kıvırcık) kısa saça döner.
+export const HAT_HAIR = { 3: 1, 5: 1 };
 
 /** Saç biçimleri (görünüş.sac); null: kel. Baş kemiğine bağlıdır. */
 function hairGeometries() {
@@ -218,7 +246,7 @@ export class Crowd {
   begin() {
     this.count = 0;
     this.hairCounts = this.hair.map(() => 0);
-    this.extraCounts = { beard: 0, glasses: 0 };
+    this.extraCounts = Object.fromEntries(Object.keys(this.extras).map((k) => [k, 0]));
     this.propCounts = Object.fromEntries(Object.keys(this.props).map((k) => [k, 0]));
     this.dogCount = 0;
   }
@@ -303,6 +331,7 @@ export class Crowd {
     };
     if (p.beard) extra("beard", head, p.hairColor);
     if (p.glasses) extra("glasses", head);
+    if (p.hat) extra(p.hat, head, p.hatColor);
 
     const hair = this.hair[p.style];
     if (hair) {

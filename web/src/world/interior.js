@@ -350,14 +350,31 @@ export class Dollhouse {
         add(1.55, 0.2, 2.0, bxw, 0.41, bz, "#f6f3ee");
         add(1.6, 0.9, 0.08, bxw, 0.06, r.z0 + 0.06, wood);
         for (const e of [-0.38, 0.38]) add(0.55, 0.12, 0.35, bxw + e, 0.61, r.z0 + 0.3, "#ffffff");
-        const duvet = add(1.62, 0.1, 1.35, bxw, 0.62, bz + 0.32, pick(DUVETS, "yorgan"));
+        const duvetColor = pick(DUVETS, "yorgan");
+        const duvet = add(1.62, 0.1, 1.35, bxw, 0.62, bz + 0.32, duvetColor);
+        // Uyurken ayrı yorgan: bedeni örter, ortası kabarık, kenarlardan ve ayak ucundan yatağın yanlarına
+        // sarkar. Yatan bedenin en yüksek noktası (ayak ucu ~0,87 m, göğüs ve kemer ~0,79 m) üst yüzün
+        // altında kalır, yüzeyler çakışmaz; baş ucunda çene hizasına alçalır, baş ve omuz başı yastıkta görünür.
+        const c0 = bz - 0.52, c1 = bz + 1.06, cl = c1 - c0;
+        const cover = new THREE.BoxGeometry(1.66, 1, cl, 12, 1, 10);
+        const cp = cover.attributes.position;
+        for (let k = 0; k < cp.count; k++) {
+          if (cp.getY(k) < 0) { cp.setY(k, 0.45); continue; }
+          const x = cp.getX(k), along = cp.getZ(k) + cl / 2; // 0: baş ucu
+          const hump = Math.abs(x) < 0.62 ? Math.cos((Math.PI * x) / 1.24) ** 2 : 0; // kollar da altında
+          const edge = Math.max(0, Math.abs(x) - 0.72) * 0.9; // kenara doğru hafif düşüş
+          cp.setY(k, 0.67 + 0.27 * hump * Math.min(1, 0.7 + along / 0.75) - edge);
+        }
+        cover.computeVertexNormals();
+        const covered = add(0, 0, 0, bxw, 0, c0 + cl / 2, duvetColor, 0, { geo: cover });
+        covered.visible = false;
         add(0.4, 0.5, 0.38, ax(2.0), 0.06, r.z0 + 0.3, wood);
         add(0.16, 0.25, 0.16, ax(2.0), 0.56, r.z0 + 0.3, "#f3e3c0", 0, { mat: { emissive: "#ffd9a0", emissiveIntensity: 0.2 } });
         const wl = Math.min(1.6, dz - 0.6);
         add(0.6, 2.1, wl, bx(0.32), 0.06, r.z1 - wl / 2 - 0.3, "#e9e2d6");
         add(0.02, 1.9, 0.02, bx(0.63), 0.15, r.z1 - wl / 2 - 0.3, "#8a8f96", 0, { shadow: false });
         add(1.4, 0.02, 0.8, bxw, 0.06, Math.min(bz + 1.5, r.z1 - 0.5), pick(RUGS, "hali2"), 0, { shadow: false });
-        spots.bed = { p: [bxw, bz + 0.95], heading: 0, top: 0.63, duvet };
+        spots.bed = { p: [bxw, bz + 0.95], heading: 0, top: 0.63, duvet, covered };
         spots.wardrobe = { p: [bx(1.05), r.z1 - wl / 2 - 0.3], heading: faceB };
         break;
       }
@@ -552,7 +569,7 @@ export class Dollhouse {
         else if (atDesk || act === "calisma") { p.shL = p.shR = 0.75; p.elL = p.elR = 1.35 + 0.08 * Math.sin(time * 9); p.lean = 0.15; p.headPitch = 0.25 + 0.1 * Math.sin(time * 0.2); }
       }
     }
-    if (u.spots.bed?.duvet) u.spots.bed.duvet.scale.y = act === "uyku" ? 3 : 1;
+    if (u.spots.bed?.duvet) { u.spots.bed.duvet.visible = act !== "uyku"; u.spots.bed.covered.visible = act === "uyku"; }
     return true;
   }
 

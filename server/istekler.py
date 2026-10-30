@@ -5,7 +5,7 @@ ya da elle (DM, canlı yayın) gelir ve sakinin overrides alanına işlenir.
 Yorumdaki biçim (büyük/küçük harf ve Türkçe karakter fark etmez, birkaçı aynı yorumda olabilir):
     meslek: balıkçı      mesleğim yazılımcı olsun      balıkçı olmak istiyorum
     hobi: satranç        evcil: kedi                   adımı gizle / adımı göster
-Yalnız katalogdaki seçenekler geçer (kadrolu işler, ör. fener bekçisi, istenemez). İstek yalnız
+Yalnız katalogdaki seçenekler geçer (kadrolu işler, ör. fener bekçisi, istenemez; "istenebilir" olanlar, ör. polis, hariç). İstek yalnız
 yorumu yazanın kendisi için ve yalnız adada oturuyorsa uygulanır; henüz taşınmamışsa 7 gün bekler.
 Aynı konuda birden çok istek varsa en son yazılan geçer.
 
@@ -32,7 +32,7 @@ TURLER = ("meslek", "hobi", "evcil", "gizle")
 MAX_METIN = 300
 # Katalogda adı geçmeyen ama sık yazılacak karşılıklar.
 EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilimci", "hekim": "doktor",
-             "kaptan": "balikci"}
+             "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
@@ -60,7 +60,7 @@ def _sozluk(pairs) -> list[tuple[str, str]]:
 @cache
 def secenekler() -> dict[str, list[tuple[str, str]]]:
     c = sim.catalog()
-    meslekler = [j for j in c["meslekler"] if not j.get("kadro") and j["id"] != c["kilitli_meslek"]]
+    meslekler = [j for j in c["meslekler"] if (not j.get("kadro") or j.get("istenebilir")) and j["id"] != c["kilitli_meslek"]]
     meslek = [(katla(j["id"].replace("_", " ")), j["id"]) for j in meslekler]
     meslek += [(katla(k), j["id"]) for j in meslekler for k in j["kademeler"] if katla(k) not in GENEL]
     meslek += list(EK_MESLEK.items())
@@ -121,11 +121,26 @@ ON CONFLICT (kaynak, kaynak_id) DO NOTHING;
 UYGULA_SQL = """
 BEGIN;
 CREATE TEMP TABLE son ON COMMIT DROP AS
-SELECT DISTINCT ON (i.handle, i.tur) i.id, i.handle, i.tur, i.deger, i.durum
+SELECT DISTINCT ON (i.handle, i.tur) i.id, i.handle, i.tur, i.deger, i.durum, i.created_at, {koltuk_a} AS koltuk
 FROM istekler i
 JOIN sakinler s ON s.platform = 'tt' AND s.handle = i.handle AND s.left_day IS NULL
 WHERE i.durum IN ('bekliyor', 'uygulandi')
 ORDER BY i.handle, i.tur, i.created_at DESC, i.id DESC;
+
+-- Tek koltuklu meslekler (muhtar, okul müdürü): adadan ayrılan koltuğu bırakır; koltuk doluysa ya da aynı
+-- mahallede daha önce isteyen varsa istek 'dolu' olur (kişinin eski mesleği sürer).
+UPDATE sakinler SET overrides = overrides - 'meslek'
+WHERE platform = 'tt' AND left_day IS NOT NULL AND overrides->>'meslek' IN ({tek});
+CREATE TEMP TABLE dolu ON COMMIT DROP AS
+SELECT a.id, a.handle, a.tur FROM son a
+WHERE a.durum = 'bekliyor' AND a.tur = 'meslek' AND a.deger IN ({tek}) AND (
+  EXISTS (SELECT 1 FROM sakinler o WHERE o.platform = 'tt' AND o.left_day IS NULL AND o.handle <> a.handle
+          AND o.overrides->>'meslek' = a.deger AND {koltuk_o} = a.koltuk)
+  OR EXISTS (SELECT 1 FROM son b WHERE b.durum = 'bekliyor' AND b.tur = 'meslek' AND b.deger = a.deger
+             AND b.koltuk = a.koltuk AND b.handle <> a.handle AND (b.created_at, b.id) < (a.created_at, a.id)));
+UPDATE istekler i SET durum = CASE WHEN i.id = d.id THEN 'dolu' ELSE 'eskidi' END
+FROM dolu d WHERE i.handle = d.handle AND i.tur = d.tur AND i.durum = 'bekliyor';
+DELETE FROM son WHERE id IN (SELECT id FROM dolu);
 
 -- Kişi başına tek güncelleme (UPDATE ... FROM aynı satırı birden çok eşleşmeyle yalnız bir kez günceller).
 UPDATE sakinler s SET overrides = s.overrides || o.yeni
@@ -156,7 +171,16 @@ def kaydet(satirlar: list, kaynak: str, db: str = DB) -> int:
 
 def uygula(db: str = DB) -> list:
     """Bekleyen istekleri adada oturanlara uygular, 7 günden eski kayıtları siler (yayın yapmaz)."""
-    return json.loads(psql(UYGULA_SQL.format(gun=RETURN_WINDOW_DAYS), db) or "[]")
+    c = sim.catalog()
+    # Tek koltuklu meslekler (muhtar, okul müdürü): koltuk, mahallenin şubesidir (sim.workplace ile aynı:
+    # mahalle % şube sayısı; okul sayısı mahalleden azsa iki mahalle aynı okulu paylaşır).
+    tekler = [j for j in c["meslekler"] if j.get("tek") == "mahalle"]
+    tek = ", ".join(f"'{j['id']}'" for j in tekler) or "NULL"
+    mahalle = sim.cap("daire_per_bina") * sim.cap("bina_per_sokak") * sim.cap("sokak_per_mahalle")
+    koltuk = "CASE {} ELSE 0 END".format(" ".join(f"WHEN '{j['id']}' THEN {{s}}.slot / {mahalle} % {len(c['isyerleri'][j['yer']])}" for j in tekler)) if tekler else "0"
+    sql = UYGULA_SQL.format(gun=RETURN_WINDOW_DAYS, tek=tek, koltuk_a=koltuk.replace("{s}", "s").replace("CASE", "CASE i.deger"),
+                            koltuk_o=koltuk.replace("{s}", "o").replace("CASE", "CASE a.deger"))
+    return json.loads(psql(sql, db) or "[]")
 
 
 def yorumlar(items: list, hesap: str | None = None, db: str = DB) -> dict:
@@ -173,9 +197,14 @@ def yorumlar(items: list, hesap: str | None = None, db: str = DB) -> dict:
             # Aynı yorumda birden çok istek: kaynak kimliği türle ayrılır.
             satirlar.append([handle, tur, deger, f"{cid}:{tur}", it[2]])
     yeni = kaydet(satirlar, "yorum", db)
+    dolu = "SELECT coalesce(json_agg(json_build_array(handle, deger) ORDER BY id), '[]') FROM istekler WHERE durum = 'dolu'"
+    once = json.loads(psql(dolu, db))
     uygulanan = uygula(db)
     bekleyen = int(psql("SELECT count(*) FROM istekler WHERE durum = 'bekliyor'", db))
-    return {"yorum": len(items), "istek": yeni, "uygulanan": uygulanan, "bekleyen_istek": bekleyen}
+    # Koltuğu dolu olduğu için geçmeyen istekler (muhtar): yorumu yazana cevapta söylemek için.
+    reddedilen = [d for d in json.loads(psql(dolu, db)) if d not in once]
+    return {"yorum": len(items), "istek": yeni, "uygulanan": uygulanan, "bekleyen_istek": bekleyen,
+            **({"dolu": reddedilen} if reddedilen else {})}
 
 
 def main() -> None:
