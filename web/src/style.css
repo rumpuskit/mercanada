@@ -104,10 +104,6 @@ button {
   display: none !important;
 }
 
-.muted {
-  color: var(--muted);
-}
-
 /* --- sol sütun: üst bilgi ve kart aynı akışta --- */
 #sol {
   position: fixed;
@@ -304,11 +300,6 @@ button {
   font-size: 13.5px;
   text-decoration: none;
   box-shadow: 0 4px 14px rgba(224, 96, 122, 0.35);
-}
-#hud .cta:not([href]) {
-  background: var(--glass-2);
-  color: var(--muted);
-  box-shadow: none;
 }
 #hud .priv {
   color: var(--muted);

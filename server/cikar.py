@@ -2,7 +2,7 @@
 """Adadan çıkmak isteyeni (DM ile bildirir) hemen çıkarır ve bir daha taşınmamasını sağlar.
 
 Kullanım:
-    python3 cikar.py kullaniciadi [--platform tt]
+    python3 cikar.py kullaniciadi
     python3 cikar.py --geri-al kullaniciadi     # fikrini değiştirirse: sonraki aktarımda yeniden taşınır
     python3 cikar.py --gizle kullaniciadi       # adada kalır, adı görünmez ("gizli komşu")
     python3 cikar.py --goster kullaniciadi      # adı yeniden görünür
@@ -17,11 +17,12 @@ import time
 from mercanada_sim import sim
 from ortak import DB, opt_out_hash, psql, publish
 
+PLATFORM = "tt"  # sakinler yalnız TikTok takipçilerinden
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("handle")
-    parser.add_argument("--platform", default="tt", choices=["tt", "ig"])
     parser.add_argument("--geri-al", action="store_true")
     parser.add_argument("--gizle", action="store_true")
     parser.add_argument("--goster", action="store_true")
@@ -29,10 +30,10 @@ def main() -> None:
     args = parser.parse_args()
 
     handle = sim.normalize_handle(args.handle)
-    ozet = opt_out_hash(args.platform, handle)
+    ozet = opt_out_hash(PLATFORM, handle)
     if args.gizle or args.goster:
         n = psql("WITH d AS (UPDATE sakinler SET hidden = :hid WHERE platform = :'pf' AND handle = :'h' RETURNING 1) SELECT count(*) FROM d",
-                 args.db, ["-v", f"pf={args.platform}", "-v", f"h={handle}", "-v", f"hid={'true' if args.gizle else 'false'}"])
+                 args.db, ["-v", f"pf={PLATFORM}", "-v", f"h={handle}", "-v", f"hid={'true' if args.gizle else 'false'}"])
         if n != "1":
             raise SystemExit(f"HATA: @{handle} adada değil")
         print(json.dumps({"gizli" if args.gizle else "gorunur": handle, "yayin": publish(args.db)}, ensure_ascii=False))
@@ -46,7 +47,7 @@ def main() -> None:
         INSERT INTO cikanlar (ozet, day) VALUES ('{ozet}', {day}) ON CONFLICT DO NOTHING;
         DELETE FROM istekler WHERE handle = :'h';
         WITH d AS (DELETE FROM sakinler WHERE platform = :'pf' AND handle = :'h' RETURNING 1) SELECT count(*) FROM d;
-    """, args.db, ["-v", f"pf={args.platform}", "-v", f"h={handle}"])
+    """, args.db, ["-v", f"pf={PLATFORM}", "-v", f"h={handle}"])
     print(json.dumps({"cikarildi": handle, "kayit_silindi": removed == "1", "yayin": publish(args.db)}, ensure_ascii=False))
 
 

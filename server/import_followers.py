@@ -2,12 +2,12 @@
 """Takipçi listesini şehre işler: yeni gelenler taşınır, takibi bırakanlar adadan ayrılır.
 
 Kullanım:
-    python3 import_followers.py liste.json [--platform tt] [--day N] [--force] [--dry-run]
+    python3 import_followers.py liste.json [--day N] [--force] [--dry-run]
 
 Asıl kaynak, Mac'teki tik.ninja takibinin günde 3 kez ssh ile yolladığı listedir (tasinma.py bu
 modülün aktar() işlevini çağırır). Elle verilen dosya da okunur: aynı biçimdeki liste
 ({"kaynak": "tikninja", "liste": [[ad, takip zamanı, sıra], ...]}), TikTok "Verilerini indir" çıktısı
-(zip ya da içindeki user_data*.json / Follower*.txt) ya da Instagram dışa aktarımı (--platform ig).
+(zip ya da içindeki user_data*.json / Follower*.txt).
 Kurallar:
   - Takibi bırakan bu aktarımda ayrılır; evi 7 gün tutulur, bu sürede dönerse aynı evine döner.
   - 7 günü geçen ayrılanın kaydı silinir (KVKK: gerekenden uzun tutulmaz), evi boşa çıkar.
@@ -112,22 +112,6 @@ def _tiktok_date(value) -> int:
     return 0
 
 
-# --- Instagram ---
-
-def _instagram_json(blob: bytes) -> dict[str, tuple[int, int]]:
-    out: dict[str, tuple[int, int]] = {}
-    data = json.loads(blob)
-    if isinstance(data, dict):  # bazı sürümlerde {"relationships_followers": [...]}
-        data = next((v for v in data.values() if isinstance(v, list)), [])
-    for item in data:
-        entry = (item.get("string_list_data") or [{}])[0]
-        handle = entry.get("value") or item.get("title") or ""
-        if not handle and entry.get("href"):
-            handle = entry["href"].rstrip("/").rsplit("/", 1)[-1]
-        _add(out, handle, int(entry.get("timestamp") or 0))
-    return out
-
-
 def _add(out: dict[str, tuple[int, int]], handle: str, ts: int, sira: int = 0) -> None:
     h = sim.normalize_handle(handle)
     if HANDLE_RE.match(h):
@@ -141,12 +125,9 @@ def _merge(out: dict[str, tuple[int, int]], h: str, v: tuple[int, int]) -> None:
         out[h] = v
 
 
-def read_export(paths: list[Path], platform: str) -> tuple[dict[str, tuple[int, int]], str]:
+def read_export(paths: list[Path]) -> tuple[dict[str, tuple[int, int]], str]:
     """{handle: (takip zaman damgası (UTC, saniye), sıra)} ve okunan dosyaların sha256 özeti."""
-    if platform == "ig":
-        wanted = re.compile(r"followers_\d+\.json$")
-    else:
-        wanted = re.compile(r"(user_data[^/]*\.json|follower[^/]*\.txt)$", re.I)
+    wanted = re.compile(r"(user_data[^/]*\.json|follower[^/]*\.txt)$", re.I)
     blobs: list[tuple[str, bytes]] = []
     for path in paths:
         if zipfile.is_zipfile(path):
@@ -159,9 +140,7 @@ def read_export(paths: list[Path], platform: str) -> tuple[dict[str, tuple[int, 
 
     followers: dict[str, tuple[int, int]] = {}
     for name, blob in blobs:
-        if platform == "ig":
-            part = _instagram_json(blob)
-        elif name.lower().endswith(".txt"):
+        if name.lower().endswith(".txt"):
             part = _tiktok_txt(blob.decode("utf-8", "replace"))
         else:
             part = _tiktok_json(blob)
@@ -259,7 +238,6 @@ def aktar(followers: dict[str, tuple[int, int]], sha: str, platform: str = "tt",
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("exports", nargs="+", type=Path)
-    parser.add_argument("--platform", default="tt", choices=["tt", "ig"], help="tt: TikTok (varsayılan), ig: Instagram")
     parser.add_argument("--day", type=int, default=sim.day_of(time.time()), help="Türkiye günü (varsayılan: bugün)")
     parser.add_argument("--db", default=DB)
     parser.add_argument("--force", action="store_true", help="nüfus düşüşü kontrolünü atla")
@@ -267,8 +245,8 @@ def main() -> None:
     args = parser.parse_args()
 
     try:
-        followers, sha = read_export(args.exports, args.platform)
-        result = aktar(followers, sha, args.platform, args.day, args.db, args.force, args.dry_run)
+        followers, sha = read_export(args.exports)
+        result = aktar(followers, sha, "tt", args.day, args.db, args.force, args.dry_run)
     except AktarimHatasi as e:
         sys.exit(f"HATA: {e}")
     if result.get("atlandi"):

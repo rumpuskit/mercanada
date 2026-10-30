@@ -21,12 +21,7 @@ export const at = (r) => (r.hidden ? "Gizli komşu" : "@" + r.handle);
 
 export function createUI({ residents, people, world, dollhouse, stories, traffic, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
-  if (TIKTOK_URL) $("cta").href = TIKTOK_URL;
-  else {
-    // Hesap henüz açılmadı: bağlantı yok, yalnız haber.
-    $("cta").removeAttribute("href");
-    $("cta").textContent = "TikTok hesabımız çok yakında açılıyor";
-  }
+  $("cta").href = TIKTOK_URL;
   // İskelede bekleyenler: takip etmiş, sıradaki taşınmayı bekleyenler. Dokununca iskeleye uçar.
   if (waiting > 0 && world.ferryPier) {
     const btn = $("waiting");
@@ -185,7 +180,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       ["Adada", t === 0 ? "Bugün geldi" : `${fmt.format(t)} gündür`],
       ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : world.vehicles ? "Otobüs ve yürüyüş" : "Yürüyerek (adada henüz araç yok)") + (people.works[selected].wp.kind === "anakara" ? " · işe vapurla" : "")],
       // İstekler videolarımızın yorumlarından okunur (sunucuda istekler.py; biçim orada).
-      ...(TIKTOK && !r.hidden ? [["Sen misin?", "Videomuza “meslek: balıkçı”, “hobi: tavla”, “evcil: kedi” ya da “adımı gizle” yaz; sonraki taşınmada işlenir."]] : []),
+      ...(!r.hidden ? [["Sen misin?", "Videomuza “meslek: balıkçı”, “hobi: tavla”, “evcil: kedi” ya da “adımı gizle” yaz; sonraki taşınmada işlenir."]] : []),
     ]);
   }
 
@@ -423,10 +418,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       $("floorbar").hidden = true;
       $("card-handle").textContent = "@" + handle;
       $("card-title").textContent = "Bu kullanıcı adı henüz adada değil.";
-      $("card-now").textContent = TIKTOK
-        ? `TikTok'ta @${TIKTOK} hesabını takip ettiysen iskelede sıranı bekliyorsun: sıradaki taşınma ${nextMove()}. ` +
-          "Etmediysen takip et, sen de taşın. (Bazı hesapları, ör. gizli hesapları, TikTok takipçi listesinde göstermiyor; onlar taşınamıyor.)"
-        : "Ada henüz sakin kabul etmiyor: TikTok hesabımız çok yakında açılıyor.";
+      $("card-now").textContent = `TikTok'ta @${TIKTOK} hesabını takip ettiysen iskelede sıranı bekliyorsun: sıradaki taşınma ${nextMove()}. ` +
+        "Etmediysen takip et, sen de taşın. (Bazı hesapları, ör. gizli hesapları, TikTok takipçi listesinde göstermiyor; onlar taşınamıyor.)";
       $("card-facts").replaceChildren();
       $("card-tabs").hidden = true;
       $("card-traits").replaceChildren();

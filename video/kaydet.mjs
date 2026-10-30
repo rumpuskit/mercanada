@@ -11,8 +11,8 @@
 //   (video/ klasörüne göre), konuşmanın 14 dB altına ayarlanır.
 //   adres:   sitenin sorgu parametreleri (ör. "saat=08:10&hiz=20&nufus=3200")
 //   kamera:  [[t, kx, ky, kz, bx, by, bz], ...] kamera konumu ve bakılan nokta (çekim başından saniye)
-//   takip:   { omuz: true } yürüyen bir sakini omuz görünümünde izler (kamera yerine); { yakin: true, secim }
-//            yürüyen bir sakini yakından izler, secim görünüş koşulları (kel değil vb.)
+//   takip:   { yakin: true, secim } yürüyen bir sakini yakından izler (kamera yerine); secim görünüş
+//            koşulları (kel değil vb.)
 //   yazilar: [{ metin, alt?, bas, son, yer: "ust" | "orta" | "alt" }]
 //   arayuz:  true ise sitenin üst bilgisi görünür (diğer paneller hep gizli); kart: true ise sakin kartı da
 //   yorunge: { hedef: "siradaki" | "iskele" | "fener" | "meydan" | [x, z], r, h, a0, a1, bak } hedefin
@@ -181,25 +181,6 @@ for (const [ci, shot] of S.cekimler.entries()) {
         A.controls.target.set(st.x, st.y + (takip.bak ?? 1.2), st.z);
         A.camera.lookAt(A.controls.target);
       };
-      return;
-    }
-    if (takip?.omuz) {
-      // Meydanın çevresinde yürüyen, araçta olmayan bir sakin.
-      const P = A.people;
-      let best = -1, bd = Infinity;
-      for (let i = 0; i < P.n; i++) {
-        if (!P.visible[i] || !P.poses[i].moving || P.poses[i].inVehicle || P.poses[i].indoor) continue;
-        const d = Math.hypot(P.positions[i * 3] - (takip.x ?? 0), P.positions[i * 3 + 2] - (takip.z ?? -60));
-        if (d < bd) { bd = d; best = i; }
-      }
-      if (best >= 0) {
-        if (takip.ad) A.residents[best].handle = takip.ad;
-        A.follower.start({ kind: "sakin", i: best }, "omuz");
-        A.follower.dist = takip.uzaklik ?? 4.2;
-        A.follower.pitch = takip.egim ?? 0.28;
-        A.ui.select?.(best, false, false); // takip burada omuz görünümünde başladı; seçim onu bozmasın
-      }
-      globalThis.__yonetmen = null;
       return;
     }
     const keys = kamera;

@@ -5,7 +5,7 @@
 // aktarımdan sonra listeyi buraya yollar (PUT), ziyaretçiler Cloudflare kenarından okur (GET).
 import { DurableObject } from "cloudflare:workers";
 
-const ORIGINS = ["https://mercanada.rumpuskit.com", "https://ada.rumpuskit.com", "http://localhost:4173", "http://localhost:5173"];
+const ORIGINS = ["https://mercanada.rumpuskit.com", "http://localhost:4173", "http://localhost:5173"];
 
 export class Presence extends DurableObject {
   async fetch(request) {

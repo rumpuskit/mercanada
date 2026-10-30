@@ -23,7 +23,7 @@ import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
 import { startOnline } from "./online.js";
 import { Follower } from "./follow.js";
-import { TEST_PHASE, VERI_URL } from "./config.js";
+import { VERI_URL } from "./config.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -262,7 +262,7 @@ controls.update();
 // Zaman hızı yalnızca geliştirmede (vite dev, ?gelistir ya da ?test): yayında şehir gerçek saatle yaşar.
 const dev = import.meta.env.DEV || params.has("gelistir") || params.has("denetle") || params.has("test");
 let speed = dev ? Number(params.get("hiz")) || 1 : 1;
-if (dev || TEST_PHASE) {
+if (dev) {
   const speedBar = document.getElementById("speed"), hud = document.getElementById("hud");
   speedBar.hidden = false;
   // Telefonda hız düğmeleri üst bilginin hemen altında (üst bilgi satır ekledikçe aşağı kayar).
@@ -307,7 +307,7 @@ if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, fo
 // Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
 follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false, false); };
 // Çevrimiçi sayacı yalnızca yayındaki sitede (ya da ?sayac ile denerken).
-if (["mercanada.rumpuskit.com", "ada.rumpuskit.com"].includes(location.hostname) || params.has("sayac")) startOnline();
+if (location.hostname === "mercanada.rumpuskit.com" || params.has("sayac")) startOnline();
 const mapUI = createMapUI({ world, camera, controls, flyTo, ui, residents });
 
 // Bir sakine dokununca kartını aç.
