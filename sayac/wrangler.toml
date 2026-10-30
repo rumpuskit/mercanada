@@ -10,6 +10,7 @@ workers_dev = false
 # alan adı bağlayabildiği için eski ada.rumpuskit.com adresi burada (rota) yeni adrese yönlendirilir.
 routes = [
   { pattern = "sayac.rumpuskit.com", custom_domain = true },
+  { pattern = "ada.rumpuskit.com/*", zone_name = "rumpuskit.com" },
 ]
 
 [[durable_objects.bindings]]
