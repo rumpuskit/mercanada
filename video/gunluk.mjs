@@ -2,7 +2,11 @@
 // standardına (video/cikti/ANLATIM-STANDARDI.md) uygun seslendirme ve çekim planını kurar; istenirse sesi ve
 // videoyu üretir, açıklamayı panoya kopyalar ve bildirim gönderir.
 //
-//   node gunluk.mjs [--yuva aksam|ogle|sabah] [--uret] [--onizleme] [--bildir] [--zorla]
+//   node gunluk.mjs [--yuva aksam|ogle|sabah] [--uret] [--onizleme] [--bildir] [--zorla] [--ac] [--hikaye h.json]
+//
+// --hikaye: günün hikâyesi elle (gerçek olaylardan, sitede doğrulanmış): {"tur", "kanca", "govde": [{ses, yazi?,
+// vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], "saat": "19:40"}.
+// İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
 //
 // Yuva: akşam (21:00 taşınmasından sonra, günün özeti), öğle (bir sakinin hikâyesi ya da istek), sabah
 // (09:00 taşınma haberi). Kaç yuvanın üretileceği takipçi sayısına bağlı (SIKLIK); gerekmeyen yuva sessizce
@@ -28,7 +32,8 @@ sim.setCatalog(catalog);
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.includes(k) ? args[args.indexOf(k) + 1] : d);
 const yuva = opt("--yuva", "aksam");
-const SAAT = { sabah: "09:30", ogle: "12:30", aksam: "21:30" }; // önerilen paylaşma saati (Türkiye)
+// Önerilen paylaşma saati: kullanıcı Almanya'da (TR = Almanya + 2 saat, kış saati).
+const SAAT = { sabah: "09:30 (TR 11:30)", ogle: "12:30 (TR 14:30)", aksam: "18:30 (TR 20:30)" };
 // Takipçi sayısına göre günde kaç video (önce akşam, sonra öğle, sonra sabah).
 const SIKLIK = [[0, ["aksam"]], [100, ["ogle", "aksam"]], [1000, ["sabah", "ogle", "aksam"]]];
 
@@ -100,7 +105,9 @@ const need = next ? Math.max(1, next.nufus - N) : 0;
 // --- hikâye seçimi ---
 const named = (r) => r.handle != null; // adını gizleyenler adlarıyla anılmaz
 const yeniler = residents.filter((r) => r.arrived_day === today).sort((a, b) => a.slot - b.slot);
-const acilan = stages.filter((s) => s.nufus > (durum.zirve ?? 0) && s.nufus <= level && durum.zirve > 0);
+// Bugün açılanlar: dünkü düzeyden (bugünden önce gelenler) bugünkü düzeye geçerken açılan adımlar.
+const dunku = residents.filter((r) => r.arrived_day < today).reduce((m, r) => Math.max(m, r.slot + 1), 0);
+const acilan = stages.filter((s) => s.nufus > dunku && s.nufus <= level);
 const istekDegisen = residents.filter((r) => named(r) && r.overrides && JSON.stringify(r.overrides) !== JSON.stringify(durum.istekler?.[r.handle] ?? null));
 
 /** Sakinin işi: "ozne bir X." ve ardından durumu. Asıl mesleğinin yeri açık değilse anakarada çalışır. */
@@ -131,7 +138,7 @@ const BOS = [
   { id: "gece", govde: [c("Akşam oldu."), c("Fener yandı."), c("Bakan kimse yok.", null, true)], soru: c("Adanın ilk gecesini kim geçirecek?"), cekim: ["fener", "ucus"], saat: "20:10" },
 ];
 
-let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null;
+let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null;
 if (acilan.length) {
   tur = "acilis";
   const s = acilan.at(-1);
@@ -187,6 +194,13 @@ if (acilan.length) {
     cekim = [{ sakin: r.handle }, { sakin: r.handle }];
   }
 }
+if (opt("--hikaye")) {
+  // Elle yazılmış hikâye (seçimin yerine geçer).
+  const h = JSON.parse(readFileSync(opt("--hikaye"), "utf8"));
+  const cc = (x) => c(x.ses, x.yazi ?? null, !!x.vurus);
+  tur = h.tur ?? "ozel"; govde = h.govde.map(cc); soru = cc(h.soru); cekim = h.cekim; etiketler = h.etiketler ?? [];
+  saat = h.saat ?? saat; ozelKanca = h.kanca ?? null;
+}
 if (!tur || !govde.length) {
   tur = "bos";
   const konu = BOS.find((k) => !durum.konular.includes(k.id)) ?? BOS[durum.konular.length % BOS.length];
@@ -225,7 +239,7 @@ console.log(`${tarih} ${yuva} · ${tur}${konuId ? ` (${konuId})` : ""} · nüfus
 for (const x of cumleler) console.log("   " + x.ses + (x.vurus ? "   [vuruş]" : ""));
 
 // --- açıklama (etkileşim: kanca + soru + istek kalıbı + etiketler) ---
-const kanca = { acilis: `Bugün adada yeni bir yer açıldı 🏗️`, yeniler: `Bugün ${fmt(yeniler.length)} kişi Mercanada'ya taşındı 🧳`, istek: "Yorumlardan gelen istek işlendi ✍️", sakin: "Bir sakinin günü 👀", bos: "Bu adada henüz kimse yaşamıyor 🏝️" }[tur];
+const kanca = ozelKanca ?? { acilis: `Bugün adada yeni bir yer açıldı 🏗️`, yeniler: `Bugün ${fmt(yeniler.length)} kişi Mercanada'ya taşındı 🧳`, istek: "Yorumlardan gelen istek işlendi ✍️", sakin: "Bir sakinin günü 👀", bos: "Bu adada henüz kimse yaşamıyor 🏝️" }[tur];
 const aciklama = [
   kanca,
   `${soru.ses} 👇`,
@@ -331,3 +345,4 @@ if (args.includes("--bildir")) {
   try { execFileSync("osascript", ["-e", `display notification ${JSON.stringify(msg)} with title "Mercanada" subtitle ${JSON.stringify(video.split("/").pop())}`]); } catch {}
 }
 console.log("video:", video);
+if (args.includes("--ac")) try { execFileSync("open", [out]); } catch {}
