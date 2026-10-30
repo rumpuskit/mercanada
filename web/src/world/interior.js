@@ -60,7 +60,8 @@ export class Dollhouse {
   open(b, floor) {
     this.close();
     this.building = b;
-    this.floor = Math.max(0, Math.min(b.floors - 1, floor));
+    // icKat: içi gezilen kat sayısı (cami tek kat harim: kubbeli dış hacim iki kat yüksekliğinde).
+    this.floor = Math.max(0, Math.min((b.icKat ?? b.floors) - 1, floor));
     this.city.setHidden(b, true);
     this.group = new THREE.Group();
     // Alt katlar: normal bina, çatısız.
@@ -196,18 +197,24 @@ export class Dollhouse {
     const metal = { metalness: 0.5, roughness: 0.4 };
     add(0.05, 0.05, zBot - zTop, 0, 1.4, (zTop + zBot) / 2, "#3a3f47", 0, { mat: metal, shadow: false });
     for (let z = zTop; z <= zBot; z += 0.6) add(0.03, 0.9, 0.03, 0, 0.5, z, "#3a3f47", 0, { mat: metal, shadow: false });
-    // Asansör: önde, kapısı arkaya (merdiven boşluğuna) bakar.
+    // Asansör yalnız 4 ve daha çok katlı apartmanda (yönetmelik gibi); 3 katlıda o köşede saksı.
     const ez0 = 2.4, ez1 = Math.min(hd - 0.3, 4.2);
+    if (b.floors < 4) {
+      add(0.45, 0.4, 0.45, 0.5, 0.06, (ez0 + ez1) / 2, "#b5653f");
+      add(0.7, 0.8, 0.7, 0.5, 0.85, (ez0 + ez1) / 2, "#5f8f4a", 0, { geo: new THREE.IcosahedronGeometry(0.4, 0) });
+    }
     const steel = { metalness: 0.4, roughness: 0.4 };
-    // Kuyu duvarları da kesik (içerisi görünsün); kapı kasası ve kat göstergesi tam boy.
-    add(1.7, CUT, 0.1, 0, 0, ez1, "#9aa3ad", 0, { mat: steel });
-    for (const x of [-0.85, 0.85]) add(0.1, CUT, ez1 - ez0, x, 0, (ez0 + ez1) / 2, "#9aa3ad", 0, { mat: steel });
-    for (const x of [-0.82, 0.82]) add(0.08, 2.3, 0.12, x, 0, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
-    add(1.72, 0.1, 0.12, 0, 2.25, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
-    for (const x of [-0.38, 0.38]) add(0.74, CUT + 0.2, 0.05, x, 0.06, ez0, "#c9ced4", 0, { mat: { metalness: 0.7, roughness: 0.25 } });
-    add(0.6, 0.02, 1.3, 0, 0.06, (ez0 + ez1) / 2, "#5a5f66", 0, { shadow: false });
-    add(0.12, 0.25, 0.04, 1.0, 1.0, ez0 - 0.06, "#2a2a2e");
-    add(0.3, 0.08, 0.03, 0, 2.38, ez0 - 0.07, null, 0, { material: new THREE.MeshBasicMaterial({ color: "#5fe08a", toneMapped: false }), shadow: false });
+    if (b.floors >= 4) {
+      // Kuyu duvarları da kesik (içerisi görünsün); kapı kasası ve kat göstergesi tam boy.
+      add(1.7, CUT, 0.1, 0, 0, ez1, "#9aa3ad", 0, { mat: steel });
+      for (const x of [-0.85, 0.85]) add(0.1, CUT, ez1 - ez0, x, 0, (ez0 + ez1) / 2, "#9aa3ad", 0, { mat: steel });
+      for (const x of [-0.82, 0.82]) add(0.08, 2.3, 0.12, x, 0, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
+      add(1.72, 0.1, 0.12, 0, 2.25, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
+      for (const x of [-0.38, 0.38]) add(0.74, CUT + 0.2, 0.05, x, 0.06, ez0, "#c9ced4", 0, { mat: { metalness: 0.7, roughness: 0.25 } });
+      add(0.6, 0.02, 1.3, 0, 0.06, (ez0 + ez1) / 2, "#5a5f66", 0, { shadow: false });
+      add(0.12, 0.25, 0.04, 1.0, 1.0, ez0 - 0.06, "#2a2a2e");
+      add(0.3, 0.08, 0.03, 0, 2.38, ez0 - 0.07, null, 0, { material: new THREE.MeshBasicMaterial({ color: "#5fe08a", toneMapped: false }), shadow: false });
+    }
     if (f === 0) {
       add(1.4, 0.02, 0.9, 0, 0.06, hd - 0.7, "#6b4a35", 0, { shadow: false });
       for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) {
@@ -576,8 +583,22 @@ export class Dollhouse {
   // --- iş yerleri ---
 
   /** İş yeri katı: kabuk, türüne göre döşeme ve o katta çalışanların noktaları. */
+  /**
+   * Zemin katın döşeme yüksekliği: bina tabanı (FLAT_Y) çevredeki eğimli zeminden ya da avlu taşından alçakta
+   * kalabilir (iskele, ambar, tersane, kıyı kulübeleri, cami avlusu); döşeme en yüksek zeminin üstüne çıkar,
+   * yoksa toprak ve taş içeriyi örter.
+   */
+  _lift(b) {
+    let top = FLAT_Y;
+    for (const [fx, fz] of [[0, 0], [-1, -1], [1, -1], [-1, 1], [1, 1], [0, -1], [0, 1], [-1, 0], [1, 0]]) {
+      const p = local(b, fx * (b.w / 2 - 0.4), 0, fz * (b.d / 2 - 0.4));
+      top = Math.max(top, this.world.groundY(p.x, p.z));
+    }
+    return Math.max(0.1, top - FLAT_Y + 0.08);
+  }
+
   _buildWork(b, f) {
-    const y0 = f * FLOOR_H;
+    const y0 = f * FLOOR_H + (f === 0 ? this._lift(b) : 0);
     const add = this._adder(b, y0);
     this._shell(b, add);
     const spots = buildWorkInterior(b, f, add, (lx, lz, heading, type) => ({ p: local(b, lx, 0, lz).clone(), heading: b.rot + heading, type, y: FLAT_Y + y0 + 0.06 }));

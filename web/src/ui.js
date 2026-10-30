@@ -14,6 +14,9 @@ const OUT_LABELS = {
   kahvehane: "Kahvehanede", pazar: "Pazarda alışverişte", saha: "Futbol sahasında",
 };
 
+// İş yeri adı olmayan binaların kartta görünen adı.
+const BUILDING_NAMES = { cami: "Cami", liman: "Vapur iskelesi", ambar: "Liman ambarı", tersane: "Tersane", kulube: "Balıkçı kulübesi", ahir: "Çiftlik", itfaiye: "İtfaiye istasyonu", garaj: "Belediye garajı", bufe: "Büfe", carsi: "Çarşı dükkânı" };
+
 const fmt = new Intl.NumberFormat("tr-TR");
 const $ = (id) => document.getElementById(id);
 // Sakinin görünen adı: adını gizlemek isteyenler "Gizli komşu" olarak görünür.
@@ -59,9 +62,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     if (ns.at) btn.addEventListener("click", () => flyTo(ns.at[0], world.groundY(ns.at[0], ns.at[1]), ns.at[1], 110));
   }
   let selected = null;
-  let mode = null; // "sakin" | "bina" | "arac" | "yer"
+  let mode = null; // "sakin" | "bina" | "arac"
   let vehicle = null; // seçili aracın kaydı
-  let place = null; // içi açılmayan bina
   let tab = "simdi";
   for (const btn of document.querySelectorAll("#card-tabs button")) {
     btn.addEventListener("click", () => {
@@ -227,7 +229,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     $("card-traits").replaceChildren();
     const b = dollhouse.building;
     if (!b.daireler) {
-      $("card-handle").textContent = dollhouse.workName ?? "Dükkân";
+      icon(PLACE_ICONS[b.kind] ?? "🏢");
+      $("card-handle").textContent = dollhouse.workName ?? (/Fener/.test(b.address ?? "") ? "Fener bekçisinin evi" : BUILDING_NAMES[b.kind] ?? "Dükkân");
       $("card-title").textContent = `${b.address ?? ""} · ${dollhouse.floor + 1}. kat`;
       // Yalnızca şu an bu katta çalışanlar (izinli, yolda ya da evde olanlar listelenmez).
       const rows = [];
@@ -253,6 +256,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       if (rows.length > 12) facts([...rows.slice(0, 12), ["", `ve ${rows.length - 12} kişi daha`]]);
       return;
     }
+    icon("🏠");
     const p = sim.addressParts(b.slot0);
     $("card-handle").textContent = `${sim.sokakName(p.mahalle, p.sokak)} No ${p.bina * 2 + 1}`;
     $("card-title").textContent = `${sim.mahalleName(p.mahalle)}, Mercanada · ${b.floors} katlı apartman`;
@@ -275,13 +279,12 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     if (mode === "sakin" && selected != null) renderPerson();
     else if (mode === "bina" && dollhouse.isOpen()) renderBuilding();
     else if (mode === "arac" && vehicle) renderVehicle();
-    else if (mode === "yer" && place) renderPlace();
     flushActions();
   }
 
   const KIND_NAMES = { car: "Otomobil", taxi: "Taksi", bus: "Otobüs", ambulans: "Ambulans", itfaiye: "İtfaiye aracı", cop: "Çöp kamyonu" };
   const KIND_ICONS = { car: "🚗", taxi: "🚕", bus: "🚌", ambulans: "🚑", itfaiye: "🚒", cop: "🚛" };
-  const PLACE_ICONS = { cami: "🕌", liman: "⛴", ambar: "📦", tersane: "⚓", kulube: "🎣", ahir: "🐄", itfaiye: "🚒", garaj: "🚛", bufe: "🥤" };
+  const PLACE_ICONS = { cami: "🕌", liman: "⛴", ambar: "📦", tersane: "⚓", kulube: "🎣", ahir: "🐄", itfaiye: "🚒", garaj: "🚛", bufe: "🥤", karakol: "👮", muhtarlik: "🏛", adliye: "⚖️", okul: "🏫", saglik: "🏥", belediye: "🏛", kahvehane: "☕", kafe: "☕", firin: "🥖", market: "🛒", otel: "🏨", kutuphane: "📚", muze: "🏺" };
 
   // Kart birkaç karede bir yeniden çizilir; düğmeler değişmediyse yerinde kalır (yoksa basılırken
   // DOM'dan kopar ve dokunuş boşa gider). Yalnızca tıklama işlevleri tazelenir.
@@ -351,18 +354,6 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     el.style.background = color ?? "";
   }
 
-  function renderPlace() {
-    $("card-tabs").hidden = true;
-    $("card-traits").replaceChildren();
-    const names = { cami: "Cami", liman: "Vapur iskelesi", ambar: "Liman ambarı", tersane: "Tersane", kulube: "Balıkçı kulübesi", ahir: "Çiftlik", itfaiye: "İtfaiye istasyonu", garaj: "Belediye garajı", bufe: "Büfe" };
-    const wp = Object.values(world.workplaces).flat().find((w) => w?.building === place);
-    $("card-handle").textContent = wp?.name ?? names[place.kind] ?? "Bina";
-    icon(PLACE_ICONS[place.kind] ?? "🏛");
-    $("card-title").textContent = place.address ?? "";
-    $("card-now").textContent = `${place.floors} katlı`;
-    facts([]);
-  }
-
   /** Araca dokununca: yoldaysa takip edilir, park halindeyse ona odaklanılır. */
   function selectVehicle(record) {
     if (!record) return;
@@ -428,17 +419,10 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     showCard();
   }
 
-  /** Bir binaya dokununca: içini aç (iç mekânı olmayanlara yalnız odaklan). Takip biter. */
+  /** Bir binaya dokununca: içini aç (her binanın iç mekânı var: konut, iş yeri, kamu binası). Takip biter. */
   function openBuilding(b) {
     if (!b) return;
     follow.set(null);
-    if (["kulube", "ahir", "liman", "tersane", "ambar", "cami", "itfaiye", "garaj"].includes(b.kind)) {
-      selected = null; mode = "yer"; place = b;
-      dollhouse.close();
-      flyTo(b.x, world.groundY(b.x, b.z), b.z, Math.max(45, Math.max(b.w, b.d) * 2.2));
-      showCard();
-      return;
-    }
     selected = null;
     mode = "bina";
     dollhouse.open(b, dollhouse.building === b ? dollhouse.floor : 0);
@@ -481,7 +465,6 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     selected = null;
     mode = null;
     vehicle = null;
-    place = null;
     follow.set(null);
     dollhouse.close();
     $("card").hidden = true;
