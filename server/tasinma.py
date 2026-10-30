@@ -6,6 +6,9 @@ zorunlu komutudur (mercanada kullanıcısının authorized_keys'i); veri stdin'd
         Saatlik: profildeki takipçi sayısı. İskelede bekleyenler bundan hesaplanır.
     {"tur": "liste", "takipci": N, "liste": [[ad, takip zamanı, sıra], ...]}
         Günde 3 kez (taşınma): aktif takipçilerin tam listesi, import_followers.aktar() ile şehre işlenir.
+    {"tur": "yorumlar", "hesap": ad, "yorumlar": [[yorum kimliği, ad, unix zaman, metin], ...]}
+        Taşınmadan hemen sonra: videolarımıza son okumadan beri gelen yorumlar. istekler.py ayrıştırır;
+        metin saklanmaz, yalnız geçerli istekler (meslek, hobi, evcil, adımı gizle) kaydedilir.
 
 Çıktı tek satır JSON; hata olursa {"hata": "..."} ve çıkış kodu 1. Aynı anda tek çalıştırma (kilit).
 Elle deneme:  echo '{"tur": "sayi", "takipci": 3}' | python3 tasinma.py
@@ -19,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import istekler  # noqa: E402
 from import_followers import AktarimHatasi, _tikninja_json, aktar  # noqa: E402
 from ortak import DB, ROOT, psql, publish  # noqa: E402
 
@@ -58,7 +62,17 @@ def liste(takipci: int, items: list) -> dict:
     # Profilde sayılıp listede hiç görünmeyenler (gizli/kısıtlı hesaplar, çıkanlar) iskelede beklemez.
     durum_yaz("tt_takipci", takipci)
     durum_yaz("disarida", max(0, takipci - sonuc["nufus"]))
+    # Taşınmadan önce yorum yazıp şimdi gelenlerin bekleyen istekleri.
+    if uygulanan := istekler.uygula():
+        sonuc["istek_uygulanan"] = uygulanan
     sonuc["yayin"] = publish()
+    return sonuc
+
+
+def yorumlar(hesap: str | None, items: list) -> dict:
+    sonuc = istekler.yorumlar(items, hesap)
+    if sonuc["uygulanan"]:
+        sonuc["yayin"] = publish()
     return sonuc
 
 
@@ -69,11 +83,14 @@ def main() -> int:
             raise ValueError("veri çok büyük")
         msg = json.loads(raw)
         takipci = msg.get("takipci")
-        if not isinstance(takipci, int) or takipci < 0:
+        if msg.get("tur") != "yorumlar" and (not isinstance(takipci, int) or takipci < 0):
             raise ValueError("takipci sayısı yok")
         with open(ROOT / "tasinma.lock", "w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            if msg.get("tur") == "sayi":
+            if msg.get("tur") == "yorumlar" and isinstance(msg.get("yorumlar"), list):
+                hesap = msg.get("hesap")
+                out = yorumlar(str(hesap).lower() if hesap else None, msg["yorumlar"])
+            elif msg.get("tur") == "sayi":
                 out = sayi(takipci)
             elif msg.get("tur") == "liste" and isinstance(msg.get("liste"), list):
                 out = liste(takipci, msg["liste"])

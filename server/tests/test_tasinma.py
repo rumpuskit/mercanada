@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -94,6 +95,53 @@ class TasinmaTest(unittest.TestCase):
         code, out = self.send({"tur": "liste", "takipci": 14, "liste": liste2 + [["z0", 500, 0]]})
         self.assertEqual(code, 0, out)
         self.assertEqual(self.q("SELECT count(*) FROM sakinler WHERE handle = 'y2'"), "0")
+
+    def test_yorum_istekleri(self):
+        liste = [[f"k{i:02d}", 300 + i, 0] for i in range(4)] + [["ali", 400, 0], ["ayse", 401, 0]]
+        self.assertEqual(self.send({"tur": "liste", "takipci": 6, "liste": liste})[0], 0)
+        t = int(time.time()) - 3600
+        yorumlar = [
+            ["c1", "Ali", t, "meslek: balıkçı"],
+            ["c2", "ayse", t, "adımı gizle lütfen"],
+            ["c3", "yeni", t, "hobi: tavla"],              # henüz adada değil: bekler
+            ["c4", "livemercanada", t, "meslek: doktor"],  # kendi yorumumuz
+            ["c5", "ali", t - 600, "meslek: doktor"],      # daha eski: balıkçıyı ezmez
+            ["c6", "k00", t, "çok güzel olmuş"],
+            ["c7", "k01", t, None],
+        ]
+        msg = {"tur": "yorumlar", "hesap": "livemercanada", "yorumlar": yorumlar}
+        code, out = self.send(msg)
+        self.assertEqual(code, 0, out)
+        self.assertEqual((out["istek"], out["bekleyen_istek"]), (4, 1), out)
+        self.assertEqual(sorted(out["uygulanan"]), [["ali", "meslek", "balikci"], ["ayse", "gizle", "1"]])
+        pub = {s[2]: s for s in self.published()["sakinler"]}
+        self.assertEqual(pub[4][4], {"meslek": "balikci"})
+        self.assertIsNone(pub[5][0])  # adı gizli
+        # Aynı yorumlar ikinci kez gelirse yeni istek yok.
+        code, out = self.send(msg)
+        self.assertEqual((out["istek"], out["uygulanan"]), (0, []))
+
+        # Sonradan yazılan istek geçer; geç okunan daha eski yorum ezmez.
+        self.send({"tur": "yorumlar", "yorumlar": [["c8", "ali", t + 60, "hobim satranç, mesleğim aşçı"]]})
+        self.send({"tur": "yorumlar", "yorumlar": [["c9", "ali", t - 60, "meslek: mimar"]]})
+        self.assertEqual(self.q("SELECT overrides FROM sakinler WHERE handle = 'ali'"),
+                         '{"hobi": "satranc", "meslek": "asci"}')
+        self.send({"tur": "yorumlar", "yorumlar": [["c10", "ayse", t + 60, "adımı göster"]]})
+        self.assertEqual(self.q("SELECT hidden FROM sakinler WHERE handle = 'ayse'"), "f")
+
+        # "yeni" taşınınca bekleyen isteği uygulanır.
+        code, out = self.send({"tur": "liste", "takipci": 7, "liste": liste + [["yeni", 500, 0]]})
+        self.assertEqual(out["istek_uygulanan"], [["yeni", "hobi", "tavla"]])
+        # 7 günden eski istek kaydı silinir (etkisi sakinde kalır); çıkanın istekleri hemen silinir.
+        self.q("UPDATE istekler SET created_at = now() - interval '8 days' WHERE handle = 'yeni'")
+        self.send({"tur": "yorumlar", "yorumlar": []})
+        self.assertEqual(self.q("SELECT count(*) FROM istekler WHERE handle = 'yeni'"), "0")
+        self.assertEqual(self.q("SELECT overrides->>'hobi' FROM sakinler WHERE handle = 'yeni'"), "tavla")
+        sh(sys.executable, str(SERVER / "cikar.py"), "ali", env=self.env, cwd=SERVER)
+        self.assertEqual(self.q("SELECT count(*) FROM istekler WHERE handle = 'ali'"), "0")
+        # Bozuk yorum listesi hata değil, bozuk satırlar geçilir; liste değilse hata.
+        self.assertEqual(self.send({"tur": "yorumlar", "yorumlar": [["x"], 5, ["c", "b", "t", "m"]]})[1]["istek"], 0)
+        self.assertEqual(self.send({"tur": "yorumlar", "yorumlar": "x"})[0], 1)
 
     def test_korumalar(self):
         liste = [[f"k{i:02d}", 300 + i, 0] for i in range(10)]

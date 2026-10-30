@@ -178,6 +178,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       ["Evcil", pet || "Henüz yok"],
       ["Adada", t === 0 ? "Bugün geldi" : `${fmt.format(t)} gündür`],
       ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : world.vehicles ? "Otobüs ve yürüyüş" : "Yürüyerek (adada henüz araç yok)") + (people.works[selected].wp.kind === "anakara" ? " · işe vapurla" : "")],
+      // İstekler videolarımızın yorumlarından okunur (sunucuda istekler.py; biçim orada).
+      ...(TIKTOK && !r.hidden ? [["Sen misin?", "Videomuza “meslek: balıkçı”, “hobi: tavla”, “evcil: kedi” ya da “adımı gizle” yaz; sonraki taşınmada işlenir."]] : []),
     ]);
   }
 

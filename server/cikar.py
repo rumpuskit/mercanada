@@ -44,6 +44,7 @@ def main() -> None:
     day = sim.day_of(time.time())
     removed = psql(f"""
         INSERT INTO cikanlar (ozet, day) VALUES ('{ozet}', {day}) ON CONFLICT DO NOTHING;
+        DELETE FROM istekler WHERE handle = :'h';
         WITH d AS (DELETE FROM sakinler WHERE platform = :'pf' AND handle = :'h' RETURNING 1) SELECT count(*) FROM d;
     """, args.db, ["-v", f"pf={args.platform}", "-v", f"h={handle}"])
     print(json.dumps({"cikarildi": handle, "kayit_silindi": removed == "1", "yayin": publish(args.db)}, ensure_ascii=False))

@@ -13,7 +13,8 @@ TikTok takipçi listesini resmî arayüzünden vermez; resmî "Verilerini indir"
 1. **Saatte bir** araç yalnız profildeki takipçi **sayısını** okuyup sunucuya yollar. Henüz taşınmamış olanlar vapur iskelesinde valizleriyle bekler.
 2. **Günde üç kez** (09:00, 15:00, 21:00; `web/src/config.js` `TASINMA_SAATLERI` ve aracın `config.toml`'u) araç listeyi tarar. Aktif takipçilerin tamamını takip sırasıyla `ssh` ile sunucudaki `tasinma.py`'ye yollar. Bu ssh anahtarı yalnız o betiği çalıştırabilir (zorunlu komut).
 3. `tasinma.py`, `import_followers.aktar()` ile listeyi işler: yeni gelenler takip sırasına göre önce boş evlere yerleşir, takibi bırakanlar ayrılır (evi 7 gün tutulur, sonra kaydı silinir), adadan çıkmak isteyenler bir daha taşınmaz. Liste aktif nüfusun %80'inden azsa işlenmez (yarım liste adayı boşaltmasın).
-4. Güncel liste Cloudflare Worker'ına (`sayac/`) gider; site listeyi oradan okur. Ziyaretçi trafiği sunucuya gelmez.
+4. Aynı taşınmada araç, son 30 günün videolarından yorum sayısı değişenlerin yorumlarını okuyup listeden sonra yollar. `istekler.py` yorumları ayrıştırır (`meslek: balıkçı`, `hobi: tavla`, `evcil: kedi`, `adımı gizle`; yalnız katalogdaki seçenekler, kadrolu işler hariç). İstek yazanın kendisi için ve yalnız adada oturuyorsa sakinin `overrides` alanına işlenir; henüz taşınmamışsa 7 gün bekler. Yorum metni saklanmaz, istek kaydı 7 gün sonra silinir.
+5. Güncel liste Cloudflare Worker'ına (`sayac/`) gider; site listeyi oradan okur. Ziyaretçi trafiği sunucuya gelmez.
 
 TikTok bazı hesapları (ör. gizli hesapları) herkese açık takipçi listesinde göstermez; onlar taşınamaz ve iskelede bekleyen sayılmaz (profil sayısıyla nüfus farkı `durum.disarida`). tik.ninja kapanırsa resmî dışa aktarım dosyası `import_followers.py` ile elle işlenebilir.
 
@@ -46,7 +47,8 @@ web/                       tarayıcı istemcisi (Three.js + Vite), telefonda ve 
 server/
   mercanada_sim/sim.py     simülasyonun Python karşılığı (web ile bit bit aynı)
   schema.sql               Postgres şeması (sakinler, aktarimlar, istekler)
-  tasinma.py               Mac'teki takip aracından gelen sayı/liste (ssh zorunlu komutu)
+  tasinma.py               Mac'teki takip aracından gelen sayı/liste/yorumlar (ssh zorunlu komutu)
+  istekler.py              yorumdan ya da DM'den gelen istekler (meslek, hobi, evcil, adı gizle)
   import_followers.py      takipçi listesini şehre işler, listeyi yayınlar (elle: dosyadan)
   cikar.py                 adadan çıkmak / adını gizlemek isteyenler (DM ile)
   tiktok_api.py            TikTok resmî API'sinden takipçi sayısı (isteğe bağlı; sayı artık takip aracından geliyor)
@@ -54,7 +56,8 @@ server/
   systemd/                 mercanada kullanıcısının kendi servisleri (saatlik takipçi sayısı)
 sayac/                     Cloudflare Worker: çevrimiçi sayacı, /sakinler.json, mercanada.rumpuskit.com yönlendirmesi
   tests/test_parity.py     JS ve Python aynı sonucu veriyor mu?
-  tests/test_tasinma.py    taşınma uçtan uca (gerçek Postgres ister, MERCANADA_TEST_DB ile)
+  tests/test_tasinma.py    taşınma ve yorum istekleri uçtan uca (gerçek Postgres ister, MERCANADA_TEST_DB ile)
+  tests/test_istekler.py   yorumdan istek ayrıştırma
 ```
 
 ## Komutlar
@@ -87,6 +90,11 @@ sudo -u mercanada python3 import_followers.py tiktok-export.zip
 # Adadan çıkma / adı gizleme isteği (DM)
 sudo -u mercanada python3 cikar.py kullaniciadi
 sudo -u mercanada python3 cikar.py --gizle kullaniciadi
+
+# İstekler: ayrıştırmayı dene, DM/canlı yayından gelen isteği işle, son haftanın dökümü (istekler videosu)
+sudo -u mercanada python3 istekler.py dene "mesleğim balıkçı olsun"
+sudo -u mercanada python3 istekler.py ekle kullaniciadi meslek balıkçı
+sudo -u mercanada python3 istekler.py liste
 
 # Worker (sayaç + liste + yönlendirme)
 cd sayac && npx wrangler@4 deploy
