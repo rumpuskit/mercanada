@@ -79,8 +79,8 @@ rsync -a --delete --exclude __pycache__ --relative server/ data/catalog.json $SU
 ssh $SUNUCU 'chown -R mercanada:mercanada /opt/mercanada/app'
 
 # Taşınma testleri (geçici Postgres; asıl veritabanına dokunmaz)
-docker run -d --rm --name mercanada-deneme -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:55432:5432 postgres:17-alpine
-cd server && PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres MERCANADA_TEST_DB=mercanada_deneme python3 -m unittest tests.test_tasinma
+docker run -d --rm --name mercanada-deneme -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:54390:5432 postgres:17-alpine
+cd server && PGHOST=127.0.0.1 PGPORT=54390 PGUSER=postgres MERCANADA_TEST_DB=mercanada_deneme python3 -m unittest tests.test_tasinma
 
 # Bir listeyi elle işle (sunucuda; önce --dry-run ile bak). Normalde takip aracı günde 3 kez kendisi yollar.
 cd /opt/mercanada/app/server

@@ -4,7 +4,10 @@
 //   cd web && npm run build && npx vite preview --port 4173      (ayrı terminalde)
 //   cd video && node kaydet.mjs senaryolar/acilis.mjs [--onizleme] [--cekim 2] [--birlestir]
 //
-// Senaryo: { ad, fps, w, h, gecis, cekimler: [{ sure, adres, kamera, yazilar, takip, arayuz, hazirlik }] }
+// Senaryo: { ad, fps, w, h, gecis, seslendirme?, aralar?, cekimler: [{ sure, adres, kamera, yazilar, takip, arayuz, hazirlik }] }
+//   seslendirme: seslendir.mjs'e bak (ses + cümle cümle altyazı). aralar: { cümle sırası: sn } o cümleden önce
+//   eklenecek sessizlik (vuruş cümlesi öncesi 0,3–0,5 sn; anlatım standardı). Ses değiştiyse:
+//   ELEVENLABS_API_KEY=... ile çalıştır (yoksa kayıtlı ses kullanılır).
 //   adres:   sitenin sorgu parametreleri (ör. "saat=08:10&hiz=20&nufus=3200")
 //   kamera:  [[t, kx, ky, kz, bx, by, bz], ...] kamera konumu ve bakılan nokta (çekim başından saniye)
 //   takip:   { omuz: true } yürüyen bir sakini omuz görünümünde izler (kamera yerine)
@@ -13,6 +16,7 @@
 import { chromium } from "playwright-core";
 import { spawn } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { seslendir } from "./seslendir.mjs";
 import { resolve } from "node:path";
 
 const args = process.argv.slice(2);
@@ -52,6 +56,9 @@ body.arayuz #hud { transform: scale(2.1); transform-origin: top left; top: 150px
 #kayit .alt-yazi { display: inline-block; margin-top: 18px; background: #e0607a; color: #fff; border-radius: 20px; padding: 12px 26px 15px;
   font-weight: 800; font-size: 46px; line-height: 1.2; }
 #kayit .alt-yazi small { font-size: 36px; font-weight: 700; opacity: 0.95; }
+#kayit .altyazi { position: absolute; left: 50%; top: 1215px; transform: translateX(-50%); width: 900px; text-align: center;
+  color: #fff; font-weight: 900; font-size: 64px; line-height: 1.18; letter-spacing: -0.3px; white-space: pre-line;
+  -webkit-text-stroke: 12px #000; paint-order: stroke fill; text-shadow: 0 4px 14px rgba(0,0,0,.35); }
 `;
 
 function ffmpeg(args) {
@@ -59,6 +66,16 @@ function ffmpeg(args) {
   const done = new Promise((ok, fail) => p.on("close", (c) => (c === 0 ? ok() : fail(new Error("ffmpeg " + c)))));
   return { p, done };
 }
+
+// Seslendirme: cümle zamanları (eklenen aralarla kaydırılmış) ve çekimlerin genel zaman çizelgesindeki başlangıcı.
+const X = S.gecis ?? 0.35;
+const ses = S.seslendirme ? await seslendir(S) : null;
+const aralar = S.aralar ?? {};
+const cues = (ses?.cumleler ?? []).map((c, k) => {
+  const kay = Object.entries(aralar).reduce((a, [j, d]) => a + (Number(j) <= k ? d : 0), 0);
+  return { yazi: c.yazi, bas: c.bas + kay, son: c.son + kay };
+});
+const starts = S.cekimler.reduce((a, c, k) => (a.push(k ? a[k - 1] + S.cekimler[k - 1].sure - X : 0), a), []);
 
 const browser = await chromium.launch({ channel: "chrome", args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"] });
 const parts = [];
@@ -84,6 +101,9 @@ for (const [ci, shot] of S.cekimler.entries()) {
       d.style.opacity = 0;
       box.append(d);
     }
+    const sub = document.createElement("div");
+    sub.className = "altyazi";
+    box.append(sub);
     document.body.append(box);
   }, { yazilar: shot.yazilar, arayuz: shot.arayuz });
   // Dokular ve ilk kareler otursun, sonra sanal saate geç.
@@ -163,8 +183,12 @@ for (const [ci, shot] of S.cekimler.entries()) {
   const t0 = Date.now();
   for (let f = 0; f < frames; f++) {
     const t = f / fps;
-    await page.evaluate(({ t, dt, yazilar }) => {
+    await page.evaluate(({ t, dt, yazilar, g, cues }) => {
       globalThis.__shotT = t;
+      // Altyazı: genel zamana göre (çekim geçişlerinde iki çekimde de aynı yazı); cümle bitince 0,2 sn kalır.
+      const c = cues.find((c) => g >= c.bas - 0.05 && g < c.son + 0.2);
+      const sub = document.querySelector("#kayit .altyazi");
+      if (sub.textContent !== (c?.yazi ?? "")) sub.textContent = c?.yazi ?? "";
       // Yazılar: 0,3 sn'de belirir ve kaybolur.
       document.querySelectorAll("#kayit .yazi").forEach((d, k) => {
         const y = yazilar[k];
@@ -173,7 +197,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
         d.style.transform = `translate(-50%, ${(1 - o) * 24}px)`;
       });
       window.__step(dt * 1000);
-    }, { t, dt: 1 / fps, yazilar: shot.yazilar ?? [] });
+    }, { t, dt: 1 / fps, yazilar: shot.yazilar ?? [], g: starts[ci] + t, cues });
     const buf = await page.screenshot({ type: "jpeg", quality: 93 });
     if (!enc.p.stdin.write(buf)) await new Promise((r) => enc.p.stdin.once("drain", r));
     if (f % fps === 0) process.stdout.write(`\r  çekim ${ci + 1}: ${f}/${frames} kare (${((Date.now() - t0) / 1000).toFixed(0)} sn)`);
@@ -187,7 +211,6 @@ await browser.close();
 
 if (only == null || joinOnly) {
   // Çekimleri yumuşak geçişlerle birleştir.
-  const X = S.gecis ?? 0.35;
   const inputs = parts.flatMap((p) => ["-i", p.path]);
   let chain = "", prev = "[0:v]", offset = 0;
   for (let k = 1; k < parts.length; k++) {
@@ -197,8 +220,39 @@ if (only == null || joinOnly) {
     prev = lab;
   }
   const final = `${out}/${S.ad}${preview ? "-onizleme" : ""}.mp4`;
-  const enc = ffmpeg([...inputs, "-filter_complex", chain.replace(/;$/, ""), "-map", "[v]", "-c:v", "libx264", "-preset", "slow", "-crf", preview ? "24" : "17",
-    "-pix_fmt", "yuv420p", "-movflags", "+faststart", final]);
+  let audio = {};
+  if (ses) {
+    // Ses: cümle öncesi aralar sessizlikle eklenir, video boyunca uzatılır, −14 LUFS / ≤ −1 dBTP'ye getirilir.
+    const raw = `${out}/ses.mp3`;
+    const cuts = Object.entries(aralar).map(([k, d]) => {
+      const c = ses.cumleler[Number(k)], prev = ses.cumleler[Number(k) - 1];
+      return [prev ? (prev.son + c.bas) / 2 : 0, d];
+    }).sort((a, b) => a[0] - b[0]);
+    let af = "", segs = [], from = 0;
+    cuts.forEach(([at, d], k) => {
+      af += `[${parts.length}:a]atrim=${from}:${at},asetpts=PTS-STARTPTS[s${k}];aevalsrc=0:d=${d}:s=44100:c=mono[z${k}];`;
+      segs.push(`[s${k}]`, `[z${k}]`);
+      from = at;
+    });
+    af += `[${parts.length}:a]atrim=${from},asetpts=PTS-STARTPTS[s${cuts.length}];`;
+    segs.push(`[s${cuts.length}]`);
+    af += `${segs.join("")}concat=n=${segs.length}:v=0:a=1,aformat=channel_layouts=mono,apad[ham]`;
+    // Konuşmanın tepe/ortalama farkı büyük: yalnız loudnorm −15'te kalıyor. Önce hafif sıkıştırma, sonra
+    // ölçülen farka göre kazanç ve tepe sınırlayıcı (gerçek tepe ≈ −1,4 dBTP).
+    const olc = async (af) => {
+      const p = spawn("ffmpeg", ["-hide_banner", "-nostats", "-i", raw, "-af", `${af}ebur128`, "-f", "null", "-"]);
+      let log = "";
+      p.stderr.on("data", (d) => (log += d));
+      await new Promise((ok) => p.on("close", ok));
+      return Number([...log.matchAll(/^\s+I:\s+(-?[\d.]+) LUFS/gm)].at(-1)[1]);
+    };
+    const sik = `volume=${(-14 - (await olc(""))).toFixed(2)}dB,acompressor=threshold=-18dB:ratio=3:attack=5:release=80`;
+    const kazanc = (-14 - (await olc(sik + ",")) + 0.3).toFixed(2);
+    af += `;[ham]${sik},volume=${kazanc}dB,alimiter=limit=0.84:level=false:attack=2:release=60,aresample=48000[a]`;
+    audio = { input: ["-i", raw], filter: ";" + af, map: ["-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-shortest"] };
+  }
+  const enc = ffmpeg([...inputs, ...(audio.input ?? []), "-filter_complex", chain.replace(/;$/, "") + (audio.filter ?? ""), "-map", "[v]", ...(audio.map ?? []),
+    "-c:v", "libx264", "-preset", "slow", "-crf", preview ? "24" : "17", "-pix_fmt", "yuv420p", "-movflags", "+faststart", final]);
   enc.p.stdin.end();
   await enc.done;
   writeFileSync(`${out}/ACIKLAMA.txt`, S.aciklama ?? "");

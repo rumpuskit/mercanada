@@ -4,8 +4,8 @@ Gerçek bir Postgres ister; yalnız MERCANADA_TEST_DB verilince çalışır (CI'
 testte sıfırdan kurulur, bu yüzden asıl veritabanının adı verilmemeli. Liste Worker'a yollanmaz
 (geçici MERCANADA_ROOT'ta secrets/yayin.json yok).
 
-    docker run -d --rm --name mercanada-deneme -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:55432:5432 postgres:17-alpine
-    PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres MERCANADA_TEST_DB=mercanada_deneme python3 -m unittest tests.test_tasinma
+    docker run -d --rm --name mercanada-deneme -e POSTGRES_HOST_AUTH_METHOD=trust -p 127.0.0.1:54390:5432 postgres:17-alpine
+    PGHOST=127.0.0.1 PGPORT=54390 PGUSER=postgres MERCANADA_TEST_DB=mercanada_deneme python3 -m unittest tests.test_tasinma
 """
 
 import json
