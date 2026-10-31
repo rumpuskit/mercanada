@@ -42,6 +42,53 @@ const PLANS = [
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, ...extra });
 const H = (seed, n) => (roll(seed, "ic" + n) % 10000) / 10000;
 
+// Duraktaki işin duruşu (workinterior.js workPose türleri).
+const DWELL_POSE = { counter: "counter", shelf: "shelf", board: "board", look: "stand", serve: "stand", check: "stand", explain: "stand" };
+
+/**
+ * Duraklı tur: sp.path = [{x, z, dwell, act, fx?, fz?}] (dünya koordinatı; fx/fz: durakta bakılan nokta).
+ * Döner: {x, z, heading, moving, dist (yürünen toplam yol: adım evresi), act}. Yürüyüş uçlarda yavaşlar,
+ * yön durağa varırken ve kalkarken yarım saniyede döner (bir anda değil).
+ */
+function tourAt(sp, t, speed, out) {
+  if (!sp._legs) {
+    let T = 0;
+    sp._legs = sp.path.map((a, k) => {
+      const b = sp.path[(k + 1) % sp.path.length];
+      const L = Math.hypot(b.x - a.x, b.z - a.z);
+      const leg = { a, b, L, t0: T, walk: L / speed, dwell: b.dwell ?? 0, dir: Math.atan2(b.x - a.x, b.z - a.z) };
+      leg.face = b.fx != null ? Math.atan2(b.fx - b.x, b.fz - b.z) : leg.dir;
+      T += leg.walk + leg.dwell;
+      return leg;
+    });
+    sp._T = T || 1;
+  }
+  const lerpAng = (a, b, u) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * u;
+  let u = ((t % sp._T) + sp._T) % sp._T;
+  for (let k = 0; k < sp._legs.length; k++) {
+    const lg = sp._legs[k], prev = sp._legs[(k - 1 + sp._legs.length) % sp._legs.length];
+    if (u < lg.walk) {
+      const ease = (x) => x * x * (2 - x);
+      const A = Math.min(0.6, lg.L / 2), d0 = u * speed;
+      const d = A <= 0.01 ? d0 : d0 < A ? A * ease(d0 / A) : d0 > lg.L - A ? lg.L - A * ease((lg.L - d0) / A) : d0;
+      const f = lg.L ? d / lg.L : 1;
+      out.x = lg.a.x + (lg.b.x - lg.a.x) * f; out.z = lg.a.z + (lg.b.z - lg.a.z) * f;
+      out.heading = lerpAng(prev.face, lg.dir, Math.min(1, u / 0.5));
+      out.moving = lg.L > 0.05; out.dist = lg.t0 * speed + d; out.act = null;
+      return out;
+    }
+    u -= lg.walk;
+    if (u < lg.dwell) {
+      out.x = lg.b.x; out.z = lg.b.z; out.heading = lerpAng(lg.dir, lg.face, Math.min(1, u / 0.5));
+      out.moving = false; out.act = lg.b.act; out.dist = 0;
+      return out;
+    }
+    u -= lg.dwell;
+  }
+  out.x = sp.path[0].x; out.z = sp.path[0].z; out.heading = 0; out.moving = false; out.act = null;
+  return out;
+}
+
 export class Dollhouse {
   constructor(world, city, people, scene) {
     Object.assign(this, { world, city, people, scene });
@@ -592,7 +639,12 @@ export class Dollhouse {
     const y0 = f * FLOOR_H + (f === 0 ? this._lift(b) : 0);
     const add = this._adder(b, y0);
     this._shell(b, add);
-    const spots = buildWorkInterior(b, f, add, (lx, lz, heading, type) => ({ p: local(b, lx, 0, lz).clone(), heading: b.rot + heading, type, y: FLAT_Y + y0 + 0.06 }));
+    // Nokta (ve varsa duraklı turu: [[x, z, bekleme, iş, bakılanX, bakılanZ], ...]) yerelden dünyaya.
+    const W = (lx, lz) => { const q = local(b, lx, 0, lz); return { x: q.x, z: q.z }; };
+    const spots = buildWorkInterior(b, f, add, (lx, lz, heading, type, path) => ({
+      p: local(b, lx, 0, lz).clone(), heading: b.rot + heading, type, y: FLAT_Y + y0 + 0.06,
+      ...(path ? { path: path.map(([x, z, dwell = 0, act = "look", fx, fz]) => ({ ...W(x, z), dwell, act, ...(fx != null ? (({ x: X, z: Z }) => ({ fx: X, fz: Z }))(W(fx, fz)) : {}) })) } : {}),
+    }));
     this.guests = spots.guests ?? [];
     for (const lx of [-b.w / 4, b.w / 4]) {
       const lamp = new THREE.PointLight("#fff1d8", 0, 12, 1.4);
@@ -684,18 +736,25 @@ export class Dollhouse {
     const k = p.height / 1.75;
     p.x = sp.p.x; p.z = sp.p.z; p.y = sp.y; p.heading = sp.heading;
     p.radius = 0;
-    if (sp.type === "waiter" || sp.type === "walk") {
-      // Masalar arasında gidip gelir; uçlarda yavaşlayıp döner.
-      const th = time * 0.25 + ph;
-      const u = Math.sin(th);
-      p.x += Math.cos(sp.heading) * u * 2.2; p.z -= Math.sin(sp.heading) * u * 2.2;
-      p.heading = sp.heading + (Math.cos(th) > 0 ? Math.PI / 2 : -Math.PI / 2);
-      // Yürünen yol (sinüsün toplam değişimi): adım evresi hızla birlikte yavaşlar, kayma olmaz.
-      const n = Math.floor((th + Math.PI / 2) / Math.PI);
-      const dist = 2.2 * (2 * n + Math.abs(u - (n % 2 ? 1 : -1)));
-      walkPose(p, (dist / (0.72 * k)) * Math.PI);
+    if (sp.path || sp.type === "waiter" || sp.type === "walk") {
+      // Duraklı tur: noktalar arasında yürür (uçlarda hızlanıp yavaşlar), durakta işine döner ve işini yapar.
+      // Rotası verilmemiş eski noktalar: yönüne dik iki uç arasında, uçlarda kısa duraklı.
+      if (!sp.path) {
+        const dx = Math.cos(sp.heading) * 2.2, dz = -Math.sin(sp.heading) * 2.2;
+        sp.path = [{ x: sp.p.x - dx, z: sp.p.z - dz, dwell: 3, act: "look" }, { x: sp.p.x + dx, z: sp.p.z + dz, dwell: 3, act: "look" }];
+      }
+      const st = tourAt(sp, time + ph * 37, 0.95, this._tour ??= {});
+      p.x = st.x; p.z = st.z; p.heading = st.heading;
+      if (st.moving) {
+        walkPose(p, (st.dist / (0.72 * k)) * Math.PI);
+        if (sp.type === "waiter") { p.shR = 1.15; p.elR = 1.45; p.abR = 0.15; } // tepsi taşır
+      } else {
+        workPose(DWELL_POSE[st.act] ?? "stand", p, time, ph, sitPose, idleGesture, k);
+        if (st.act === "serve") { p.shR = 0.9; p.elR = 1.2; p.lean = 0.12; p.headPitch = 0.25; }
+        else if (st.act === "check") { p.lean = 0.25; p.shR = 0.6; p.elR = 1.3; p.headPitch = 0.45; }
+        else if (st.act === "explain") { p.shR = 0.9 + 0.3 * Math.sin(time * 1.3 + ph); p.elR = 0.5; p.abR = 0.4; p.headYaw = 0.4 * Math.sin(time * 0.4 + ph); }
+      }
       p.moving = false;
-      if (sp.type === "waiter") { p.shR = 1.2; p.elR = 1.4; }
       return true;
     }
     workPose(sp.type, p, time, ph, sitPose, idleGesture, k);

@@ -111,6 +111,73 @@ function offsetPath(pts, o) {
   return out;
 }
 
+/** Köşeleri kavisle döner (köşeden en çok r metre önce başlayan ikinci derece eğri): yön bir anda değişmez. */
+function roundCorners(pts, r) {
+  if (pts.length < 3) return pts;
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i - 1], [bx, bz] = pts[i], [cx, cz] = pts[i + 1];
+    const l1 = Math.hypot(bx - ax, bz - az), l2 = Math.hypot(cx - bx, cz - bz);
+    if (l1 < 0.05 || l2 < 0.05) { out.push(pts[i]); continue; }
+    const d1x = (bx - ax) / l1, d1z = (bz - az) / l1, d2x = (cx - bx) / l2, d2z = (cz - bz) / l2;
+    const turn = Math.acos(clamp(d1x * d2x + d1z * d2z, -1, 1));
+    if (turn < 0.2) { out.push(pts[i]); continue; }
+    const d = Math.min(r, l1 / 2, l2 / 2);
+    const p1 = [bx - d1x * d, bz - d1z * d], p2 = [bx + d2x * d, bz + d2z * d];
+    for (let k = 0; k <= 4; k++) {
+      const t = k / 4, u = 1 - t;
+      out.push([u * u * p1[0] + 2 * u * t * bx + t * t * p2[0], u * u * p1[1] + 2 * u * t * bz + t * t * p2[1]]);
+    }
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+
+/**
+ * Duraklı yürüyüş döngüsü: pts = [[x, z, bakışX, bakışZ]], her noktada `dwell` saniye durur. Noktalar arası
+ * yürüyüş uçlarda hızlanıp yavaşlar; yön durakta bakış noktasına yarım saniyede döner.
+ * Döner: {x, z, heading, moving, dist (adım evresi için yol), stopT (duraktaki süre)}.
+ */
+function stopGo(pts, speed, dwell, t, out) {
+  const n = pts.length;
+  if (n < 2) { out.x = pts[0][0]; out.z = pts[0][1]; out.heading = 0; out.moving = false; out.dist = 0; out.stopT = t; return out; }
+  let T = 0;
+  const legs = pts.map((a, k) => { const b = pts[(k + 1) % n]; const L = Math.hypot(b[0] - a[0], b[1] - a[1]); return { a, b, L, w: L / speed }; });
+  for (const l of legs) T += l.w + dwell;
+  let u = ((t % T) + T) % T, walked = 0;
+  const lerpAng = (a, b, v) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * v;
+  for (let k = 0; k < n; k++) {
+    const l = legs[k], prev = legs[(k - 1 + n) % n];
+    const dir = Math.atan2(l.b[0] - l.a[0], l.b[1] - l.a[1]);
+    const faceA = Math.atan2(l.a[2] - l.a[0], l.a[3] - l.a[1]), faceB = Math.atan2(l.b[2] - l.b[0], l.b[3] - l.b[1]);
+    if (u < l.w) {
+      const d = easeEnds(u * speed, l.L, 0.7), f = l.L ? d / l.L : 1;
+      out.x = l.a[0] + (l.b[0] - l.a[0]) * f; out.z = l.a[1] + (l.b[1] - l.a[1]) * f;
+      out.heading = lerpAng(faceA, dir, Math.min(1, u / 0.5)); out.moving = true; out.dist = walked + d; out.stopT = 0;
+      return out;
+    }
+    u -= l.w; walked += l.L;
+    if (u < dwell) {
+      out.x = l.b[0]; out.z = l.b[1]; out.heading = lerpAng(dir, faceB, Math.min(1, u / 0.5)); out.moving = false; out.dist = walked; out.stopT = u;
+      return out;
+    }
+    u -= dwell;
+    void prev;
+  }
+  out.x = pts[0][0]; out.z = pts[0][1]; out.heading = 0; out.moving = false; out.dist = 0; out.stopT = 0;
+  return out;
+}
+
+/** Yolun başında hızlanma, sonunda yavaşlama: ilk ve son `a` metrede konum yumuşar (hız 0'dan başlar, 0'a iner). */
+function easeEnds(d, L, a = 1.1) {
+  const f = (u) => u * u * (2 - u); // f(0)=0, f(1)=1, f'(0)=0, f'(1)=1: yürüme hızına kesintisiz bağlanır
+  const A = Math.min(a, L / 2);
+  if (A <= 0.01) return d;
+  if (d < A) return A * f(d / A);
+  if (d > L - A) return L - A * f((L - d) / A);
+  return d;
+}
+
 /** Bacak için iki kemikli ters kinematik: kalçadan ayağa (öne dz, yukarı dy) → {hip, knee}. */
 function legIK(dz, dy, L1 = 0.45, L2 = 0.47) {
   const d = clamp(Math.hypot(dz, dy), 0.25, L1 + L2 - 0.005);
@@ -618,12 +685,48 @@ export class People {
     return slot;
   }
 
+  /**
+   * Tarla işçisinin duraklı rotası (fields.js çizimiyle aynı ızgara): zeytinde bir ağaç sırası boyunca ağaçların
+   * yanı, bağda iki asma sırası arasındaki yol, sebzede iki öbek sırası arası, buğdayda tarla kenarı. Gidiş ve
+   * dönüş tek döngü. Döner: {pts: [[x, z, bakışX, bakışZ]], speed, dwell, act}.
+   */
+  _fieldWork(f, s) {
+    const key = `${f.x0},${f.z0},${s % 97}`;
+    const cache = (this._fieldJobs ??= new Map());
+    if (cache.has(key)) return cache.get(key);
+    const pts = [];
+    let job;
+    if (f.ekin === "zeytin") {
+      const rows = Math.max(1, Math.floor((f.z1 - f.z0 - 6) / 7) + 1), z = f.z0 + 4 + 7 * (s % rows);
+      for (let x = f.x0 + 4; x < f.x1 - 2; x += 7) pts.push([x, z - 1.3, x, z]);
+      job = { speed: 0.9, dwell: 16, act: "silk" };
+    } else if (f.ekin === "bag") {
+      const rows = Math.max(1, Math.floor((f.z1 - f.z0 - 3) / 2.6)), z = f.z0 + 2 + 2.6 * (s % rows) + 1.3;
+      for (let x = f.x0 + 3; x < f.x1 - 2; x += 3.5) pts.push([x, z, x, z - 1.3 * (pts.length % 2 ? 1 : -1)]);
+      job = { speed: 0.8, dwell: 8, act: "kes" };
+    } else if (f.ekin === "sebze") {
+      const rows = Math.max(1, Math.floor((f.z1 - f.z0 - 2.5) / 1.6)), z = f.z0 + 1.5 + 1.6 * (s % rows) + 0.8;
+      for (let x = f.x0 + 1.8; x < f.x1 - 1; x += 2.4) pts.push([x, z, x, z - 0.8]);
+      job = { speed: 0.7, dwell: 7, act: "topla" };
+    } else {
+      const z = (s % 2 ? f.z0 - 0.8 : f.z1 + 0.8);
+      for (let x = f.x0 + 4; x < f.x1 - 2; x += 9) pts.push([x, z, x, (f.z0 + f.z1) / 2]);
+      job = { speed: 1.0, dwell: 5, act: "yokla" };
+    }
+    // Gidiş ve dönüş: sıranın sonundan geri gelir (dönüşte de durur).
+    job.pts = [...pts, ...pts.slice(1, -1).reverse()];
+    cache.set(key, job);
+    return job;
+  }
+
   /** Yaya rotası (kaldırımlar ve geçitler); kişiye özgü küçük yan kayma ile. */
   _walkRoute(i, A, B, k) {
     const r = this.nav.route(A, B);
     const s = this.residents[i].seed;
-    const off = (frac(roll(s, "serit")) - 0.5) * 0.9 * (roll(s, "kaldirim", k) % 2 ? 1 : -1);
-    const pts = offsetPath(r.pts, off);
+    // Herkes yürüdüğü yönün sağından yürür (0,3–0,8 m, kişiye göre): karşıdan gelenle yan yana geçer, içinden
+    // geçmez. Köşeler kavisle dönülür.
+    const off = 0.3 + frac(roll(s, "serit")) * 0.5;
+    const pts = roundCorners(offsetPath(r.pts, off), 1.2);
     const lens = lengths(pts);
     const L = lens[lens.length - 1];
     const base = lengths(r.pts).at(-1) || 1;
@@ -969,8 +1072,40 @@ export class People {
           }
           return false;
         }
-        case "zeytinci": case "bahcivan": {
-          // Tarlada sıra boyunca ağır ağır ilerleyip eğilerek toplar.
+        case "zeytinci": {
+          // Çiftliğin dört parselinden birinde (kişiye göre), parselin ekinine göre iş: zeytinde ağaçtan ağaca
+          // yürüyüp dalları silker, bağda iki asma sırası arasında durup üzüm keser, sebzede çömelip toplar,
+          // buğdayda kenar boyunca durup başakları yoklar. Yürüyüş durakta yavaşlar, sonra devam eder.
+          const farm = w.plazas.filter((q) => q.kind === "tarla" && Math.hypot((q.x0 + q.x1) / 2 - ax, (q.z0 + q.z1) / 2 - az) < 110);
+          const f = farm.length ? farm[s % farm.length] : null;
+          if (f) {
+            const job = this._fieldWork(f, s);
+            const st = stopGo(job.pts, job.speed, job.dwell, sec + ph * 61, this._sg ??= {});
+            stand(st.x, st.z, st.heading);
+            if (st.moving) { walkPose(p, (st.dist / (0.72 * kk)) * Math.PI); return true; }
+            const u = st.stopT;
+            if (job.act === "silk") { // zeytin: kollar dallara, silkeleme
+              const sh = Math.sin(t * 7 + ph);
+              p.shL = p.shR = 2.6 + 0.12 * sh; p.elL = p.elR = 0.35; p.headPitch = -0.5; p.lean = -0.05;
+            } else if (job.act === "kes") { // bağ: göğüs hizasında budama makası
+              p.lean = 0.25; p.shR = 0.95; p.elR = 1.1 + 0.25 * Math.max(0, Math.sin(t * 3 + ph)); p.shL = 0.8; p.elL = 1.2; p.headPitch = 0.3;
+            } else if (job.act === "topla") { // sebze: çömelip toplar
+              const b = smooth(clamp(u / 1.2, 0, 1));
+              p.lean = 0.9 * b; p.hipL = p.hipR = 0.6 * b; p.kneeL = p.kneeR = 1.1 * b; p.drop = 0.32 * b;
+              p.shL = p.shR = 1.1 * b; p.elL = p.elR = 0.3 + 0.3 * Math.sin(t * 2 + ph) * b;
+            } else { // buğday: başakları yoklar
+              p.lean = 0.35; p.shR = 0.8; p.elR = 0.5; p.headPitch = 0.5; idleGesture(p, t, ph, false);
+            }
+            return true;
+          }
+          // Parsel yoksa (eski düzen): sıra boyunca ağır ağır ilerleyip eğilerek toplar.
+          const row = ((s % 7) - 3) * 2.4;
+          const r = pingPong([[ax - 32, az + row], [ax + 32, az + row]], 0.06, ph * 50);
+          stand(at.x, at.z, r.heading);
+          return true;
+        }
+        case "bahcivan": {
+          // Bahçıvan: sıra boyunca ağır ağır ilerleyip eğilerek çalışır.
           const row = ((s % 7) - 3) * 2.4;
           const r = pingPong([[ax - 32, az + row], [ax + 32, az + row]], 0.06, ph * 50);
           stand(at.x, at.z, r.heading);
@@ -1399,6 +1534,8 @@ export class People {
       else if (lo > 0 && segs[lo - 1].cross && !segs[lo - 1].look) spread = Math.max(0, 1 - (t - sg.t0) / 2.5);
     }
     if (t < leg.t0 * 60) d = 0;
+    // Kalkışta hızlanır, varışta yavaşlar (adım evresi de buna göre: ayak kaymaz).
+    if (!cross && !spread) d = easeEnds(d, leg.L);
     along(leg.pts, leg.lens, d, this._at);
     p.x = this._at.x; p.z = this._at.z; p.heading = this._at.heading;
     if (spread > 0) {

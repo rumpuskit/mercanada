@@ -210,11 +210,21 @@ def workplace(r: dict) -> dict:
     j = job(r)
     kind = j["yer"]
     names = catalog()["isyerleri"][kind]
-    # Yerel işler (muhtar): kendi mahallesinin şubesi; diğerleri kişiye göre bir şube.
-    index = address_parts(int(r["slot"]))["mahalle"] % len(names) if j.get("yerel") else roll(r["seed"], "isyeri") % len(names)
+    # Yerel işler (muhtar): kendi mahallesinin şubesi; şubesi belli meslekler (seramikçi seramik atölyesinde)
+    # o şubelerden birinde; diğerleri kişiye göre bir şube.
+    own = j.get("subeler")
+    if j.get("yerel"):
+        index = address_parts(int(r["slot"]))["mahalle"] % len(names)
+    elif own:
+        index = own[roll(r["seed"], "isyeri") % len(own)]
+    else:
+        index = roll(r["seed"], "isyeri") % len(names)
     if not is_open(f"{kind}:{index}"):
+        # Kendi şubesi açılana kadar açık olanlardan birinde (varsa kendi şubelerinden) çalışır.
         open_ = _open_branches(kind)
-        index = open_[roll(r["seed"], "isyeri") % len(open_)]
+        mine = [i for i in open_ if i in own] if own else []
+        pool = mine or open_
+        index = pool[roll(r["seed"], "isyeri") % len(pool)]
     return {"kind": kind, "index": index, "name": names[index]}
 
 

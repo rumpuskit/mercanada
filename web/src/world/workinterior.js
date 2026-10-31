@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { roll } from "../sim.js";
 import { FLOOR_H } from "./layout.js";
 import { doubleStair } from "./stairs.js";
+import { buildBusiness } from "./isletme.js";
 
 const std = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.75, ...extra });
 const GOODS = ["#d8433d", "#e8b93a", "#3e8a86", "#2f6fb5", "#8a62d1", "#f28c28", "#7fae45", "#f4f1ea"];
@@ -25,7 +26,9 @@ export function buildWorkInterior(b0, f, add0, spot0) {
   if (CW) core(b0, f, add0, CW, katlar);
   const b = CW ? { ...b0, w: b0.w - CW } : b0;
   const add = CW ? (w, h, d, lx, ...r) => add0(w, h, d, lx - CW / 2, ...r) : add0;
-  const spot = CW ? (lx, ...r) => spot0(lx - CW / 2, ...r) : spot0;
+  // Çekirdek şeridi kadar sola kaydırılmış alan (duraklı tur noktaları da: [x, z, bekleme, iş, bakılanX, bakılanZ]).
+  const shiftPath = (path) => path?.map(([x, z, d, a, fx, fz]) => [x - CW / 2, z, d, a, fx != null ? fx - CW / 2 : fx, fz]);
+  const spot = CW ? (lx, lz, h, t, path) => spot0(lx - CW / 2, lz, h, t, shiftPath(path)) : spot0;
   const hw = b.w / 2, hd = b.d / 2;
   const kind = b.kind;
   const counter = (x, z, w, color = "#8a6a52", top = "#4a4f57") => {
@@ -67,7 +70,15 @@ export function buildWorkInterior(b0, f, add0, spot0) {
     add(0.45, 0.05, 0.45, x, 0.47, z + 0.55, "#2f3540", rot);
   };
   const spots = [];
-  const S = (x, z, heading, type) => spots.push(spot(x, z, heading, type));
+  const S = (x, z, heading, type, path) => spots.push(spot(x, z, heading, type, path));
+
+  // Adlı şubeler (kafe, fırın, market, atölye) ve çarşı zanaatları kendi konseptini kurar (isletme.js).
+  // Çekirdek önündeki açık şerit: çekirdeğin ön duvarından sonra sağ kenara kadar kullanılabilir.
+  const coreZ = CW ? (katlar >= 4 ? Math.min(hd - 0.8, -hd + 6.3) : -hd + 4.2) : -hd;
+  if (buildBusiness({ b, f, katlar, add, spot, S, chair, guests, hw, hd, xr: hw + CW, coreZ })) {
+    spots.guests = guests;
+    return spots;
+  }
 
   switch (kind) {
     case "kafe": case "kahvehane": case "bufe": case "firin": case "carsi": {
@@ -94,9 +105,16 @@ export function buildWorkInterior(b0, f, add0, spot0) {
         }
       }
       if (kind === "kahvehane") add(0.06, 0.62, 1.05, -hw + 0.2, 1.75, -0.5, "#1d1f24"); // duvarda televizyon (maç yayını)
+      // Noktalar bu sırayla dolar: iki çalışanlı yerde biri tezgâhta, biri masalarda (garson), üçüncüsü tezgâhta.
       S(-1.2, -hd + 2.2, Math.PI, "counter");
+      // Garson: tezgâhtan siparişi alır, masaları yılan gibi dolaşır (her masada durup servis yapar), tezgâha döner.
+      const tour = [[1.5, -hd + 2.3, 5, "counter", 1.5, -hd]];
+      for (let r = 0; r < 2; r++) for (let c = 0; c < cols; c++) {
+        const cc = r % 2 ? cols - 1 - c : c, tx = -hw + 1.6 + cc * 2.6, tz = 0.6 + r * 2.4;
+        tour.push([tx + 0.72, tz - 0.72, 3.5, "serve", tx, tz]);
+      }
+      S(0, 1.8, 0, "waiter", tour);
       S(1.5, -hd + 2.2, Math.PI, "counter");
-      S(0, 1.8, 0, "waiter");
       break;
     }
     case "market": {
@@ -104,7 +122,14 @@ export function buildWorkInterior(b0, f, add0, spot0) {
       for (let r = 0; r < 3; r++) shelf(-1.2, -hd + 2 + r * 3.2, b.w - 6);
       shelf(0, -hd + 0.4, b.w - 1.5);
       S(hw - 2.2, hd - 3.1, 0, "counter");
-      S(-1.2, -hd + 3.6, Math.PI / 2, "shelf");
+      // Reyon görevlisi: koridorları sırayla dolaşır, raflarda durup ürün dizer.
+      const half = (b.w - 6) / 2, tour = [];
+      for (let r = 0; r < 3; r++) {
+        const az = -hd + 3.6 + r * 3.2, sz = -hd + 2 + r * 3.2;
+        const xs = r % 2 ? [-1.2 + half * 0.5, -1.2 - half * 0.5] : [-1.2 - half * 0.5, -1.2 + half * 0.5];
+        for (const x of xs) tour.push([x, az, 5, "shelf", x, sz]);
+      }
+      S(-1.2, -hd + 3.6, Math.PI / 2, "shelf", tour);
       break;
     }
     case "atolye": {
@@ -153,7 +178,12 @@ export function buildWorkInterior(b0, f, add0, spot0) {
             for (const dx of [-0.5, 0.5]) add(0.05, 0.66, 0.45, x + dx, 0.02, z, "#3c4148", 0, { shadow: false });
             for (const dx of [-0.27, 0.27]) chair(x + dx, z + 0.55, Math.PI, "#5a7fa8");
           }
-          S(cx + 0.4, -hd + 1.3, 0, "board");
+          // Öğretmen: tahtanın iki yanında yazar, sınıfa döner anlatır, sıralar arasında dolaşıp bakar.
+          S(cx + 0.4, -hd + 1.3, 0, "board", [
+            [cx - 1.4, -hd + 1.3, 7, "board", cx - 1.4, -hd], [cx + 1.4, -hd + 1.3, 6, "board", cx + 1.4, -hd],
+            [cx + 0.3, -hd + 2.0, 5, "explain", cx, -hd + 5], [cx + 1.15, -hd + 3.8, 3, "check", cx + 1.15, -hd + 6],
+            [cx + 1.15, -hd + 5.3, 3, "check", cx + 1.15, -hd + 8], [cx - 1.15, -hd + 4.5, 3, "check", cx - 1.15, -hd + 7],
+          ]);
         } else {
           // Öğretmenler odası: uzun masa, sandalyeler (çalışanlar oturur), dolap.
           add(1.2, 0.05, 3.6, cx, 0.74, -0.8, "#a07a58");
@@ -166,8 +196,10 @@ export function buildWorkInterior(b0, f, add0, spot0) {
           }
         }
       }
-      S(-hw + 2, hd - 1.0, Math.PI / 2, "walk");
-      S(hw - 2, hd - 1.0, -Math.PI / 2, "walk");
+      // Koridorda nöbetçi öğretmen ve hizmetli: derslik kapılarının önünde durup içeri bakar.
+      const doors = [0, 1, 2].map((k) => (xs[k] + xs[k + 1]) / 2);
+      S(-hw + 2, hd - 1.0, Math.PI / 2, "walk", doors.map((x) => [x, hd - 1.0, 4, "look", x, -hd]));
+      S(hw - 2, hd - 1.0, -Math.PI / 2, "walk", [...doors].reverse().map((x) => [x + 0.8, hd - 1.1, 3, "look", x, hd]));
       // Öğrenci sandalyeleri yalnızca dersliklerde (öğretmenler odasındakiler çalışan yeri).
       break;
     }
@@ -179,7 +211,11 @@ export function buildWorkInterior(b0, f, add0, spot0) {
         add(0.05, 2.0, 2.4, -hw + 3.4 + k * 5, 0.06, -hd + 1.6, "#bcd6e6");
       }
       S(0, hd - 3.0, 0, "counter");
-      S(-hw + 3, -hd + 2.8, Math.PI, "walk");
+      // Hemşire: yatakları sırayla dolaşır (yatak başında durup bakar), danışmaya uğrar.
+      S(-hw + 3, -hd + 2.8, Math.PI, "walk", [
+        [-hw + 2.9, -hd + 1.6, 7, "check", -hw + 2, -hd + 1.6], [-hw + 7.9, -hd + 1.6, 7, "check", -hw + 7, -hd + 1.6],
+        [-1.6, hd - 3.6, 4, "counter", 0, hd - 2.2],
+      ]);
       break;
     }
     case "kutuphane": {
@@ -187,6 +223,11 @@ export function buildWorkInterior(b0, f, add0, spot0) {
       for (let k = 0; k < 2; k++) table(hw / 2 - 1 + k * 0, -1 + k * 2.6, 4, false);
       counter(-1, hd - 2, 2.4, "#6b4a35");
       S(-1, hd - 2.8, 0, "counter");
+      // Kütüphaneci: rafların önünde kitap yerleştirir, okuma masalarına uğrar.
+      S(-hw / 2, -hd + 1.8, Math.PI, "walk", [
+        [-hw / 2 - b.w / 8, -hd + 1.6, 6, "shelf", -hw / 2 - b.w / 8, -hd + 0.6], [-hw / 2 + b.w / 8, -hd + 1.6, 6, "shelf", -hw / 2 + b.w / 8, -hd + 0.6],
+        [-hw / 2, -hd + 4.0, 5, "shelf", -hw / 2, -hd + 3.0], [hw / 2 - 2, 0.4, 3, "look", hw / 2 - 1, -1],
+      ]);
       break;
     }
     case "muze": {
@@ -196,7 +237,9 @@ export function buildWorkInterior(b0, f, add0, spot0) {
         add(0.45, 0.6, 0.45, x, 1.06, z, ["#c9a24a", "#8a5a3a", "#5a7a8a"][k % 3]);
       }
       for (let k = 0; k < 4; k++) add(1.6, 1.1, 0.04, -hw + 3 + k * (b.w - 6) / 3, 1.3, -hd + 0.2, ["#b8625a", "#5a7fa8", "#c9a25a", "#7a6a9a"][k]);
-      S(0, hd - 2, 0, "walk");
+      // Rehber: eserlerin yanında durup anlatır, sırayla dolaşır.
+      const ex = [0, 1, 2, 5, 4, 3].map((k) => [-hw + 2.5 + (k % 3) * (b.w - 5) / 2, -2 + Math.floor(k / 3) * 4]);
+      S(0, hd - 2, 0, "walk", ex.map(([x, z]) => [x + 1.1, z + 0.9, 7, "explain", x, z]));
       break;
     }
     case "otel": {
@@ -211,7 +254,8 @@ export function buildWorkInterior(b0, f, add0, spot0) {
           add(1.6, 0.55, 2.0, x, 0.06, -hd + 1.3, "#f3eee6");
           if (k > 0) add(0.12, 2.9, b.d - 0.4, x - 2.25, 0, 0, "#e9e2d6");
         }
-        S(-hw + 2, 1, Math.PI / 2, "walk");
+        // Kat görevlisi: oda kapılarının önünde durup odaya bakar (temizlik, kontrol).
+        S(-hw + 2, 1, Math.PI / 2, "walk", Array.from({ length: rooms }, (_, k) => [-hw + 2.2 + k * 4.5, 0.9, 6, "check", -hw + 2.2 + k * 4.5, -hd + 1.3]));
       }
       break;
     }

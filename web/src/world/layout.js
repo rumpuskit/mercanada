@@ -58,6 +58,34 @@ const STYLES = {
   muhtarlik: { w: 11, d: 6, floors: 1, roof: "hip", wall: "#f4efe6", roofColor: "#b5563f", plate: "#2f5d8a", flag: true },
 };
 
+// Şubelerin kendi cephe kimliği (tente ve duvar rengi): aynı türden işletmeler birbirinin kopyası olmasın.
+const BRANCH = {
+  "kafe:0": { awning: "#2f4a6d", wall: "#f6e3d8" }, // Yakamoz Kafe: lacivert, modern
+  "kafe:1": { awning: "#7a3a2a", wall: "#efdcc4", signFont: "serif", signFg: "#f3d9a4" }, // Lodos Kahvesi: kahve kızılı, geleneksel
+  "kafe:2": { awning: "#3e8a5a", wall: "#eef1e4", signFont: "serif" }, // İskele Çay Bahçesi: çay yeşili
+  "kafe:3": { awning: "#2f7fb5", wall: "#f4f7fa" }, // Martı Kafe: denizci mavisi
+  "kafe:4": { awning: "#d9a441", wall: "#f6ecd6" }, // Kumsal Kahvecisi: kum sarısı
+  "kafe:5": { awning: "#e0607a", wall: "#eaf2f4" }, // Dalga Kafe: canlı mercan
+  "firin:0": { awning: "#a8543a", wall: "#f3dcc4" }, // Mercan Fırını
+  "firin:1": { awning: "#c9573a", wall: "#f7e9cf" }, // Simitçi Martı: simit kırmızısı
+  "firin:2": { awning: "#5a4a3a", wall: "#e2d6c4", signFont: "serif", signFg: "#f0d7a8" }, // Taş Fırın: taş ve is
+  "market:0": { awning: "#3e8a86" }, // Ada Market
+  "market:1": { awning: "#2f5d8a", wall: "#efe9dc", signFont: "serif" }, // Liman Bakkalı
+  "market:2": { awning: "#5f8a37", wall: "#f1ead6" }, // Yokuş Manavı
+  "market:3": { awning: "#8a2f3a", wall: "#f3ece2", signFont: "serif", signFg: "#f3e2b8" }, // Mercan Şarküteri
+  "atolye:0": { awning: "#b5653f" }, // Seramik Atölyesi
+  "atolye:1": { awning: "#7a5a3e", wall: "#e8dcc8", signFont: "serif" }, // Marangozhane
+  "atolye:2": { awning: "#7a6a9a", wall: "#eee8f0" }, // Resim Atölyesi
+  "atolye:3": { awning: "#2f5d8a", wall: "#eef2f5" }, // Yelken Atölyesi
+};
+
+// Çarşı dükkânlarının zanaatları (iç düzeni isletme.js) ve tabeladaki ad: "Liman Berberi", "Lodos Terzisi"...
+const DUKKANLAR = [
+  ["berber", "Berberi"], ["terzi", "Terzisi"], ["kirtasiye", "Kırtasiyesi"], ["cicekci", "Çiçekçisi"],
+  ["aktar", "Aktarı"], ["nalbur", "Nalburu"], ["kuyumcu", "Kuyumcusu"], ["kitapci", "Kitabevi"],
+];
+const CARSI_ON = ["Çarşı", "Liman", "Lodos", "Yakamoz", "Mercan", "Poyraz", "Dalga", "Kumsal", "Martı", "İskele", "Yokuş", "Meydan"];
+
 // Merkezdeki iş yerleri; sırayla meydana en yakın boş cepheye yerleşir.
 const CENTER_ORDER = [
   ["belediye", 0], ["kahvehane", 0], ["kafe", 0], ["muze", 0], ["firin", 0], ["kafe", 1], ["market", 0],
@@ -687,7 +715,7 @@ export class World {
       for (const side of [-1, 1]) fronts.push({ axis, sign, side, cursor: R + 12, end, street, no: side < 0 ? 1 : 2 });
     }
     CENTER_ORDER.forEach(([kind, index]) => this._tag(`${kind}:${index}`, () => {
-      const style = STYLES[kind];
+      const style = { ...STYLES[kind], ...BRANCH[`${kind}:${index}`] };
       const front = fronts.filter((f) => f.cursor + style.w <= f.end).sort((a, b) => a.cursor - b.cursor)[0];
       const t = front.cursor + style.w / 2;
       front.cursor += style.w + 3;
@@ -748,7 +776,13 @@ export class World {
         })]);
       }
     }
-    fillers.sort((a, b) => a[0] - b[0] || a[1].x - b[1].x || a[1].z - b[1].z).forEach(([, b], i) => { b._k = `carsi:${i}`; });
+    // Çarşı dükkânları sırayla birer zanaat alır (berber, terzi, kırtasiye...); tabelada sokağın adıyla.
+    fillers.sort((a, b) => a[0] - b[0] || a[1].x - b[1].x || a[1].z - b[1].z).forEach(([, b], i) => {
+      b._k = `carsi:${i}`;
+      const [dukkan, ek] = DUKKANLAR[i % DUKKANLAR.length];
+      b.dukkan = dukkan;
+      b.isim = `${CARSI_ON[Math.floor(i / DUKKANLAR.length) % CARSI_ON.length]} ${ek}`;
+    });
     this.carsiWalks = [
       [[-halfW + 15, -4.9], [-R - 4, -4.9]], [[R + 4, -4.9], [halfW - 15, -4.9]],
       [[-halfW + 15, 4.9], [-R - 4, 4.9]], [[R + 4, 4.9], [halfW - 15, 4.9]],
@@ -919,7 +953,10 @@ export class World {
 
   _addWorkplace(kind, index, entry) {
     const names = cat().isyerleri[kind];
-    (this.workplaces[kind] ??= [])[index] = { name: names[index % names.length], outdoor: OUTDOOR_KINDS.has(kind), ...entry, _k: this._key };
+    const name = names[index % names.length];
+    (this.workplaces[kind] ??= [])[index] = { name, outdoor: OUTDOOR_KINDS.has(kind), ...entry, _k: this._key };
+    // Bina hangi şube olduğunu bilir: tabela adı ve iç konsepti (workinterior.js) buna göre.
+    if (entry.building) { entry.building.sube = index; entry.building.isim = name; }
   }
 
   /**

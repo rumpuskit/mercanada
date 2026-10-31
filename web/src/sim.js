@@ -233,12 +233,17 @@ export function workplace(r) {
   const j = job(r);
   const kind = j.yer;
   const names = catalog.isyerleri[kind];
-  // Yerel işler (muhtar): kendi mahallesinin şubesi; diğerleri kişiye göre bir şube.
-  let index = j.yerel ? addressParts(r.slot).mahalle % names.length : roll(r.seed, "isyeri") % names.length;
+  // Yerel işler (muhtar): kendi mahallesinin şubesi; şubesi belli meslekler (seramikçi seramik atölyesinde)
+  // o şubelerden birinde; diğerleri kişiye göre bir şube.
+  const own = j.subeler;
+  let index = j.yerel ? addressParts(r.slot).mahalle % names.length
+    : own ? own[roll(r.seed, "isyeri") % own.length] : roll(r.seed, "isyeri") % names.length;
   if (!isOpen(`${kind}:${index}`)) {
-    // Kendi şubesi açılana kadar açık olanlardan birinde çalışır.
+    // Kendi şubesi açılana kadar açık olanlardan birinde (varsa kendi şubelerinden) çalışır.
     const open = openBranches(kind);
-    index = open[roll(r.seed, "isyeri") % open.length];
+    const mine = own ? open.filter((i) => own.includes(i)) : [];
+    const pool = mine.length ? mine : open;
+    index = pool[roll(r.seed, "isyeri") % pool.length];
   }
   return { kind, index, name: names[index] };
 }

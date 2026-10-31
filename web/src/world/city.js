@@ -135,7 +135,42 @@ export function makeKit() {
     },
     glass: new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), { shadow: false }),
     windowOwners: [], // cam -> {slot} (daire) veya {workplace, seed}
+    named: [], // adlı dükkân tabelaları: { owner, pos, rot, w, h, text, bg, fg, font }
   };
+}
+
+/**
+ * Dükkân tabelası: zemin rengi üstünde işletmenin adı, kenarda ince çerçeve. Yazı tabelaya sığacak boyda;
+ * yazı tipi geç yüklenirse (Nunito) bir kez yeniden çizilir.
+ */
+function nameSign({ w, h, text, bg, fg, font }) {
+  const cv = document.createElement("canvas");
+  cv.width = 1024;
+  cv.height = Math.max(64, Math.round((1024 * h) / w));
+  const g = cv.getContext("2d");
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const draw = () => {
+    g.fillStyle = bg;
+    g.fillRect(0, 0, cv.width, cv.height);
+    const bw = Math.max(6, cv.height * 0.07);
+    g.strokeStyle = fg; g.globalAlpha = 0.55; g.lineWidth = bw * 0.5;
+    g.strokeRect(bw, bw, cv.width - 2 * bw, cv.height - 2 * bw);
+    g.globalAlpha = 1;
+    let px = Math.round(cv.height * 0.56);
+    const face = font === "serif" ? `italic 700 ${px}px Georgia, "Times New Roman", serif` : `900 ${px}px Nunito, sans-serif`;
+    g.font = face;
+    const max = cv.width - bw * 6;
+    const tw = g.measureText(text).width;
+    if (tw > max) { px = Math.floor(px * (max / tw)); g.font = face.replace(/\d+px/, `${px}px`); }
+    g.fillStyle = fg; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(text, cv.width / 2, cv.height / 2 + px * 0.05);
+    tex.needsUpdate = true;
+  };
+  draw();
+  document.fonts?.ready.then(draw);
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.55 }));
 }
 
 function kitBatches(K) {
@@ -146,6 +181,13 @@ function kitBatches(K) {
 export function buildKit(K) {
   const group = new THREE.Group();
   for (const batch of kitBatches(K)) group.add(batch.build());
+  for (const n of K.named) {
+    const m = nameSign(n);
+    m.position.copy(n.pos);
+    m.rotation.y = n.rot;
+    n.mesh = m;
+    group.add(m);
+  }
   return group;
 }
 
@@ -354,7 +396,11 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.07), b.rot, s.set(1.3, 2.45, 0.06)), y: 0.15, z: b.d / 2 + 0.07, w: 1.3, h: 2.45 };
     B.awnings.add(local(b, 0, 3.0, b.d / 2 + 0.9), b.rot, s.set(b.w - 1.6, 0.12, 1.9), st.awning);
     B.awnings.add(local(b, 0, 2.75, b.d / 2 + 1.85), b.rot, s.set(b.w - 1.6, 0.35, 0.06), st.awning);
-    B.signs.add(local(b, 0, 3.25, b.d / 2 + 0.1), b.rot, s.set(Math.min(b.w - 2, 7), 0.7, 0.12), st.awning);
+    // Tabela: işletmenin adı tente üstündeki levhada (şube rengi zeminde açık yazı).
+    const sw = Math.min(b.w - 2, 7);
+    B.signs.add(local(b, 0, 3.22, b.d / 2 + 0.1), b.rot, s.set(sw + 0.12, 0.82, 0.12), st.signFrame ?? "#3a3530");
+    if (b.isim) K.named.push({ owner: b, pos: local(b, 0, 3.63, b.d / 2 + 0.165).clone(), rot: b.rot, w: sw, h: 0.7, text: b.isim, bg: st.awning, fg: st.signFg ?? "#fbf6ec", font: st.signFont });
+    else B.signs.add(local(b, 0, 3.28, b.d / 2 + 0.12), b.rot, s.set(sw, 0.7, 0.12), st.awning);
   } else if (st.garage) {
     // Garaj kapıları (itfaiye, belediye garajı) ve yanında yaya kapısı.
     const n = Math.max(1, Math.floor((b.w - 4) / 5.5));
@@ -455,6 +501,7 @@ export function buildCity(world) {
         });
         if (touched) batch.mesh.instanceMatrix.needsUpdate = true;
       }
+      for (const n of K.named) if (n.owner === b) n.mesh.visible = !on;
     },
     /** Kapılar: içinden biri geçenler açılır (menteşesinden dışa doğru), diğerleri kapanır. */
     setOpenDoors(open) {

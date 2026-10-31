@@ -235,7 +235,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const b = dollhouse.building;
     if (!b.daireler) {
       icon(svg(BINA_SIMGE[b.kind] ?? "bina"), null, true);
-      $("card-handle").textContent = dollhouse.workName ?? (/Fener/.test(b.address ?? "") ? "Fener bekçisinin evi" : BUILDING_NAMES[b.kind] ?? "Dükkân");
+      $("card-handle").textContent = dollhouse.workName ?? b.isim ?? (/Fener/.test(b.address ?? "") ? "Fener bekçisinin evi" : BUILDING_NAMES[b.kind] ?? "Dükkân");
       $("card-title").textContent = `${b.address ?? ""} · ${dollhouse.floor + 1}. kat`;
       // Yalnızca şu an bu katta çalışanlar (izinli, yolda ya da evde olanlar listelenmez).
       const rows = [];
