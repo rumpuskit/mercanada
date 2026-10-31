@@ -98,18 +98,26 @@ export async function yukle(dosya, log = console.log) {
   } finally {
     closeSync(fd);
   }
-  log(`yüklendi (${(boyut / 1e6).toFixed(1)} MB), TikTok işliyor…`);
-  for (let i = 0; i < 60; i++) {
+  log(`yüklendi (${(boyut / 1e6).toFixed(1)} MB), TikTok işliyor… (${init.publish_id})`);
+  let son = null;
+  for (let i = 0; i < 120; i++) {
     await new Promise((ok) => setTimeout(ok, 5000));
     const s = await api("/post/publish/status/fetch/", { publish_id: init.publish_id }, token);
+    if (s.status !== son?.status) log(`  durum: ${s.status}${s.fail_reason ? " " + s.fail_reason : ""}`);
+    son = s;
     if (s.status === "SEND_TO_USER_INBOX" || s.status === "PUBLISH_COMPLETE") return { publish_id: init.publish_id, status: s.status };
     if (s.status === "FAILED") throw new Error(`TikTok işleyemedi: ${s.fail_reason ?? "bilinmiyor"}`);
   }
-  throw new Error("TikTok 5 dakikada işlemeyi bitirmedi (gelen kutusunu sonra kontrol et)");
+  throw new Error(`TikTok 10 dakikada işlemeyi bitirmedi (son durum ${son?.status}, ${init.publish_id}; gelen kutusunu sonra kontrol et)`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [komut, arg] = process.argv.slice(2);
+  if (komut === "sorgula") {
+    // Bir yüklemenin durumu: node tiktok.mjs sorgula PUBLISH_ID
+    console.log(await api("/post/publish/status/fetch/", { publish_id: arg }, await belirtec()));
+    process.exit(0);
+  }
   if (komut === "baglan") {
     const state = randomBytes(12).toString("hex");
     yaz({ ...durumOku(), state });

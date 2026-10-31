@@ -17,7 +17,8 @@ PUBLIC = ROOT / "public"            # yayınlanan listenin yerel kopyası
 SECRETS = ROOT / "secrets"          # yalnız mercanada kullanıcısı okur (chmod 700)
 DB = os.environ.get("MERCANADA_DB", "mercanada")
 
-RETURN_WINDOW_DAYS = 7
+RETURN_WINDOW_DAYS = 7   # takibi bırakanın evi bu kadar tutulur
+ISTEK_GUN = 30           # yorum isteği bu kadar bekler (yorumlar da son 30 günden okunur); sonra silinir
 
 
 def psql(sql: str, db: str = DB, extra: list[str] | None = None) -> str:

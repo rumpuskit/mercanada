@@ -134,8 +134,11 @@ class TasinmaTest(unittest.TestCase):
         # "yeni" taşınınca bekleyen isteği uygulanır.
         code, out = self.send({"tur": "liste", "takipci": 7, "liste": liste + [["yeni", 500, 0]]})
         self.assertEqual(out["istek_uygulanan"], [["yeni", "hobi", "tavla"]])
-        # 7 günden eski istek kaydı silinir (etkisi sakinde kalır); çıkanın istekleri hemen silinir.
+        # İstek kaydı 30 gün tutulur (8 günlük durur), sonra silinir (etkisi sakinde kalır); çıkanın istekleri hemen silinir.
         self.q("UPDATE istekler SET created_at = now() - interval '8 days' WHERE handle = 'yeni'")
+        self.send({"tur": "yorumlar", "yorumlar": []})
+        self.assertEqual(self.q("SELECT count(*) FROM istekler WHERE handle = 'yeni'"), "1")
+        self.q("UPDATE istekler SET created_at = now() - interval '31 days' WHERE handle = 'yeni'")
         self.send({"tur": "yorumlar", "yorumlar": []})
         self.assertEqual(self.q("SELECT count(*) FROM istekler WHERE handle = 'yeni'"), "0")
         self.assertEqual(self.q("SELECT overrides->>'hobi' FROM sakinler WHERE handle = 'yeni'"), "tavla")

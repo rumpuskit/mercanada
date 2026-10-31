@@ -7,16 +7,16 @@ Yorumdaki biçim (büyük/küçük harf ve Türkçe karakter fark etmez, birkaç
     hobi: satranç        evcil: kedi                   adımı gizle / adımı göster
 Yalnız katalogdaki seçenekler geçer (kadrolu işler, ör. cankurtaran, istenemez; "istenebilir" olanlar, ör. polis ve
 fener bekçisi, hariç). İstek yalnız yorumu yazanın kendisi için ve yalnız adada oturuyorsa uygulanır; henüz
-taşınmamışsa 7 gün bekler.
+taşınmamışsa 30 gün bekler (ISTEK_GUN).
 Aynı konuda birden çok istek varsa en son yazılan geçer.
 
 Yorum metni saklanmaz: yalnız ayrıştırılmış istek (kullanıcı adı, tür, değer, yorum kimliği) tutulur
-ve 7 gün sonra silinir; isteğin etkisi sakinin kaydında kalır.
+ve 30 gün sonra silinir; isteğin etkisi sakinin kaydında kalır.
 
 Kullanım (sunucuda, mercanada kullanıcısıyla):
     python3 istekler.py dene "mesleğim balıkçı olsun"     # ayrıştırmayı dene, kaydetme
     python3 istekler.py ekle kullaniciadi meslek balikci  # DM ya da canlı yayından gelen istek
-    python3 istekler.py liste [--gun 7]                   # son isteklerin dökümü (haftalık video)
+    python3 istekler.py liste [--gun 30]                  # son isteklerin dökümü (haftalık video)
 """
 
 import argparse
@@ -27,7 +27,7 @@ import time
 from functools import cache
 
 from mercanada_sim import sim
-from ortak import DB, RETURN_WINDOW_DAYS, psql, publish
+from ortak import DB, ISTEK_GUN, psql, publish
 
 TURLER = ("meslek", "hobi", "evcil", "gizle")
 MAX_METIN = 300
@@ -180,7 +180,7 @@ def kaydet(satirlar: list, kaynak: str, db: str = DB) -> int:
 
 
 def uygula(db: str = DB) -> list:
-    """Bekleyen istekleri adada oturanlara uygular, 7 günden eski kayıtları siler (yayın yapmaz)."""
+    """Bekleyen istekleri adada oturanlara uygular, 30 günden eski kayıtları siler (yayın yapmaz)."""
     c = sim.catalog()
     # Tek koltuklu meslekler (muhtar, okul müdürü, fener bekçisi): koltuk, mahallenin şubesidir (sim.workplace ile aynı:
     # mahalle % şube sayısı; okul sayısı mahalleden azsa iki mahalle aynı okulu paylaşır; tek fener: adada bir koltuk).
@@ -188,7 +188,7 @@ def uygula(db: str = DB) -> list:
     tek = ", ".join(f"'{j['id']}'" for j in tekler) or "NULL"
     mahalle = sim.cap("daire_per_bina") * sim.cap("bina_per_sokak") * sim.cap("sokak_per_mahalle")
     koltuk = "CASE {} ELSE 0 END".format(" ".join(f"WHEN '{j['id']}' THEN {{s}}.slot / {mahalle} % {len(c['isyerleri'][j['yer']])}" for j in tekler)) if tekler else "0"
-    sql = UYGULA_SQL.format(gun=RETURN_WINDOW_DAYS, tek=tek, koltuk_a=koltuk.replace("{s}", "s").replace("CASE", "CASE i.deger"),
+    sql = UYGULA_SQL.format(gun=ISTEK_GUN, tek=tek, koltuk_a=koltuk.replace("{s}", "s").replace("CASE", "CASE i.deger"),
                             koltuk_o=koltuk.replace("{s}", "o").replace("CASE", "CASE a.deger"))
     return json.loads(psql(sql, db) or "[]")
 
@@ -228,7 +228,7 @@ def main() -> None:
     p.add_argument("deger", help="katalog kimliği ya da adı (gizle için: evet/hayir)")
     p.add_argument("--kaynak", default="dm", choices=["dm", "canli"])
     p = sub.add_parser("liste", help="son isteklerin dökümü")
-    p.add_argument("--gun", type=int, default=RETURN_WINDOW_DAYS)
+    p.add_argument("--gun", type=int, default=ISTEK_GUN)
     parser.add_argument("--db", default=DB)
     args = parser.parse_args()
 
@@ -246,7 +246,7 @@ def main() -> None:
         now = int(time.time())
         kaydet([[handle, args.tur, deger, f"{args.kaynak}:{handle}:{args.tur}:{now}", now]], args.kaynak, args.db)
         uygulanan = uygula(args.db)
-        durum = "uygulandı" if any(u[0] == handle for u in uygulanan) else "adada değil, taşınınca uygulanacak (7 gün)"
+        durum = "uygulandı" if any(u[0] == handle for u in uygulanan) else f"adada değil, taşınınca uygulanacak ({ISTEK_GUN} gün)"
         print(json.dumps({"istek": [handle, args.tur, deger], "durum": durum,
                           "yayin": publish(args.db) if uygulanan else None}, ensure_ascii=False))
         return

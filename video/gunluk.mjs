@@ -5,8 +5,9 @@
 //   node gunluk.mjs [--yuva aksam|ogle|sabah] [--uret] [--onizleme] [--bildir] [--zorla] [--ac] [--hikaye h.json]
 //
 // --hikaye: günün hikâyesi elle (gerçek olaylardan, sitede doğrulanmış): {"tur", "kanca", "govde": [{ses, yazi?,
-// vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], "saat": "19:40"}.
-// İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
+// vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], "saat": "19:40",
+// "imza2": {ses, yazi?} (kilit sayacının ikinci cümlesi: sıradaki yer yerine başka bir hedef, ör. zeplin),
+// "ilk": imza çekimi (varsayılan "ucus")}. İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
 //
 // Yuva: akşam (21:00 taşınmasından sonra, günün özeti), öğle (bir sakinin hikâyesi ya da istek), sabah
 // (09:00 taşınma haberi). Kaç yuvanın üretileceği takipçi sayısına bağlı (SIKLIK); gerekmeyen yuva sessizce
@@ -138,7 +139,7 @@ const BOS = [
   { id: "gece", govde: [c("Akşam oldu."), c("Fener yandı."), c("Bakan kimse yok.", null, true)], soru: c("Adanın ilk gecesini kim geçirecek?"), cekim: ["fener", "ucus"], saat: "20:10" },
 ];
 
-let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null;
+let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus";
 if (acilan.length) {
   tur = "acilis";
   const s = acilan.at(-1);
@@ -206,6 +207,7 @@ if (opt("--hikaye")) {
   const cc = (x) => c(x.ses, x.yazi ?? null, !!x.vurus);
   tur = h.tur ?? "ozel"; govde = h.govde.map(cc); soru = cc(h.soru); cekim = h.cekim; etiketler = h.etiketler ?? [];
   saat = h.saat ?? saat; ozelKanca = h.kanca ?? null;
+  imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim;
 }
 if (!tur || !govde.length) {
   tur = "bos";
@@ -217,11 +219,11 @@ if (!tur || !govde.length) {
 // İmza (kilit sayacı) ve kapanış (soru + takip + istek kalıbı).
 const imza = N === 0
   ? [c("Bu adada kimse yaşamıyor."), c(`${next.ad} için ${say(need)} kişi lazım.`, `${next.ad} için ${fmt(need)} kişi lazım.`)]
-  : [c(`Bu adada ${say(N)} kişi yaşıyor.`, `Bu adada ${fmt(N)} kişi yaşıyor.`), ...(next ? [c(`${next.ad} için ${say(need)} kişi daha lazım.`, `${next.ad} için ${fmt(need)} kişi daha lazım.`)] : [])];
+  : [c(`Bu adada ${say(N)} kişi yaşıyor.`, `Bu adada ${fmt(N)} kişi yaşıyor.`), ...(imza2 ? [imza2] : next ? [c(`${next.ad} için ${say(need)} kişi daha lazım.`, `${next.ad} için ${fmt(need)} kişi daha lazım.`)] : [])];
 const kapanis = [soru, c("Takip eden adaya taşınıyor."), c("Mesleğini sen seç."), c("Yorumuna yaz: meslek, balıkçı.", "Yorumuna yaz:\nmeslek: balıkçı")];
 const cumleler = [...imza, ...govde, ...kapanis];
 const gruplar = [
-  { cekim: "ucus", arayuz: true, ilk: 0, son: imza.length - 1 },
+  { cekim: ilkCekim, arayuz: true, ilk: 0, son: imza.length - 1 },
   ...splitGovde(govde.length, cekim).map(([a, b, ck]) => ({ cekim: ck, ilk: imza.length + a, son: imza.length + b })),
   // Kapanış üç çekim: soru (konunun son açısı), "takip eden adaya taşınıyor" (iskele), istek kalıbı (yazılı son kare).
   { cekim: typeof cekim.at(-1) === "object" ? "meydan" : cekim.at(-1), varyantEk: 1, ilk: imza.length + govde.length, son: imza.length + govde.length },
@@ -248,7 +250,7 @@ for (const x of cumleler) console.log("   " + x.ses + (x.vurus ? "   [vuruş]" :
 const kanca = ozelKanca ?? { acilis: `Bugün adada yeni bir yer açıldı 🏗️`, yeniler: `Bugün ${fmt(yeniler.length)} kişi Mercanada'ya taşındı 🧳`, istek: "Yorumlardan gelen istek işlendi ✍️", sakin: "Bir sakinin günü 👀", bos: "Bu adada henüz kimse yaşamıyor 🏝️" }[tur];
 const aciklama = [
   kanca,
-  `${soru.ses} 👇`,
+  `${soru.yazi ?? soru.ses} 👇`,
   `Mesleğini sen seç: yorumuna "meslek: balıkçı" gibi yaz.`,
   etiketler.length ? etiketler.map((h) => "@" + h).join(" ") : null,
   "Kendini bul: mercanada.rumpuskit.com",
@@ -305,6 +307,8 @@ function CEKIM(ad, v, sure, arayuz) {
     kapanis: () => ({ adres: a, kamera: [[0, 160, 180, 420, 0, 0, -60], [sure, 200, 250, 500, 0, 0, -80]], yazilar: [{ metin: "Takip et,<br>adaya taşın.", alt: `TikTok'ta<br><small>@${TIKTOK}</small>`, bas: 0.2, son: sure, yer: "ust" }] }),
   };
   const shot = (L[ad] ?? L.ucus)();
+  // Zeplin henüz açılmadıysa çekimde önizleme olarak gösterilir (?zeplin); metin bunu söylemeli ("150. sakinde").
+  if (typeof ad === "string" && ad.startsWith("zeplin") && !sim.isOpen("zeplin")) shot.adres += "&zeplin";
   if (arayuz) shot.arayuz = true;
   return shot;
 }
