@@ -88,17 +88,14 @@
     </div>
 
     <div id="navbtns">
-      <button id="menu-btn" aria-label="Menü" aria-expanded="false" aria-controls="menu-panel"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg></button>
       <button id="sound" aria-label="Ortam sesleri"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
       <button id="compass" aria-label="Kuzeye çevir"><span id="compass-needle"><svg class="i pusula" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 16 12H8z" fill="#e0607a" stroke="none"/><path d="M12 21.5 8 12h8z" fill="currentColor" stroke="none" opacity=".4"/></svg></span></button>
       <button id="zoom-in" aria-label="Yakınlaştır">+</button>
       <button id="zoom-out" aria-label="Uzaklaştır">−</button>
     </div>
 
-    <div id="menu-panel" hidden>
-      <div class="yerler-head">Adada</div>
-      <div class="yerler-grid" id="menu-grid"></div>
-    </div>
+    <!-- Adada yapılacaklar: telefonda alt sekme çubuğu, masaüstünde aramanın üstünde etiketli şerit. -->
+    <nav id="dock" aria-label="Adada"></nav>
 
     <!-- Gazete, Benim evim, Anket: ortak açılır sayfa (masaüstünde ortada, telefonda alttan). -->
     <div id="sayfa" hidden role="dialog" aria-modal="true" aria-labelledby="sayfa-baslik">

@@ -83,11 +83,12 @@ const { residents, waiting, listError, peak = 0, secim = null } = sample > 0 ? s
 // Doğrulanmış sakinlerin tercihleri ve anket sonuçları (Worker): evler, evcil adları, günün olayı ve sinema
 // filmi bunlara göre. Alınamazsa ada varsayılanlarla kurulur (bekletmez: en çok 4 sn).
 const prefsData = {};
+const oylarim = {}; // açılıştaki anket durumu (bu cihaz oy verdi mi): sekmedeki "yeni" noktası için
 if (!(sample > 0)) {
   const within = (p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error("zaman aşımı")), 4000))]);
-  const [t, a] = await Promise.allSettled([within(api.tercihler()), within(api.anket([`tema:${dateKey(today)}`, `film:${weekKey(today)}`])), within(api.ping())]);
+  const [t, a] = await Promise.allSettled([within(api.tercihler()), within(api.anket([`tema:${dateKey(today)}`, `tema:${dateKey(today + 1)}`, `film:${weekKey(today)}`])), within(api.ping())]);
   if (t.status === "fulfilled") Object.assign(prefsData, t.value.tercih ?? {});
-  if (a.status === "fulfilled") setVotes(a.value);
+  if (a.status === "fulfilled") { setVotes(a.value); Object.assign(oylarim, a.value); }
 }
 setPrefs(prefsData, residents);
 progress(0.16, "Ada kuruluyor…");
@@ -369,7 +370,8 @@ if (params.has("denetle")) globalThis.__ada = { world, people, traffic, resident
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic, zeplin });
-const ui = createUI({ residents, people, world, dollhouse, stories, traffic, zeplin, capture, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+const claim = {}; // "Bu benim" (karttan Benim evim'e): ben oluşturulunca doldurulur
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, zeplin, capture, claim, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
 // Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
 follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false, false); };
@@ -394,29 +396,40 @@ const ben = createBen({
     if ("gun" in patch) { const d = people.day; people.day = null; people.setDay(d); }
   },
 });
-const anket = createAnket({ sayfa: menu.sayfa, today: () => sim.dayOf(simNow()), world, toast: ui.toast });
+const anket = createAnket({ sayfa: menu.sayfa, today: () => sim.dayOf(simNow()), world, toast: ui.toast, onVote: (id, secim) => { oylarim[id] = { ...(oylarim[id] ?? {}), benim: secim }; menu.refresh(); } });
 const flyToTheme = () => {
   const th = people.theme;
   if (!th) return;
   const at = th.yer === "cami" ? world.workplaces.cami?.find(Boolean)?.door : th.id === "sinema" && people.cinema ? people.cinema.spot : world.placeOf(th.yer).anchors[0];
   if (at) { menu.sayfa.close(); ui.close(); flyTo(at[0], Math.max(0, world.height(at[0], at[1])), at[1], 90); }
 };
-menu.add({ icon: "kitap", label: "Gazete", run: () => menu.sayfa.open("Mercanada Gazetesi", gazete({
-  residents, people, world, zeplin, today: () => sim.dayOf(simNow()), at: (r) => (r?.hidden ? "Gizli komşu" : "@" + (r?.handle ?? "?")),
-  select: (i) => { menu.sayfa.close(); ui.select(i); }, flyToTheme,
-})) });
-// Doğrulama ve anket Worker'ın kayıt API'sini ister (yayında değilse menüde görünmez).
-menu.add({ icon: "ev", label: "Benim evim", run: () => ben.open(), hidden: () => !api.available });
-menu.add({ icon: "kamera", label: "Fotoğraf modu", run: () => { ui.close(); menu.enterPhoto(); } });
-menu.add({ icon: "sepet", label: "Anket", run: () => anket.open(), hidden: () => !api.available });
-menu.add({ icon: "harita", label: "Ada turu", run: () => { ui.close(); tour.start(); } });
-menu.add({ icon: "goz", label: () => (hidden.found() ? "Saklı nesne: bulundu" : "Saklı nesne"), run: () => {
+// Sekmeler: "yeni" noktası bu cihazda yapılmamış şeyler için (bugünün gazetesi, açık anket, saklı nesne...).
+const seen = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+const todayKey = () => dateKey(sim.dayOf(simNow()));
+const anketAcik = () => {
+  const t = sim.dayOf(simNow()), wd = sim.weekday(t + 1);
+  const temaAcik = !(wd === 5 || wd === 6 || (wd === 4 && world.workplaces.cami?.some(Boolean)));
+  return (temaAcik && !oylarim[`tema:${dateKey(t + 1)}`]?.benim) || !oylarim[`film:${weekKey(t)}`]?.benim;
+};
+menu.add({ icon: "kitap", label: "Gazete", badge: () => seen.get("gazete") !== todayKey(), run: () => {
+  seen.set("gazete", todayKey());
+  menu.sayfa.open("Mercanada Gazetesi", gazete({
+    residents, people, world, zeplin, today: () => sim.dayOf(simNow()), at: (r) => (r?.hidden ? "Gizli komşu" : "@" + (r?.handle ?? "?")),
+    select: (i) => { menu.sayfa.close(); ui.select(i); }, flyToTheme,
+    sakli: () => ({ ...hidden.info(), bulundu: hidden.found() }), tur: () => { menu.sayfa.close(); ui.close(); tour.start(); },
+  }));
+} });
+menu.add({ icon: "ev", label: "Benim evim", short: "Evim", badge: () => !seen.get("evim"), hidden: () => !api.available, run: () => { seen.set("evim", "1"); ben.open(); } });
+menu.add({ icon: "sepet", label: "Anket", badge: anketAcik, hidden: () => !api.available, run: () => anket.open() });
+menu.add({ icon: "kamera", label: "Fotoğraf", badge: () => !seen.get("foto"), run: () => { seen.set("foto", "1"); ui.close(); menu.enterPhoto(); } });
+menu.add({ icon: "goz", label: "Saklı nesne", short: "Saklı", badge: () => !hidden.found(), run: () => {
   const h = hidden.info();
   if (!h) return;
   if (hidden.found()) return ui.toast(`Bugünkü ${h.ad} bulundu. Yarın yenisi saklanacak.`);
   ui.toast(`İpucu: bugün ${h.area} ${h.ad} var. Yakınlaş ve ona dokun.`, 5000);
 } });
 ben.peek();
+if (api.available) Object.assign(claim, { open: (h) => { seen.set("evim", "1"); ui.close(); ben.open(h); menu.refresh(); }, me: () => ben.handle });
 if (globalThis.__ada) Object.assign(globalThis.__ada, { hidden, menu, tour, ben, city, capture });
 
 // Bir sakine dokununca kartını aç.
@@ -435,6 +448,7 @@ canvas.addEventListener("pointerup", (e) => {
   if (hidden.pick(raycaster)) {
     const h = hidden.info(), res = hidden.markFound();
     const seri = res.seri > 1 ? ` ${res.seri} gündür üst üste buluyorsun.` : "";
+    menu.refresh();
     if (api.available) api.bulundu(dateKey(h.day), true).then((r) => ui.toast(`Buldun: ${h.ad}!${seri} Bugün ${r.n} kişi buldu.`, 5000)).catch(() => ui.toast(`Buldun: ${h.ad}!${seri}`, 5000));
     else ui.toast(`Buldun: ${h.ad}!${seri}`, 5000);
     return;

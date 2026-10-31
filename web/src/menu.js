@@ -8,22 +8,23 @@ import * as sim from "./sim.js";
 const $ = (id) => document.getElementById(id);
 
 export function createMenu({ capture, minute, today, shiftView, toast }) {
+  // Sekme çubuğu (#dock): telefonda altta, masaüstünde aramanın üstünde; etiketli düğmeler ve "yeni" noktası.
   const items = [];
-  const panel = $("menu-panel"), btn = $("menu-btn");
-  const show = (open) => { panel.hidden = !open; btn.setAttribute("aria-expanded", String(open)); };
-  btn.addEventListener("click", () => show(panel.hidden));
-  $("scene").addEventListener("pointerdown", () => show(false));
-
+  const dock = $("dock");
   function render() {
-    $("menu-grid").replaceChildren(...items.filter((it) => !it.hidden?.()).map((it) => {
+    dock.replaceChildren(...items.filter((it) => !it.hidden?.()).map((it) => {
       const b = document.createElement("button");
-      b.innerHTML = `<span class="ic">${svg(it.icon)}</span><span></span>`;
-      b.lastChild.textContent = typeof it.label === "function" ? it.label() : it.label;
-      b.addEventListener("click", () => { show(false); it.run(); });
+      b.type = "button";
+      // İki etiket: tam (geniş ekran) ve kısa (telefon sekme çubuğu); hangisinin görüneceğine CSS karar verir.
+      b.innerHTML = `<span class="ic">${svg(it.icon)}</span><span class="lb"></span><span class="ks"></span>`;
+      b.querySelector(".lb").textContent = typeof it.label === "function" ? it.label() : it.label;
+      b.querySelector(".ks").textContent = it.short ?? b.querySelector(".lb").textContent;
+      if (it.badge?.()) b.classList.add("yeni");
+      b.setAttribute("aria-label", b.querySelector(".lb").textContent);
+      b.addEventListener("click", () => { it.run(); render(); });
       return b;
     }));
   }
-  btn.addEventListener("click", render);
 
   // --- ortak sayfa ---
   const sayfa = {
@@ -84,8 +85,10 @@ export function createMenu({ capture, minute, today, shiftView, toast }) {
 
   return {
     sayfa,
-    /** Menüye öğe ekler: { icon, label, run, hidden? }. */
-    add(item) { items.push(item); },
+    /** Sekme ekler: { icon, label, short?, run, hidden?, badge? }. */
+    add(item) { items.push(item); render(); },
+    /** Görünürlük ya da "yeni" noktası değişince. */
+    refresh: render,
     enterPhoto,
     get photo() { return foto; },
   };

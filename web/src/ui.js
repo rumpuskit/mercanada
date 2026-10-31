@@ -27,7 +27,7 @@ const $ = (id) => document.getElementById(id);
 // Sakinin görünen adı: adını gizlemek isteyenler "Gizli komşu" olarak görünür.
 export const at = (r) => (r.hidden ? "Gizli komşu" : "@" + r.handle);
 
-export function createUI({ residents, people, world, dollhouse, stories, traffic, zeplin = null, capture = null, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null }) {
+export function createUI({ residents, people, world, dollhouse, stories, traffic, zeplin = null, capture = null, claim = null, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
   $("cta").href = TIKTOK_URL;
   // İskelede bekleyenler: takip etmiş, sıradaki taşınmayı bekleyenler. Dokununca iskeleye uçar.
@@ -209,6 +209,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     const f = follow.get();
     followActions(f?.kind === "sakin" && f.i === selected ? f.view : null, { kind: "sakin", i: selected }, ["goz", "Gözünden bak"]);
     if (!r.hidden && capture) action(["paylas", "Paylaş"], () => shareResident(selected));
+    // Kendini bulan için davet: "Bu benim" doğrulamaya (Benim evim) adı dolu götürür; doğrulanmışsa "Evimi döşe".
+    if (!r.hidden && claim?.open) action(["ev", claim.me?.() === r.handle ? "Evimi döşe" : "Bu benim"], () => claim.open(r.handle));
     if (tab === "bugun") {
       const homeLabel = (k) => {
         const seg = people.plans[selected][k];

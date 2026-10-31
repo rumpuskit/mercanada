@@ -8,7 +8,7 @@ import { CICEK_AD, SECENEK, dateKey, setPrefs } from "./tercih.js";
 import * as sim from "./sim.js";
 
 export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim, prefsData }) {
-  let state = null, poll = null, busy = false;
+  let state = null, poll = null, busy = false, prefill = "";
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
   const button = (text, cls, onClick) => { const b = el("button", text, cls); b.addEventListener("click", onClick); return b; };
   const idxOf = (h) => residents.findIndex((r) => r.handle === h);
@@ -36,7 +36,7 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
     out.push(el("p", "Adadaki evin senin mi? Kendini doğrula: evinin duvar ve koltuk rengini, pencerendeki çiçekleri, evcilinin adını seç; bugün ne yapacağına ve kiminle buluşacağına sen karar ver."));
     out.push(el("p", `Nasıl: kullanıcı adını yaz, sana 4 haneli bir kod verelim; kodu @${TIKTOK} videolarımızdan birine yorum olarak yaz. Şifre ya da giriş yok.`, "muted"));
     const input = el("input");
-    Object.assign(input, { type: "text", placeholder: "@kullanıcıadı", autocomplete: "off", spellcheck: false, inputMode: "text" });
+    Object.assign(input, { type: "text", placeholder: "@kullanıcıadı", autocomplete: "off", spellcheck: false, inputMode: "text", value: prefill ? "@" + prefill : "" });
     input.className = "ben-input";
     input.style.cssText = "width:100%;box-sizing:border-box;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--glass-2);color:var(--ink);font:800 15px Nunito,system-ui,sans-serif;margin:8px 0";
     const msg = el("p", "", "muted");
@@ -147,7 +147,9 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
   }
 
   return {
-    open() {
+    /** handle: karttaki "Bu benim" ile gelindiyse ad kutusu dolu gelir. */
+    open(handle = "") {
+      prefill = handle;
       sayfa.open("Benim evim", el("p", "Yükleniyor…", "muted"));
       refresh();
     },

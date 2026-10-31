@@ -44,6 +44,13 @@ export function gazete(d) {
     out.push(p);
   }
 
+  // Günün saklı nesnesi (ipucu bölge, bulunduysa söyler).
+  const sk = d.sakli?.();
+  if (sk?.ad) {
+    out.push(el("h3", "Saklı nesne"));
+    out.push(el("p", sk.bulundu ? `Bugünkü ${sk.ad} bulundu. Yarın yenisi saklanacak.` : `Bugün adada ${sk.ad} saklı: ${sk.area} bak, yakınlaş ve ona dokun.`));
+  }
+
   // Bugün ve dün gelenler.
   const named = residents.map((r, i) => [r, i]).filter(([r]) => !r.hidden);
   const bugun = named.filter(([r]) => r.arrived_day === day), dun = named.filter(([r]) => r.arrived_day === day - 1);
@@ -135,6 +142,13 @@ export function gazete(d) {
       ul.append(li);
     }
     out.push(ul);
+  }
+  if (d.tur) {
+    const p = el("p");
+    const a = el("span", "Ada turuna çık (30 saniye)", "link");
+    a.addEventListener("click", () => d.tur());
+    p.append(a);
+    out.push(el("h3", "Adayı tanı"), p);
   }
   out.push(el("p", "TikTok'ta @livemercanada'yı takip eden adaya taşınır. Mesleğini seçmek için videolarımıza “meslek: balıkçı” gibi yaz.", "muted"));
   return out;

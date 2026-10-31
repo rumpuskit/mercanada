@@ -1200,14 +1200,58 @@ html[data-vakit="gece"] #loading {
   backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
 
-/* Menü paneli: sağdaki düğmelerin solunda. */
-#menu-panel {
-  position: fixed; right: calc(max(12px, env(safe-area-inset-right)) + 52px); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 70px);
-  width: min(320px, calc(100vw - 90px)); padding: 12px; border-radius: var(--radius); z-index: 30;
-  background: var(--glass-solid); border: 1px solid var(--line); box-shadow: var(--shadow);
+/* Sekme çubuğu: masaüstünde aramanın üstünde etiketli şerit; telefonda alt sekme çubuğu (aşağıda). */
+#dock {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(max(16px, env(safe-area-inset-bottom)) + 62px);
+  display: flex; gap: 4px; padding: 5px; border-radius: 999px; z-index: 5;
+  background: var(--glass); border: 1px solid var(--line); box-shadow: var(--shadow);
   backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
 }
-#menu-btn[aria-expanded="true"] { color: var(--accent); background: var(--accent-soft); }
+#dock:empty { display: none; }
+#dock button {
+  position: relative; display: flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--ink);
+  padding: 8px 13px; border-radius: 999px; cursor: pointer; font: 800 14px "Nunito", system-ui, sans-serif; white-space: nowrap;
+}
+#dock button:hover, #dock button:focus-visible { background: var(--accent-soft); color: var(--accent); }
+#dock .ic { display: grid; place-items: center; font-size: 18px; color: var(--accent); }
+#dock .ks { display: none; }
+/* "Yeni": bu cihazda yapılmamış (bugünün gazetesi, verilmemiş oy, bulunmamış saklı nesne...). */
+#dock button.yeni::after {
+  content: ""; position: absolute; top: 6px; right: 8px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px var(--glass-solid);
+}
+#arama { z-index: 10; } /* yer paneli ve öneriler şeridin üstüne açılır */
+@media (min-width: 900px) and (max-width: 1180px) {
+  #dock button { flex-direction: column; gap: 1px; padding: 5px 11px; font-size: 11.5px; }
+  #dock .lb { display: none; }
+  #dock .ks { display: block; }
+  #dock button.yeni::after { top: 4px; right: 10px; }
+}
+@media (max-width: 899px) {
+  #dock {
+    left: 0; right: 0; transform: none; bottom: 0; border-radius: 0; justify-content: space-around; gap: 0;
+    padding: 4px max(6px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    border-width: 1px 0 0; background: var(--glass-solid);
+  }
+  #dock button { flex: 1; flex-direction: column; gap: 2px; padding: 6px 2px 5px; border-radius: 12px; font: 800 11.5px "Nunito", system-ui, sans-serif; }
+  #dock .ic { font-size: 20px; }
+  #dock .lb { display: none; }
+  #dock .ks { display: block; }
+  #dock button.yeni::after { top: 4px; right: calc(50% - 18px); }
+  /* Sekme çubuğu yüksekliği (~56 px) kadar yukarı: arama, kart, kat çubuğu, bildirim ve tur. */
+  #arama { bottom: calc(env(safe-area-inset-bottom) + 66px); }
+  #card { bottom: calc(env(safe-area-inset-bottom) + 126px) !important; max-height: 42vh; }
+  #floorbar:not([hidden]) ~ #sol #card { bottom: calc(env(safe-area-inset-bottom) + 176px) !important; }
+  #floorbar { bottom: calc(env(safe-area-inset-bottom) + 122px) !important; }
+  #toast { bottom: calc(env(safe-area-inset-bottom) + 134px); }
+  #tur { bottom: calc(env(safe-area-inset-bottom) + 130px); }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  #dock { left: max(12px, env(safe-area-inset-left)); right: auto; bottom: max(10px, env(safe-area-inset-bottom)); border-radius: 16px; border-width: 1px; padding: 3px; }
+  #dock button { flex: none; padding: 4px 9px; }
+  #arama { bottom: max(10px, env(safe-area-inset-bottom)); }
+  #card { bottom: auto !important; }
+}
 
 /* Ortak sayfa (gazete, benim evim, anket). */
 #sayfa { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(15, 22, 38, 0.32); }
@@ -1245,7 +1289,7 @@ html[data-vakit="gece"] #loading {
 }
 
 /* Fotoğraf modu: arayüz gizlenir. */
-body.foto #hud, body.foto #card, body.foto #arama, body.foto #minimap, body.foto #navbtns, body.foto #menu-panel, body.foto #speed, body.foto #floorbar { display: none !important; }
+body.foto #hud, body.foto #card, body.foto #arama, body.foto #minimap, body.foto #navbtns, body.foto #dock, body.foto #speed, body.foto #floorbar { display: none !important; }
 #foto-bar {
   position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 45;
   display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 999px;
@@ -1272,4 +1316,4 @@ body.foto #hud, body.foto #card, body.foto #arama, body.foto #minimap, body.foto
 #tur-yazi small { display: block; font-weight: 700; color: var(--muted); font-size: 13px; }
 #tur-basla { border: 0; border-radius: 999px; padding: 9px 14px; background: var(--accent); color: #fff; font: 800 13px "Nunito", system-ui, sans-serif; cursor: pointer; }
 #tur-bitir { border: 0; border-radius: 999px; padding: 9px 13px; background: var(--glass-2); color: var(--ink); font: 800 13px "Nunito", system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
-body.tur #hud, body.tur #card, body.tur #arama, body.tur #navbtns, body.tur #menu-panel { opacity: 0; pointer-events: none; transition: opacity .4s; }
+body.tur #hud, body.tur #card, body.tur #arama, body.tur #navbtns, body.tur #dock { opacity: 0; pointer-events: none; transition: opacity .4s; }

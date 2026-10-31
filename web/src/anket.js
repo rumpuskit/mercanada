@@ -7,7 +7,7 @@ import * as sim from "./sim.js";
 
 const DAYS = ["pazartesi", "salı", "çarşamba", "perşembe", "cuma", "cumartesi", "pazar"];
 
-export function createAnket({ sayfa, today, world, toast }) {
+export function createAnket({ sayfa, today, world, toast, onVote }) {
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 
   /** Yarın sabit bir gün mü (oylama yok)? etkinlik.js dayTheme ile aynı kural. */
@@ -28,7 +28,7 @@ export function createAnket({ sayfa, today, world, toast }) {
       const n = counts[o] ?? 0;
       const b = el("button", `${labels[o]}${n ? ` · ${n}` : ""}`, "secim" + (mine === o ? " on" : ""));
       b.addEventListener("click", async () => {
-        try { await api.oy(id, o); toast("Oyun kaydedildi"); await open(true); } catch (e) { toast(e.message); }
+        try { await api.oy(id, o); onVote?.(id, o); toast("Oyun kaydedildi"); await open(true); } catch (e) { toast(e.message); }
       });
       out.push(b);
       if (total) { const bar = el("div", null, "cubuk"); const fill = el("i"); fill.style.width = `${Math.round((n / total) * 100)}%`; bar.append(fill); out.push(bar); }
