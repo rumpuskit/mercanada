@@ -88,7 +88,9 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     if (yer === "ev") return "Ev";
     if (yer === "is") return people.works[i].loc.name;
     if (yer.startsWith("mahalle:")) return sim.isOpen(`cay:${yer.slice(8)}`) ? "Mahallesinin çay bahçesi" : "Mahallesi";
-    return PLACE_NAMES[yer.replace("hobi:", "")] ?? yer;
+    const key = yer.replace("hobi:", "");
+    if (key === "iskele" && !world.places.iskele) return "Kıyı"; // balık iskelesi açılana kadar kıyıdan balık tutulur
+    return PLACE_NAMES[key] ?? yer;
   }
 
   /** Yolculuğun gerçek varış yeri: "meydan" planı saate göre farklı yerlere dağılır. */
@@ -111,11 +113,12 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         const j = people.works[i].job;
         if (j === "ogrenci") return "Anakarada, üniversitede";
         if (j === "anakara") return "Anakarada, işte";
+        if (j === "zeplin_pilotu") return zeplin?.pose.visible ? "Zeplini uçuruyor" : "Anakarada, zeplin üssünde";
         return `İşte · ${people.works[i].loc.name}`;
       }
       case "yol": {
         const d = destOf(i, seg);
-        if (d === "is" && people.works[i].wp.kind === "anakara") return seg.nereden === "ev" ? "Vapura yetişmeye gidiyor" : "Vapurdan indi, eve dönüyor";
+        if (d === "is" && (people.works[i].wp.kind === "anakara" || people.works[i].wp.kind === "zeplin")) return seg.nereden === "ev" ? "Vapura yetişmeye gidiyor" : "Vapurdan indi, eve dönüyor";
         return `Yolda → ${placeLabel(i, d)}`;
       }
       case "hobi": return `${people.hobbies[i].ad} · ${placeLabel(i, seg.yer)}`;
@@ -180,7 +183,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     if (dream.id !== wk.job) {
       const opens = sim.cat().isyerleri[dream.yer].map((name, k) => [sim.stageOf(`${dream.yer}:${k}`), name]).sort((a, b) => a[0] - b[0])[0];
       $("card-dream").innerHTML = svg("vinc");
-      $("card-dream").append(`${opens[1]} açılınca adada çalışacak (${fmt.format(opens[0])}. sakinde)`);
+      $("card-dream").append(dream.yer === "zeplin" ? `${opens[1]} ${fmt.format(opens[0])}. sakinde gelince uçmaya başlayacak`
+        : `${opens[1]} açılınca adada çalışacak (${fmt.format(opens[0])}. sakinde)`);
     }
     $("card-now").textContent = nowText(selected);
     $("card-tabs").hidden = false;
@@ -222,7 +226,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       ["Hobi", people.hobbies[selected].ad],
       ["Evcil", pet || "Henüz yok"],
       ["Adada", t === 0 ? "Bugün geldi" : t === 1 ? "Dün geldi" : `${fmt.format(t)} gündür`],
-      ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : world.vehicles ? "Otobüs ve yürüyüş" : "Yürüyerek (adada henüz araç yok)") + (people.works[selected].wp.kind === "anakara" ? " · işe vapurla" : "")],
+      ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : world.vehicles ? "Otobüs ve yürüyüş" : "Yürüyerek (adada henüz araç yok)") + (["anakara", "zeplin"].includes(people.works[selected].wp.kind) ? " · işe vapurla" : "")],
       // İstekler videolarımızın yorumlarından okunur (sunucuda istekler.py; biçim orada).
       ...(!r.hidden ? [["Sen misin?", senMisin(r, dreamTitle)]] : []),
     ]);
@@ -333,6 +337,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         : m < 540 ? "Anakarada, 09:00'da adaya gelecek" : "Anakarada, yarın 09:00'da gelecek";
       if (z.visible) rows.push(["Hız", `${Math.round(z.speed * 3.6)} km/sa`], ["Yükseklik", `${Math.round(z.y)} m`]);
       rows.push(["Uçuş", "Her gün 09:00–22:00"]);
+      // Pilotlar: mesleği zeplin pilotu olan sakinler (kartından açılır).
+      for (let i = 0; i < residents.length; i++) if (sim.dreamJob(residents[i]).id === "zeplin_pilotu") rows.push(["Pilot", at(residents[i]), () => select(i)]);
       if (ZEPLIN_REKLAM.ad) rows.push(["Reklam", ZEPLIN_REKLAM.ad]);
       facts(rows);
       const f = follow.get();

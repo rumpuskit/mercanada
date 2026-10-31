@@ -1039,6 +1039,8 @@ export class World {
     // Anakarada çalışan ve okuyanlar: vapur iskelesinin ucunda vapura biner (gün boyu adada görünmez).
     const ferryDoor = [3.5, lz + 36];
     this._addWorkplace("anakara", 0, { door: ferryDoor, path: [ferryDoor, [0, lz - 6], [0, avZ0], HUB], anchor: ferryDoor, spread: 2, queue: { x0: -4, x1: 4, z: lz + 34.5 } });
+    // Zeplin pilotları: zeplin üssü anakarada; onlar da vapurla gidip gelir (zeplin 150. sakinde açılır).
+    this._tag("zeplin:0", () => this._addWorkplace("zeplin", 0, { door: ferryDoor, path: [ferryDoor, [0, lz - 6], [0, avZ0], HUB], anchor: ferryDoor, spread: 2, queue: { x0: -4, x1: 4, z: lz + 34.5 } }));
     // Evden çalışanlar ve emekliler: iş yerleri evleridir (adreste mahalle görünür).
     this._addWorkplace("ev", 0, { door: null, path: [HUB], anchor: HUB, spread: 0, home: true });
     this.labels.push({ text: "Vapur İskelesi", x: 0, z: lz + 20, h: 22 });

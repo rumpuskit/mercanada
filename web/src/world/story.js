@@ -52,7 +52,7 @@ export class Stories {
     this.workmates = new Map();
     res.forEach((r, i) => {
       // Evde olanların (emekli, evden çalışan) ve anakaraya gidenlerin ortak iş yeri yok.
-      if (["ev", "anakara"].includes(people.works[i].wp.kind)) return;
+      if (["ev", "anakara", "zeplin"].includes(people.works[i].wp.kind)) return;
       const key = people.works[i].wp.kind + ":" + people.works[i].wp.index;
       if (!this.workmates.has(key)) this.workmates.set(key, []);
       this.workmates.get(key).push(i);

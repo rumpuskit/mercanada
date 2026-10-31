@@ -47,6 +47,7 @@ const UNIFORMS = {
   okul_muduru: { top: "#2c3a52", bottom: "#2c3a52", sleeves: true },
   kahveci: { top: "#f4f4f2", bottom: "#1d1d22", sleeves: true },
   futbolcu: { top: "#c8312f", bottom: "#f4f4f2", shorts: true, sleeves: false }, // Mercanspor forması
+  zeplin_pilotu: { top: "#f4f4f2", bottom: "#1d3156", sleeves: true, hat: "kep", hatColor: "#1d3156" }, // pilot gömleği ve kepi
   hakim: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true }, // cübbe
   savci: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true },
 };
@@ -771,7 +772,7 @@ export class People {
     const store = this.tripStore[i];
     if (store.has(k)) return store.get(k);
     // Anakaradan dönenler vapur iskeleye yanaştığında iner: yolculuk o an başlar.
-    const ferry = this.works[i].wp.kind === "anakara";
+    const ferry = this.works[i].wp.kind === "anakara" || this.works[i].wp.kind === "zeplin"; // zeplin üssü anakarada
     if (ferry && seg.nereden === "is") {
       // Yolcular vapurdan birkaç dakika içinde sırayla iner (hepsi aynı anda aynı noktadan çıkmaz).
       const arr = nextArrival(seg.bas) + (this.residents[i].seed % 40) / 10;
