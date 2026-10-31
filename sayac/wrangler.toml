@@ -24,3 +24,12 @@ new_sqlite_classes = ["Presence"]
 [[kv_namespaces]]
 binding = "SAKINLER"
 id = "87cae72fa4a5459c871b7e4b1e7b5e30"
+
+# Kayıt: yorumla doğrulama, ev ve gün tercihleri, anketler, saklı nesne sayacı, siteden seçim oyları (kayit.js).
+[[durable_objects.bindings]]
+name = "KAYIT"
+class_name = "Kayit"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Kayit"]

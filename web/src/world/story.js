@@ -2,6 +2,7 @@
 // adaya gelişten bugüne olaylar ve günün akışı. Hepsi simülasyondan ve tohumdan türetilir; aynı kişiye
 // bakan herkes aynı hikâyeyi okur.
 import { ETKINLIK } from "./etkinlik.js";
+import { prefOf } from "../tercih.js";
 import * as sim from "../sim.js";
 
 const PET_NAMES = {
@@ -87,7 +88,8 @@ export class Stories {
     const kind = sim.pet(r, this.people.day);
     if (!kind) return null;
     const names = PET_NAMES[kind] ?? ["Dostum"];
-    return { kind, name: names[sim.roll(r.seed, "evcilAd") % names.length] };
+    // Doğrulanmış sakin evcilinin adını seçebilir (tercih.js).
+    return { kind, name: prefOf(r.handle)?.evcil_ad ?? names[sim.roll(r.seed, "evcilAd") % names.length] };
   }
 
   neighbors(i) {

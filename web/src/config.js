@@ -21,3 +21,8 @@ export function nextMove(now = Date.now()) {
 // ("zeplin/reklam.png") ya da CORS izinli tam adres; null ise Mercanada'nın kendi tanıtımı. ad: kartta görünen
 // reklamveren adı. İki yana da aynı görsel okunur yönde basılır; gece alan ışıklı parlar.
 export const ZEPLIN_REKLAM = { gorsel: null, ad: null };
+
+// Kayıt API'si (yorumla doğrulama, tercihler, anketler, saklı nesne): sakin listesiyle aynı Worker.
+// Yerel denemede ?api=yerel → wrangler dev (localhost:8799).
+export const KAYIT_URL = typeof location !== "undefined" && new URLSearchParams(location.search).get("api") === "yerel"
+  ? "http://localhost:8799" : VERI_URL.replace(/\/sakinler\.json$/, "");

@@ -87,6 +87,24 @@ def publish(db: str = DB) -> dict:
     return {"sakin": len(sakinler), "bekleyen": data["bekleyen"], "zirve": zirve, "worker": push((PUBLIC / "sakinler.json").read_bytes())}
 
 
+def kayit(method: str, path: str, body: dict | None = None) -> dict | None:
+    """Worker'daki kayıt API'si (yayın anahtarıyla): yorumla doğrulama onayı, siteden seçim oyları.
+    Adres yayin.json'daki liste adresinin kökü. Ulaşılamazsa None (taşınmayı durdurmaz)."""
+    try:
+        conf = json.loads((SECRETS / "yayin.json").read_text())
+    except FileNotFoundError:
+        return None
+    root = conf["url"].split("/sakinler.json")[0]
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(root + path, data=data, method=method, headers={
+        "Authorization": f"Bearer {conf['anahtar']}", "Content-Type": "application/json", "User-Agent": "mercanada-sunucu/1"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read())
+    except (urllib.error.URLError, ValueError):
+        return None
+
+
 def push(body: bytes) -> str:
     try:
         conf = json.loads((SECRETS / "yayin.json").read_text())

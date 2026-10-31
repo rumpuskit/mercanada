@@ -4,6 +4,7 @@ import { HOME_LABELS, homeActivity } from "./world/life.js";
 import { TIKTOK, TIKTOK_URL, ZEPLIN_REKLAM, nextMove } from "./config.js";
 import { svg, BINA_SIMGE, ARAC_SIMGE } from "./icons.js";
 import { ETKINLIK } from "./world/etkinlik.js";
+import { residentCard, shareCanvas } from "./paylas.js";
 
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const PLACE_NAMES = {
@@ -26,7 +27,7 @@ const $ = (id) => document.getElementById(id);
 // Sakinin görünen adı: adını gizlemek isteyenler "Gizli komşu" olarak görünür.
 export const at = (r) => (r.hidden ? "Gizli komşu" : "@" + r.handle);
 
-export function createUI({ residents, people, world, dollhouse, stories, traffic, zeplin = null, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null }) {
+export function createUI({ residents, people, world, dollhouse, stories, traffic, zeplin = null, capture = null, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
   $("cta").href = TIKTOK_URL;
   // İskelede bekleyenler: takip etmiş, sıradaki taşınmayı bekleyenler. Dokununca iskeleye uçar.
@@ -122,6 +123,9 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       }
       case "yol": {
         const d = destOf(i, seg);
+        // Yolculuk varışa yetişecek saatte başlar; o ana kadar evinde bekler (görünmez).
+        const leg = people.travelCache[i]?.legs.find((l) => minute() < l.t1);
+        if (!people.visible[i] && leg?.kind === "before" && seg.nereden === "ev") return `Evde, birazdan çıkacak → ${placeLabel(i, d)}`;
         if (d === "is" && (people.works[i].wp.kind === "anakara" || people.works[i].wp.kind === "zeplin")) return seg.nereden === "ev" ? "Vapura yetişmeye gidiyor" : "Vapurdan indi, eve dönüyor";
         return `Yolda → ${placeLabel(i, d)}`;
       }
@@ -204,6 +208,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     $("card-traits").replaceChildren();
     const f = follow.get();
     followActions(f?.kind === "sakin" && f.i === selected ? f.view : null, { kind: "sakin", i: selected }, ["goz", "Gözünden bak"]);
+    if (!r.hidden && capture) action(["paylas", "Paylaş"], () => shareResident(selected));
     if (tab === "bugun") {
       const homeLabel = (k) => {
         const seg = people.plans[selected][k];
@@ -419,6 +424,55 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     if (at) { close(); flyTo(at[0], Math.max(0, world.height(at[0], at[1])), at[1], th.id === "sinema" ? 45 : 90); }
   });
 
+  /** Kısa bildirim. */
+  let toastTimer = null;
+  function toast(text, ms = 3200) {
+    const el = $("toast");
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.hidden = true; }, ms);
+  }
+
+  /** Sakin kartını görsel olarak paylaşır: sahnede kendisi (evdeyse evi), altında kartı. */
+  async function shareResident(i) {
+    const r = residents[i];
+    const day = today();
+    // Kadraj: sakin görünüyorsa yakından (masada oturuyorsa tentenin altından, alçak açıyla); görünmüyorsa
+    // bulunduğu yer (evdeyse evi, değilse iş yeri/durak çevresi).
+    let frame = null;
+    const ne = people.activities[i]?.ne;
+    if (people.visible[i]) {
+      const role = people.roles[i]?.[people.plans[i].findIndex((q) => q === people.activities[i] || (q.bas === people.activities[i]?.bas && q.ne === ne))];
+      const table = role?.item?.table;
+      frame = { target: [people.positions[i * 3], people.positions[i * 3 + 1] + 1.0, people.positions[i * 3 + 2]], dist: table ? 8 : 12, up: table ? 0.14 : 0.55, inside: !!people.poses[i].indoor };
+    } else if (ne === "ev" || ne === "uyku" || (ne === "yol" && people.activities[i].nereden === "ev" && people.travelCache[i]?.legs.find((l) => minute() < l.t1)?.kind === "before")) {
+      const b = homeOf(i);
+      if (b) frame = { target: [b.x, b.floors * 3.2 * 0.45, b.z], dist: Math.max(b.w, b.d, b.floors * 3.2) * 3.2, up: 0.45 };
+    } else {
+      const [x, z] = people.focusPoint(i);
+      frame = { target: [x, world.groundY(x, z) + 2, z], dist: 45, up: 0.7 };
+    }
+    const shot = capture(frame);
+    const pet = stories.petName(i);
+    const t = sim.tenure(r, day);
+    const card = residentCard(shot, {
+      handle: at(r), letter: r.handle[0].toLocaleUpperCase("tr"), color: `hsl(${r.seed % 360} 62% 58%)`,
+      title: $("card-title").textContent, now: nowText(i),
+      rows: [
+        ["Ev", sim.addressText(r.slot).replace(/, [^,]*Mahallesi, Mercanada$/, "")],
+        ["Mahalle", sim.addressText(r.slot).match(/([^,]*Mahallesi)/)?.[1] ?? "Mercanada"],
+        ["Hobi", people.hobbies[i].ad],
+        ["Evcil", pet ? `${pet.kind} · ${pet.name}` : "Henüz yok"],
+        ["Adada", t === 0 ? "Bugün geldi" : t === 1 ? "Dün geldi" : `${fmt.format(t)} gündür`],
+      ],
+      link: `https://mercanada.rumpuskit.com/?bul=${encodeURIComponent(r.handle)}`,
+    });
+    const res = await shareCanvas(card, { name: `mercanada-${r.handle}`, text: `Mercanada'da yaşıyorum: ${$("card-title").textContent}.`, url: `https://mercanada.rumpuskit.com/?bul=${encodeURIComponent(r.handle)}` });
+    if (res === "indirildi-kopyalandi") toast("Kart indirildi, bağlantı kopyalandı");
+    else if (res === "indirildi") toast("Kart indirildi");
+  }
+
   function showCard() {
     $("card").hidden = false;
     document.body.classList.add("kart-acik");
@@ -528,6 +582,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   return {
     select,
     find,
+    toast,
     openBuilding,
     selectVehicle,
     close,

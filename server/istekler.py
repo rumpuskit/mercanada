@@ -27,6 +27,7 @@ import time
 from functools import cache
 
 from mercanada_sim import sim
+import ortak  # noqa: E402
 from ortak import DB, ISTEK_GUN, psql, publish
 
 TURLER = ("meslek", "hobi", "evcil", "gizle")
@@ -74,6 +75,8 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
     return {"meslek": _sozluk(meslek), "hobi": _sozluk(hobi), "evcil": _sozluk(evcil)}
 
 
+# Sitedeki yorumla doğrulama kodu: "kod 1234", "kod: 1234", "kodum 1234".
+KOD = re.compile(r"\bkod\w*\s*:?\s*(\d{4})\b")
 TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
 OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) olmak isti")
 GIZLE = re.compile(r"\b(?:adimi|ismimi|adim|ismim|beni)\b(?: \w+){0,2} (?P<ne>gizle|goster)\w*"
@@ -196,16 +199,20 @@ def uygula(db: str = DB) -> list:
 def yorumlar(items: list, hesap: str | None = None, db: str = DB) -> dict:
     """tasinma.py'den: [[yorum kimliği, kullanıcı adı, unix zaman, metin], ...]. Metinler ayrıştırılıp
     atılır; kendi hesabımızın yorumları ve bozuk satırlar geçilir."""
-    satirlar = []
+    satirlar, kodlar = [], []
     for it in items:
         if not (isinstance(it, list) and len(it) == 4 and isinstance(it[3], str) and isinstance(it[2], int)):
             continue
         cid, handle = str(it[0])[:40], sim.normalize_handle(str(it[1]))
         if not cid or not handle or handle == hesap:
             continue
+        if m := KOD.search(katla(it[3][:200])):
+            kodlar.append([m.group(1), handle])
         for tur, deger in cozumle(it[3]).items():
             # Aynı yorumda birden çok istek: kaynak kimliği türle ayrılır.
             satirlar.append([handle, tur, deger, f"{cid}:{tur}", it[2]])
+    # Sitedeki yorumla doğrulama: "kod 1234" yazanın kodu Worker'da o kullanıcı adına verildiyse bağlanır.
+    onay = (ortak.kayit("POST", "/api/onayla", {"ciftler": kodlar}) or {}).get("onaylanan", []) if kodlar else []
     yeni = kaydet(satirlar, "yorum", db)
     dolu = "SELECT coalesce(json_agg(json_build_array(handle, deger) ORDER BY id), '[]') FROM istekler WHERE durum = 'dolu'"
     once = json.loads(psql(dolu, db))
@@ -214,7 +221,7 @@ def yorumlar(items: list, hesap: str | None = None, db: str = DB) -> dict:
     # Koltuğu dolu olduğu için geçmeyen istekler (muhtar): yorumu yazana cevapta söylemek için.
     reddedilen = [d for d in json.loads(psql(dolu, db)) if d not in once]
     return {"yorum": len(items), "istek": yeni, "uygulanan": uygulanan, "bekleyen_istek": bekleyen,
-            **({"dolu": reddedilen} if reddedilen else {})}
+            **({"dolu": reddedilen} if reddedilen else {}), **({"dogrulanan": onay} if onay else {})}
 
 
 def main() -> None:

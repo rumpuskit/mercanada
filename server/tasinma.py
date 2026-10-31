@@ -70,14 +70,30 @@ def liste(takipci: int, items: list) -> dict:
     # Belediye başkanlığı seçimi: zamanı geldiyse başlar, süresi dolduysa sonuçlanır.
     if s := secim.ilerlet():
         sonuc["secim"] = s
+    if secim.acik() and (site := secim.site_items()):
+        secim.yorumlar(site, None)
     sonuc["yayin"] = publish()
+    if n := kayit_temizle():
+        sonuc["tercih_silinen"] = n
     return sonuc
+
+
+def kayit_temizle() -> int:
+    """Sitedeki tercihlerden kaydı artık olmayanlarınkini (Worker) sildirir: takibi bırakıp 7 gün dönmeyen ya da
+    çıkarılan sakinin evi, evcil adı ve günü sitede kalmaz."""
+    from ortak import kayit, psql as q
+    liste = kayit("GET", "/tercihler.json")
+    if not liste or not liste.get("tercih"):
+        return 0
+    var = set(json.loads(q("SELECT coalesce(json_agg(handle), '[]') FROM sakinler WHERE platform = 'tt'")))
+    yok = [h for h in liste["tercih"] if h not in var]
+    return (kayit("POST", "/api/sil", {"handles": yok}) or {}).get("silinen", 0) if yok else 0
 
 
 def yorumlar(hesap: str | None, items: list) -> dict:
     sonuc = istekler.yorumlar(items, hesap)
-    # Açık seçim varsa adaylık ve oylar (yorum metninden; metin saklanmaz).
-    if s := secim.yorumlar(items, hesap):
+    # Açık seçim varsa adaylık ve oylar (yorum metninden; metin saklanmaz) ve sitede verilenler.
+    if s := secim.yorumlar(items + (secim.site_items() if secim.acik() else []), hesap):
         sonuc["secim"] = s
     if sonuc["uygulanan"] or any(sonuc.get("secim", {}).values()):
         sonuc["yayin"] = publish()

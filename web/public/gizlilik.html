@@ -59,6 +59,18 @@
     <li><strong>Site ziyaretçileri:</strong> çerez, reklam ya da takip kodu yoktur. "Şu an adada" sayacı yalnızca açık
       bağlantıların sayısını tutar; IP adresi ya da kimlik saklanmaz. Tarayıcın, siteyi hızlı açmak için sakin
       listesinin son kopyasını kendi cihazında saklar.</li>
+    <li><strong>"Benim evim" (isteğe bağlı doğrulama):</strong> sitede kullanıcı adını yazarsan 4 haneli bir kod verilir;
+      kodu videolarımızdan birine yorum olarak yazdığında, yorumlar okunurken kod o kullanıcı adına bağlanır. Saklananlar:
+      kullanıcı adı ile kod (en çok 48 saat, eşleşince silinir), cihazında tutulan rastgele anahtarın geri döndürülemez
+      özeti ve hazır listelerden yaptığın seçimler (evinin duvar, koltuk ve perde rengi, pencere çiçekleri, evcilinin
+      adı, o güne ait etkinlik ve buluşmak istediğin sakin; seçim açıkken adaylık ve oy). Bu seçimler adada herkese
+      görünür (sitede evin ve günün böyle çizilir). Serbest yazı alınmaz. "Bu cihazda çıkış yap" anahtarı geçersiz
+      kılar; kaydın silindiğinde (adadan ayrılıp 7 gün dönmezsen ya da çıkmak istersen) seçimlerin de silinir.</li>
+    <li><strong>Anket ve saklı nesne:</strong> anket oyu ve günün saklı nesnesini bulduğun bilgisi, tarayıcında üretilen
+      rastgele bir cihaz kimliğiyle tutulur (kişisel bilgi içermez; anket sonuçları herkese açıktır, saklı nesne kayıtları
+      40 gün sonra silinir). Kötüye kullanımı sınırlamak için IP adresinin kendisi değil, o güne özel tuzla üretilmiş
+      özeti en çok bir gün tutulur. Tarayıcın ayrıca bulduğun günleri, ada turunu gördüğünü ve ses tercihini kendi
+      cihazında saklar.</li>
   </ul>
 
   <h2>Ne için kullanıyoruz?</h2>
@@ -71,8 +83,9 @@
   <ul>
     <li>Liste, projenin kendi bilgisayarında ve kendi sunucusundaki veritabanında tutulur. Sitede gösterilmesi
       için listenin herkese açık
-      kopyası Cloudflare üzerinden dağıtılır; site GitHub Pages'te yayınlanır. Bu hizmet sağlayıcılarının sunucuları
-      yurt dışında olabilir.</li>
+      kopyası Cloudflare üzerinden dağıtılır; site GitHub Pages'te yayınlanır. Sitede yapılan doğrulama, seçimler,
+      anket oyları ve saklı nesne kayıtları Cloudflare'de (Durable Object) tutulur. Bu hizmet sağlayıcılarının
+      sunucuları yurt dışında olabilir.</li>
     <li>Takip ettiğin sürece adada kalırsın. Takibi bırakırsan bir sonraki taşınmada (en geç bir iki gün içinde) adadan
       ayrılırsın; 7 gün içinde dönersen aynı evine dönersin. 7 gün sonra kaydın her iki yerde de tamamen silinir.
       Programın çalışma kayıtları da 7 gün sonra silinir.</li>
@@ -89,7 +102,8 @@
     (mesajla ya da videolarımızdan birine "adımı gizle" yazarak); o zaman "gizli komşu" olarak yaşarsın.
     "adımı göster" yazarak geri alabilirsin.</li>
   </ul>
-  <p>Talepler en geç 30 gün içinde, genellikle bir sonraki taşınmada yerine getirilir.</p>
+  <p>Talepler en geç 30 gün içinde, genellikle bir sonraki taşınmada yerine getirilir. Sitedeki seçimlerini "Benim evim"
+  sayfasından istediğin an kaldırabilirsin.</p>
 
   <h2>TikTok uygulaması</h2>
   <p>Videolarımızı kendi TikTok hesabımıza yüklemek için TikTok'un geliştirici arayüzünü kullanırız. Bu bağlantı

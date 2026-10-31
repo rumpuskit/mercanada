@@ -54,3 +54,31 @@ class CozumleTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DogrulamaKoduTest(unittest.TestCase):
+    """Sitedeki yorumla doğrulama: yorumdaki kod Worker'a [kod, kullanıcı adı] olarak gider, istek sayılmaz."""
+
+    def test_kod(self):
+        from istekler import KOD
+        for text, want in {"kod 4821": "4821", "Kod: 4821 ben buradayım": "4821", "kodum 1234": "1234",
+                           "kod4821": "4821", "KOD 12345": None, "kodlar çok güzel": None}.items():
+            m = KOD.search(katla(text))
+            self.assertEqual(m and m.group(1), want, text)
+        self.assertEqual(cozumle("kod 4821"), {})
+
+    def test_worker_cagrisi(self):
+        import istekler
+        import ortak
+        gelen = []
+        eski_kayit, eski_kaydet, eski_psql, eski_uygula = ortak.kayit, istekler.kaydet, istekler.psql, istekler.uygula
+        ortak.kayit = lambda method, path, body=None: (gelen.append((method, path, body)), {"onaylanan": ["ali"]})[1]
+        istekler.kaydet = lambda satirlar, kaynak, db=None: 0
+        istekler.psql = lambda sql, db=None, extra=None: "[]" if "json_agg" in sql else "0"
+        istekler.uygula = lambda db=None: []
+        try:
+            out = istekler.yorumlar([["c1", "Ali", 1, "kod 4821"], ["c2", "veli", 2, "meslek: balıkçı"], ["c3", "biz", 3, "kod 1111"]], hesap="biz")
+        finally:
+            ortak.kayit, istekler.kaydet, istekler.psql, istekler.uygula = eski_kayit, eski_kaydet, eski_psql, eski_uygula
+        self.assertEqual(gelen, [("POST", "/api/onayla", {"ciftler": [["4821", "ali"]]})])
+        self.assertEqual(out["dogrulanan"], ["ali"])

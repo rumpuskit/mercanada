@@ -8,6 +8,7 @@
 import * as THREE from "three";
 import { roll, weekday } from "../sim.js";
 import { moonPhase, sunTimes } from "./sky.js";
+import { votedFilm, votedTheme } from "../tercih.js";
 
 const frac = (n) => (n >>> 0) / 4294967296;
 
@@ -80,6 +81,10 @@ export function dayTheme(day, world) {
     ...(world.places.kahvehane ? [{ id: "tavla", ad: "Kahvehanede tavla turnuvası", yer: "kahvehane", boost: { kahvehane: 3, kahvehane_bahce: 4 } }] : []),
     { id: "komsuluk", ad: "Komşuluk günü: kapı önleri dolu", yer: "meydan", boost: { kapi_onu: 3, piknik: 1.5 } },
   ];
+  // Sitedeki ankette bir gün önceden oylanan olay (oy varsa) sıranın yerine geçer.
+  const voted = votedTheme(day);
+  const pick = list.find((t) => t.id === voted);
+  if (pick) return { ...pick, oylama: true };
   return list[roll(day, "gunun_olayi") % list.length];
 }
 
@@ -115,6 +120,14 @@ export function chooseActivity(seed, day, k, seg, c, fav) {
  * Plajda açık hava sineması: perde (gece ışıklı, oynayan film) ve sandalye sıraları. Kumsalda engelsiz bir
  * yer bulunamazsa kurulmaz. seats: oturma yerleri (people.js "seat:sinema" havuzu).
  */
+// Film türü (haftalık ankette kazanan; yoksa komedi): perdedeki gökyüzü, ışık ve silüetler.
+const FILMS = {
+  komedi: { skies: [["#87c3e8", "#f6f4ef"], ["#f2c230", "#fff3c4"]], walk: 18 },
+  macera: { skies: [["#1b2a4a", "#f2a65a"], ["#0f2a2a", "#2f9c9a"]], walk: 34 },
+  korku: { skies: [["#0b0b14", "#3a1022"], ["#120f1f", "#2b1d3a"]], walk: 8 },
+  animasyon: { skies: [["#7ad1c4", "#f6b2d6"], ["#b5a6ef", "#fde2a8"]], walk: 22 },
+};
+
 export function buildCinema(world) {
   const beach = world.places.plaj?.anchors ?? [];
   const sand = (x, z) => world.isWalkable(x, z) && world.height(x, z) > 0.25;
@@ -171,18 +184,18 @@ export function buildCinema(world) {
     idx++;
   }
   for (const mesh of meshes) { mesh.castShadow = true; group.add(mesh); }
-  let last = -1;
+  let last = -1, genre = "komedi";
   const draw = (t) => {
     // Basit "film": gökyüzü, ufuk, sahnede yürüyen iki silüet; sahneler 20 sn'de bir değişir.
     const g = cv.getContext("2d");
-    const scene = Math.floor(t / 20) % 4;
-    const skies = [["#1b2a4a", "#f2a65a"], ["#87c3e8", "#f6f4ef"], ["#2b1d3a", "#e9667f"], ["#0f2a2a", "#2f9c9a"]][scene];
+    const film = FILMS[genre] ?? FILMS.komedi;
+    const skies = film.skies[Math.floor(t / 20) % film.skies.length];
     const gr = g.createLinearGradient(0, 0, 0, 128);
     gr.addColorStop(0, skies[0]); gr.addColorStop(1, skies[1]);
     g.fillStyle = gr; g.fillRect(0, 0, 256, 128);
     g.fillStyle = "rgba(0,0,0,0.55)"; g.fillRect(0, 92, 256, 36);
     g.fillStyle = "#111";
-    for (const [k, sp] of [[0, 18], [1, -12]]) {
+    for (const [k, sp] of [[0, film.walk], [1, -film.walk * 0.7]]) {
       const x = ((t * sp + k * 120) % 300 + 300) % 300 - 22;
       g.fillRect(x, 62, 10, 30); g.beginPath(); g.arc(x + 5, 56, 7, 0, Math.PI * 2); g.fill();
     }
@@ -191,7 +204,8 @@ export function buildCinema(world) {
   };
   return {
     group, seats, spot,
-    update(theme, minute, real) {
+    update(theme, minute, real, day) {
+      genre = votedFilm(day) ?? "komedi";
       const on = theme?.id === "sinema" && minute >= theme.bas - 60 && minute <= theme.son + 30;
       group.visible = on;
       screen.visible = on && minute >= theme.bas - 10 && minute <= theme.son;

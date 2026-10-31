@@ -28,6 +28,14 @@ import { startOnline } from "./online.js";
 import { Follower } from "./follow.js";
 import { VERI_URL, ZEPLIN_REKLAM } from "./config.js";
 import { Zeplin } from "./world/zeplin.js";
+import { api } from "./api.js";
+import { buildFlowers, curtain, dateKey, setPrefs, setVotes, weekKey } from "./tercih.js";
+import { buildHidden } from "./world/sakli.js";
+import { createMenu } from "./menu.js";
+import { createTour } from "./tur.js";
+import { createBen } from "./ben.js";
+import { createAnket } from "./anket.js";
+import { gazete } from "./gazete.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -72,6 +80,16 @@ progress(0.06, "Sakin listesi alınıyor…");
 const today = sim.dayOf(nowUnix());
 const sample = Number(params.get("nufus"));
 const { residents, waiting, listError, peak = 0, secim = null } = sample > 0 ? sampleTown(Math.min(60000, sample)) : await loadResidents();
+// Doğrulanmış sakinlerin tercihleri ve anket sonuçları (Worker): evler, evcil adları, günün olayı ve sinema
+// filmi bunlara göre. Alınamazsa ada varsayılanlarla kurulur (bekletmez: en çok 4 sn).
+const prefsData = {};
+if (!(sample > 0)) {
+  const within = (p) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error("zaman aşımı")), 4000))]);
+  const [t, a] = await Promise.allSettled([within(api.tercihler()), within(api.anket([`tema:${dateKey(today)}`, `film:${weekKey(today)}`])), within(api.ping())]);
+  if (t.status === "fulfilled") Object.assign(prefsData, t.value.tercih ?? {});
+  if (a.status === "fulfilled") setVotes(a.value);
+}
+setPrefs(prefsData, residents);
 progress(0.16, "Ada kuruluyor…");
 await paint();
 // Ada, en büyük sıra numarasına kadar kurulur: ayrılanların boş kalan evleri de durur (yeni gelen yerleşir).
@@ -189,6 +207,18 @@ const lampLight = createLampLight(world, world.lampSpots,
   [terrain.material, ...roads.userData.groundMaterials, ...grounds.userData.groundMaterials, ...(harbor.userData.groundMaterials ?? [])],
   { wallMaterials: city.wallMaterials });
 scene.add(city.group, trees, buildSites(world));
+// Pencere çiçekleri (tercih.js): seçen dairelerin pencerelerinde; tercih değişince yeniden kurulur.
+let flowers = buildFlowers(city.windowInfo);
+scene.add(flowers);
+function refreshFlowers() {
+  scene.remove(flowers);
+  flowers.traverse((o) => { o.geometry?.dispose(); o.material?.dispose?.(); });
+  flowers = buildFlowers(city.windowInfo);
+  scene.add(flowers);
+}
+// Günün saklı nesnesi.
+const hidden = buildHidden(world);
+scene.add(hidden.group);
 const bayram = buildBayram(world);
 scene.add(bayram.group, bayram.mast);
 const clouds = buildClouds(world);
@@ -312,7 +342,9 @@ const dateDay = dev && /^\d{4}-\d{2}-\d{2}$/.test(params.get("tarih") ?? "") ? D
 if (dateDay != null) simBase += (dateDay - today) * 86400;
 const fixed = dev && params.get("saat")?.match(/^(\d{1,2}):(\d{2})$/);
 if (fixed) simBase = (dateDay ?? today) * 86400 - sim.TZ_OFFSET + Number(fixed[1]) * 3600 + Number(fixed[2]) * 60;
-const simNow = () => simBase + (performance.now() / 1000 - realBase) * speed;
+// Fotoğraf modunda saat kaydırıcısı yalnız bakılan anı kaydırır (viewShift, saniye); çıkınca sıfırlanır.
+let viewShift = 0;
+const simNow = () => simBase + (performance.now() / 1000 - realBase) * speed + viewShift;
 function setSpeed(next) {
   simBase = simNow();
   realBase = performance.now() / 1000;
@@ -337,13 +369,55 @@ if (params.has("denetle")) globalThis.__ada = { world, people, traffic, resident
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic, zeplin });
-const ui = createUI({ residents, people, world, dollhouse, stories, traffic, zeplin, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, zeplin, capture, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
 // Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
 follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false, false); };
 // Çevrimiçi sayacı yalnızca yayındaki sitede (ya da ?sayac ile denerken).
 if (location.hostname === "mercanada.rumpuskit.com" || params.has("sayac")) startOnline();
 const mapUI = createMapUI({ world, camera, controls, flyTo, ui, residents, zeplin });
+
+// --- menü: gazete, fotoğraf, benim evim, anket, ada turu, saklı nesne ---
+function shiftView(m) {
+  if (m == null) { viewShift = 0; return; }
+  viewShift += (m - sim.minuteOf(simNow())) * 60;
+}
+const menu = createMenu({ capture, minute: () => sim.minuteOf(simNow()), today: () => sim.dayOf(simNow()), shiftView, toast: ui.toast });
+const tour = createTour({ world, people, residents, flyTo, cinema: people.cinema, vec: (x, y, z) => new THREE.Vector3(x, y, z) });
+{ const move = controls.onUserMove; controls.onUserMove = (kind) => { move(kind); tour.stop(); }; } // kamerayı tutan turu bitirir
+const ben = createBen({
+  sayfa: menu.sayfa, residents, people, ui, today: () => sim.dayOf(simNow()), secim: () => secim, prefsData,
+  onPrefs(patch) {
+    // Değişiklik hemen bu ekranda: çiçekler yeniden kurulur, evin içi açıksa yeniden çizilir, gün planı yenilenir.
+    if ("cicek" in patch) refreshFlowers();
+    if ("duvar" in patch || "koltuk" in patch) dollhouse.rebuild?.();
+    if ("gun" in patch) { const d = people.day; people.day = null; people.setDay(d); }
+  },
+});
+const anket = createAnket({ sayfa: menu.sayfa, today: () => sim.dayOf(simNow()), world, toast: ui.toast });
+const flyToTheme = () => {
+  const th = people.theme;
+  if (!th) return;
+  const at = th.yer === "cami" ? world.workplaces.cami?.find(Boolean)?.door : th.id === "sinema" && people.cinema ? people.cinema.spot : world.placeOf(th.yer).anchors[0];
+  if (at) { menu.sayfa.close(); ui.close(); flyTo(at[0], Math.max(0, world.height(at[0], at[1])), at[1], 90); }
+};
+menu.add({ icon: "kitap", label: "Gazete", run: () => menu.sayfa.open("Mercanada Gazetesi", gazete({
+  residents, people, world, zeplin, today: () => sim.dayOf(simNow()), at: (r) => (r?.hidden ? "Gizli komşu" : "@" + (r?.handle ?? "?")),
+  select: (i) => { menu.sayfa.close(); ui.select(i); }, flyToTheme,
+})) });
+// Doğrulama ve anket Worker'ın kayıt API'sini ister (yayında değilse menüde görünmez).
+menu.add({ icon: "ev", label: "Benim evim", run: () => ben.open(), hidden: () => !api.available });
+menu.add({ icon: "kamera", label: "Fotoğraf modu", run: () => { ui.close(); menu.enterPhoto(); } });
+menu.add({ icon: "sepet", label: "Anket", run: () => anket.open(), hidden: () => !api.available });
+menu.add({ icon: "harita", label: "Ada turu", run: () => { ui.close(); tour.start(); } });
+menu.add({ icon: "goz", label: () => (hidden.found() ? "Saklı nesne: bulundu" : "Saklı nesne"), run: () => {
+  const h = hidden.info();
+  if (!h) return;
+  if (hidden.found()) return ui.toast(`Bugünkü ${h.ad} bulundu. Yarın yenisi saklanacak.`);
+  ui.toast(`İpucu: bugün ${h.area} ${h.ad} var. Yakınlaş ve ona dokun.`, 5000);
+} });
+ben.peek();
+if (globalThis.__ada) Object.assign(globalThis.__ada, { hidden, menu, tour, ben, city, capture });
 
 // Bir sakine dokununca kartını aç.
 const raycaster = new THREE.Raycaster();
@@ -357,6 +431,14 @@ canvas.addEventListener("pointerup", (e) => {
   if (follower.target && follower.view === "omuz") return;
   const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
+  // Günün saklı nesnesi: bulana seri ve bugün kaç kişinin bulduğu.
+  if (hidden.pick(raycaster)) {
+    const h = hidden.info(), res = hidden.markFound();
+    const seri = res.seri > 1 ? ` ${res.seri} gündür üst üste buluyorsun.` : "";
+    if (api.available) api.bulundu(dateKey(h.day), true).then((r) => ui.toast(`Buldun: ${h.ad}!${seri} Bugün ${r.n} kişi buldu.`, 5000)).catch(() => ui.toast(`Buldun: ${h.ad}!${seri}`, 5000));
+    else ui.toast(`Buldun: ${h.ad}!${seri}`, 5000);
+    return;
+  }
   const index = people.pick(raycaster);
   if (index != null && !people.poses[index].inVehicle) return ui.select(index, false);
   const veh = vehicles.pick(raycaster);
@@ -407,6 +489,75 @@ addEventListener("resize", () => {
   renderer.setSize(innerWidth, innerHeight, false);
 });
 
+// --- paylaşım ve fotoğraf için sahne görüntüsü ---
+/**
+ * Sahneyi bu anda çizip w×h oranında (ortadan kırparak) bir tuvale kopyalar. frame verilirse kamera o kare
+ * için oraya konur, sonra eski yerine döner. İşaretçi görüntüye girmez.
+ */
+function capture(frame = null, w = 1080, h = 1240) {
+  const pos = camera.position.clone(), tgt = controls.target.clone();
+  const view = camera.view?.enabled;
+  if (view) camera.clearViewOffset();
+  const mv = marker.visible, tv = nameTags.group.visible;
+  marker.visible = false;
+  nameTags.group.visible = false; // ad kartta yazıyor; yakın kadrajda etiket görüntüyü kapatır
+  // frame: { target: [x, y, z], dist, up } — kamera bugünkü bakış yönünden, up eğimiyle (0 yatay, 1 tepeden).
+  let look = controls.target;
+  if (frame) {
+    look = new THREE.Vector3(...frame.target);
+    // Bugünkü bakış yönünden başlayıp çevresinde 16 yön ve iki eğim denenir; arada bina kalmayan (en açık) seçilir.
+    const base = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
+    let best = null, bestClear = -1;
+    for (const up of [frame.up, frame.up + 0.3, frame.up - 0.2]) {
+      for (let k = 0; k < 16; k++) {
+        const a = base + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 8);
+        const dir = new THREE.Vector3(Math.sin(a) * Math.cos(up), Math.sin(up), Math.cos(a) * Math.cos(up));
+        const clear = frame.inside ? frame.dist : rayClear(look, dir, frame.dist);
+        if (clear > bestClear + 0.5) { bestClear = clear; best = dir; }
+        if (clear >= frame.dist - 0.01) break;
+      }
+      if (bestClear >= frame.dist - 0.01) break;
+    }
+    camera.position.copy(look).addScaledVector(best, Math.max(4, bestClear));
+  }
+  camera.lookAt(look);
+  fitDepth(camera.position.distanceTo(look));
+  renderer.render(scene, camera);
+  const src = renderer.domElement, sw = src.width, sh = src.height;
+  const s = Math.min(sw / w, sh / h), cw = w * s, ch = h * s;
+  const out = document.createElement("canvas");
+  out.width = w; out.height = h;
+  out.getContext("2d").drawImage(src, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, w, h);
+  camera.position.copy(pos); controls.target.copy(tgt); camera.lookAt(tgt);
+  marker.visible = mv;
+  nameTags.group.visible = tv;
+  return out;
+}
+
+/** Işın (o'dan dir yönünde) bir binaya çarpmadan gidebildiği uzaklık (en çok max). Binalar tam kutularıyla. */
+function rayClear(o, dir, max) {
+  let best = max;
+  for (const b of world.buildings) {
+    const R = Math.max(b.w, b.d) / 2 + max;
+    if (Math.abs(b.x - o.x) > R || Math.abs(b.z - o.z) > R) continue;
+    const c = Math.cos(b.rot), sn = Math.sin(b.rot);
+    const ox = (o.x - b.x) * c - (o.z - b.z) * sn, oz = (o.x - b.x) * sn + (o.z - b.z) * c, oy = o.y - 1.2;
+    const dx = dir.x * c - dir.z * sn, dz = dir.x * sn + dir.z * c;
+    const hx = b.w / 2 + 0.3, hz = b.d / 2 + 0.3, top = b.floors * 3.2 + 2.5;
+    if (Math.abs(ox) < b.w / 2 - 0.4 && Math.abs(oz) < b.d / 2 - 0.4 && oy < top) continue; // içindeyse (açık iç mekân)
+    let t0 = 0, t1 = best;
+    for (const [o1, d1, lo, hi] of [[ox, dx, -hx, hx], [oz, dz, -hz, hz], [oy, dir.y, -1, top]]) {
+      if (Math.abs(d1) < 1e-6) { if (o1 < lo || o1 > hi) { t0 = Infinity; break; } continue; }
+      let a = (lo - o1) / d1, bb = (hi - o1) / d1;
+      if (a > bb) [a, bb] = [bb, a];
+      t0 = Math.max(t0, a); t1 = Math.min(t1, bb);
+      if (t0 > t1) break;
+    }
+    if (t0 <= t1 && t0 < best) best = Math.max(0, t0 - 0.5);
+  }
+  return best;
+}
+
 // --- pencereler ve lambalar ---
 const tmpColor = new THREE.Color();
 const LAMP_OFF = new THREE.Color("#cfd6de");
@@ -420,6 +571,7 @@ function updateWindows(minute, light, sunDeg) {
     else if (o.workplace === "otel" || o.workplace === "saglik" || o.workplace === "karakol") lit = (o.seed * 7) % 5 < 3;
     else lit = minute > 470 && minute < 1380 && (o.seed * 5) % 7 < 5;
     tmpColor.copy(P.WINDOW_DAY).lerp(lit ? P.WINDOW_NIGHT : P.WINDOW_DARK, night);
+    if (o.slot != null) curtain(o.slot, tmpColor, night, lit); // seçtiği perde rengi
     windows.setColorAt(i, tmpColor);
   }
   windows.instanceColor.needsUpdate = true;
@@ -455,6 +607,8 @@ function enter() {
   if (intro) {
     const off = homeView.pos.clone().sub(homeView.target);
     flyTo(homeView.target.x, homeView.target.y, homeView.target.z, off.length(), off, 2.6);
+    // İlk gelişte (bu cihazda) ada turu önerilir.
+    if (!tour.seen() && residents.length) setTimeout(() => tour.offer(), 3200);
   }
 }
 
@@ -546,6 +700,8 @@ function tick() {
   globalThis.__yonetmen?.(dt, unix);
   controls.update(dt);
 
+  hidden.setDay(day);
+  hidden.update(real);
   const skyState = sky.update(day, minute, controls.target);
   const light = skyState.light;
   zeplinNight = 1 - light;

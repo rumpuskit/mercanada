@@ -16,6 +16,7 @@ import { pedWait } from "./signals.js";
 import { ferryOut, nextArrival, nextDeparture } from "./ferry.js";
 import { ETKINLIK, buildCinema, chooseActivity, dayTheme, favorites } from "./etkinlik.js";
 import { sunPosition, sunTimes } from "./sky.js";
+import { dateKey, prefOf } from "../tercih.js";
 import { craneSeat, forkliftSeat, portMotion, shipWalkY, stackerSeat } from "./port.js";
 import { pointAt } from "./traffic.js";
 import { playgroundItems } from "./layout.js";
@@ -548,9 +549,42 @@ export class People {
       w: this.world, pools: this.pools, groupPools: this.groupPools, sun: sunTimes(this.day), theme: this.theme,
       workplace: (kind) => this.world.workplaces[kind]?.find(Boolean), dog: false,
     };
+    // Doğrulanmış sakinlerin bugün için seçtikleri (sitede "Benim evim"): etkinlik ve karşılıklı buluşma.
+    const today = dateKey(this.day);
+    const dayPref = this.residents.map((r) => { const g = prefOf(r.handle)?.gun; return g?.tarih === today ? g : null; });
+    const fits = (id, seg) => { const e = ETKINLIK[id]; return !!e && (!e.gerek || e.gerek(ctx)) && (!e.saat || e.saat(seg, ctx)); };
+    const setAct = (q, id) => {
+      const e = ETKINLIK[id];
+      q.mode = e.mode; q.act = id;
+      (this.override[q.i] ??= new Map()).set(q.k, e.yer);
+      (this.acts[q.i] ??= new Map()).set(q.k, id);
+    };
+    this.meet = this.residents.map(() => -1);
+    const byHandle = new Map(this.residents.map((r, i) => [r.handle, i]));
+    const outings = (i) => requests.filter((q) => q.i === i && (q.seg.ne === "meydan" || q.seg.ne === "hobi") && !this.override[i]?.has(q.k));
+    for (let a = 0; a < this.n; a++) {
+      const b = byHandle.get(dayPref[a]?.bulusma);
+      if (b == null || b <= a || dayPref[b]?.bulusma !== this.residents[a].handle) continue;
+      this.meet[a] = b; this.meet[b] = a;
+      // Çakışan çıkışlarında (en az yarım saat) ikisi de aynı etkinliği seçer: önce birinin istediği, olmazsa kafe,
+      // piknik ya da meydan.
+      for (const qa of outings(a)) for (const qb of outings(b)) {
+        if (Math.min(qa.seg.son, qb.seg.son) - Math.max(qa.seg.bas, qb.seg.bas) < 30 || qa.act || qb.act) continue;
+        const both = (id) => ETKINLIK[id]?.sosyal && fits(id, qa.seg) && fits(id, qb.seg);
+        const id = [dayPref[a].etkinlik, dayPref[b].etkinlik, "kafe", "piknik", "kahvehane_bahce"].find((x) => x && both(x)) ?? "meydan_sohbet";
+        if (id === "meydan_sohbet") { for (const q of [qa, qb]) { q.mode = "group:meydan"; q.act = id; (this.override[q.i] ??= new Map()).set(q.k, "meydan"); (this.acts[q.i] ??= new Map()).set(q.k, id); } }
+        else { setAct(qa, id); setAct(qb, id); }
+      }
+    }
     for (const q of requests) {
       if (q.seg.ne !== "meydan" && q.seg.ne !== "hobi") continue;
-      if (this.override[q.i]?.has(q.k)) continue; // maçta
+      if (this.override[q.i]?.has(q.k)) continue; // maçta ya da buluşmada
+      const want = dayPref[q.i]?.etkinlik;
+      if (want && fits(want, q.seg)) {
+        if (want === "meydan_sohbet") { q.mode = "group:meydan"; q.act = want; (this.override[q.i] ??= new Map()).set(q.k, "meydan"); (this.acts[q.i] ??= new Map()).set(q.k, want); }
+        else setAct(q, want);
+        continue;
+      }
       const s = this.residents[q.i].seed;
       if (q.seg.ne === "hobi" && roll(s, "hobiDegis", this.day * 16 + q.k) % 100 >= 25) {
         // Hobinin yeri adada henüz yoksa (koşu ve bisiklet sahil yolunu ister) kumsalda yapılır.
@@ -583,7 +617,7 @@ export class People {
         const start = roll(s, "yer" + mode, this.day) % pool.length;
         let item = null;
         // En yakın arkadaşı aynı anda aynı yerdeyse onun masasına otur.
-        const f = this.stories?.friend[i] ?? -1;
+        const f = this.meet?.[i] >= 0 ? this.meet[i] : this.stories?.friend[i] ?? -1; // buluşan ya da can dostu
         const fRole = f >= 0 ? this.roles[f]?.find((r, kk) => r?.item?.table && r.mode === mode && this.plans[f][kk].bas < seg.son && this.plans[f][kk].son > seg.bas) : null;
         if (fRole) item = pool.find((c) => c !== fRole.item && c.table && c.table[0] === fRole.item.table[0] && c.table[1] === fRole.item.table[1] && free(c.busy, seg.bas - 2, seg.son + 2)) ?? null;
         for (let n = 0; n < pool.length && !item; n++) {
@@ -614,7 +648,7 @@ export class People {
         if (groups?.length) {
           let g0 = roll(s, "grup", this.day + k) % groups.length;
           // Arkadaşının grubu varsa önce ona katılmayı dener.
-          const f = this.stories?.friend[i] ?? -1;
+          const f = this.meet?.[i] >= 0 ? this.meet[i] : this.stories?.friend[i] ?? -1;
           const fRole = f >= 0 ? this.roles[f]?.find((r, kk) => r?.groupRef && r.mode === mode && this.plans[f][kk].bas < seg.son && this.plans[f][kk].son > seg.bas) : null;
           if (fRole) g0 = groups.indexOf(fRole.groupRef);
           for (let n = 0; n < groups.length && !role.group; n++) {
@@ -1878,7 +1912,7 @@ export class People {
 
   /** Sakinlerin konumlarını verilen dakikaya göre günceller ve çizim listesini kurar. */
   update(minute, time) {
-    this.cinema?.update(this.theme, minute, time);
+    this.cinema?.update(this.theme, minute, time, this.day);
     const crowd = this.crowd, at = this._at;
     const w = this.world;
     this.openDoors.clear();

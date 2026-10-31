@@ -80,6 +80,22 @@ def cozumle(text: str) -> dict:
     return out
 
 
+def site_items(db: str = DB) -> list:
+    """Sitede doğrulanmış sakinlerin verdiği adaylık ve oylar (Worker), yorum biçiminde: yorumlar() aynı kuralla
+    işler (adada oturma, seçim süresi, son oy geçer). Çekilen en son zaman durum tablosunda tutulur."""
+    import ortak
+    son = psql("SELECT deger->>'ms' FROM durum WHERE anahtar = 'secim_site_son'", db) or "0"
+    r = ortak.kayit("GET", f"/api/secim-oylari?since={int(son)}")
+    if not r or not r.get("oylar"):
+        return []
+    items = [[f"site:{o['handle']}:{o['olusma']}", o["handle"], int(o["olusma"]) // 1000,
+              "adayım" if o["tur"] == "aday" else f"oy @{o['aday']}"] for o in r["oylar"]]
+    en_son = max(int(o["olusma"]) for o in r["oylar"])
+    psql(f"""INSERT INTO durum (anahtar, deger) VALUES ('secim_site_son', '{{"ms": {en_son}}}')
+             ON CONFLICT (anahtar) DO UPDATE SET deger = EXCLUDED.deger, updated_at = now();""", db)
+    return items
+
+
 def acik(db: str = DB) -> dict | None:
     v = psql(f"""SELECT json_build_object('id', id, 'bas', extract(epoch FROM bas)::bigint, 'son', extract(epoch FROM son)::bigint)
                  FROM secimler WHERE makam = '{MAKAM}' AND durum = 'acik' ORDER BY id DESC LIMIT 1""", db)

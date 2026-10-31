@@ -135,6 +135,7 @@ export function makeKit() {
     },
     glass: new Batch(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), { shadow: false }),
     windowOwners: [], // cam -> {slot} (daire) veya {workplace, seed}
+    windowInfo: [], // daire pencereleri: dünya konumu, dışa bakan yön, genişlik (tercih.js pencere çiçekleri)
     named: [], // adlı dükkân tabelaları: { owner, pos, rot, w, h, text, bg, fg, font }
   };
 }
@@ -204,6 +205,10 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     B.frames.add(local(b, lx, ly - 0.08, z), b.rot, s.set(w + 0.24, h + 0.24, 0.16));
     // Cam çerçevenin (ön yüzü z ± 0,08) 2 cm önünde: uzaktan bakınca titreşmesin.
     addGlass(b, lx, ly + h / 2 - 0.08 + 0.04, z + side * 0.1, w, h, side < 0, owner);
+    if (owner?.slot != null && K.windowInfo) {
+      const at = local(b, lx, ly + 0.24, z + side * 0.1);
+      K.windowInfo.push({ slot: owner.slot, x: at.x, y: at.y, z: at.z, nx: side * Math.sin(b.rot), nz: side * Math.cos(b.rot), w });
+    }
     B.trims.add(local(b, lx, ly - 0.16, z + side * 0.1), b.rot, s.set(w + 0.5, 0.1, 0.28), "#f2efe8");
   };
 
@@ -489,6 +494,7 @@ export function buildCity(world) {
     setFlood: (s, f) => features.userData.setFlood(s, f),
     windows: K.glass.mesh,
     windowOwners: K.windowOwners,
+    windowInfo: K.windowInfo,
     wallMaterials: [K.B.walls.material, K.B.plinth.material, K.B.doors.material],
     /** Bir binayı gizler ya da geri getirir (ev içi görünümü için). */
     setHidden(b, on) {

@@ -48,6 +48,9 @@ def main() -> None:
         DELETE FROM istekler WHERE handle = :'h';
         WITH d AS (DELETE FROM sakinler WHERE platform = :'pf' AND handle = :'h' RETURNING 1) SELECT count(*) FROM d;
     """, args.db, ["-v", f"pf={PLATFORM}", "-v", f"h={handle}"])
+    # Sitedeki tercihleri, oturumu ve oyları da (Worker).
+    from ortak import kayit
+    kayit("POST", "/api/sil", {"handles": [handle]})
     print(json.dumps({"cikarildi": handle, "kayit_silindi": removed == "1", "yayin": publish(args.db)}, ensure_ascii=False))
 
 

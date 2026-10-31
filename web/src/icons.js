@@ -44,6 +44,7 @@ const P = {
   sepet: '<path d="M3 4.5h2.5l2 10.5h10.5l2-7H6.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/>',
   yatak: '<path d="M3 19V6M3 15h18v4"/><path d="M21 15v-3a3 3 0 0 0-3-3h-7v6"/><circle cx="7" cy="11" r="1.8"/>',
   kitap: '<path d="M3 5.5c3-1 6-1 9 1 3-2 6-2 9-1v13c-3-1-6-1-9 1-3-2-6-2-9-1z"/><path d="M12 6.5v13"/>',
+  paylas: '<path d="M12 15V4"/><path d="M8 8l4-4 4 4"/><path d="M5 13v6h14v-6"/>',
   zeplin: '<path d="M3 10.5c0-2.5 3.6-4.5 8.5-4.5S20 8 20 10.5 16.4 15 11.5 15 3 13 3 10.5z"/><path d="M20 10.5l1.5-2.5v5zM9 15l.8 2.5h3.4l.8-2.5"/>',
   araba: '<path d="M4 16.5V12l2-5h12l2 5v4.5"/><path d="M4 12h16"/><circle cx="7.5" cy="16.5" r="1.8"/><circle cx="16.5" cy="16.5" r="1.8"/>',
   taksi: '<path d="M4 16.5V12l2-5h12l2 5v4.5"/><path d="M4 12h16M10 7V4.5h4V7"/><circle cx="7.5" cy="16.5" r="1.8"/><circle cx="16.5" cy="16.5" r="1.8"/>',

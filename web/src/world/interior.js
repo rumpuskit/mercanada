@@ -16,6 +16,7 @@ import { buildWorkInterior, workPose } from "./workinterior.js";
 import { phonePose } from "./human.js";
 import { doubleStair } from "./stairs.js";
 import * as P from "./palette.js";
+import { prefFor } from "../tercih.js";
 import { Color } from "three";
 
 const SCHOOL_TOP = [new Color("#2f4a6d"), new Color("#f4f1ea")];
@@ -126,6 +127,11 @@ export class Dollhouse {
 
   setFloor(floor) {
     if (this.building) this.open(this.building, floor);
+  }
+
+  /** Açık iç mekânı yeniden çizer (sakin evinin rengini değiştirince). */
+  rebuild() {
+    if (this.building) this.open(this.building, this.floor);
   }
 
   close() {
@@ -269,7 +275,9 @@ export class Dollhouse {
     const mirror = H(key, 1) < 0.5; // ana eşyalar hangi yan duvarda
     const A = mirror ? x1 : x0, B = mirror ? x0 : x1;
     const sA = mirror ? -1 : 1; // A duvarından içeri yön
-    const paint = pick(PAINTS, "boya");
+    // Doğrulanmış sakin kendi evinin duvar ve koltuk rengini seçebilir (tercih.js).
+    const pref = prefFor(slot);
+    const paint = pref?.duvar ?? pick(PAINTS, "boya");
     const wood = pick(WOODS, "ahsap");
     const floorCol = pick(FLOORS, "parke");
 
@@ -337,7 +345,7 @@ export class Dollhouse {
     const faceB = -faceA;
     switch (r.kind) {
       case "salon": case "acik": {
-        const sofa = pick(SOFAS, "koltuk");
+        const sofa = pref?.koltuk ?? pick(SOFAS, "koltuk");
         const sz = r.kind === "acik" ? r.z1 - 1.7 : zc;
         // Kanepe A duvarında, televizyon karşısında (B duvarı).
         add(0.9, 0.42, 2.1, ax(0.5), 0.06, sz, sofa);
