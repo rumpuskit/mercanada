@@ -26,7 +26,8 @@ import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
 import { startOnline } from "./online.js";
 import { Follower } from "./follow.js";
-import { VERI_URL } from "./config.js";
+import { VERI_URL, ZEPLIN_REKLAM } from "./config.js";
+import { Zeplin } from "./world/zeplin.js";
 import "./style.css";
 
 sim.setCatalog(catalog);
@@ -208,6 +209,12 @@ const dollhouse = new Dollhouse(world, city, people, scene);
 people.dollhouse = dollhouse;
 const sky = createSky(scene);
 sky.sun.shadow.mapSize.set(2048, 2048);
+// Mercan Zeplini: gelişim tablosundaki adımında açılır (?zeplin her düzeyde gösterir; ?zeplin_reklam=adres
+// reklam görselini dener, ör. reklamverene önizleme).
+const zeplin = sim.isOpen("zeplin") || params.has("zeplin")
+  ? new Zeplin(world, { reklam: params.get("zeplin_reklam") || ZEPLIN_REKLAM.gorsel, mobile })
+  : null;
+if (zeplin) scene.add(zeplin.group);
 
 // Ortam sesleri: varsayılan açık; tarayıcılar sesi ancak bir dokunuşla başlatır, o dokunuş "Adaya gir".
 // Kapatan kişinin tercihi bu cihazda hatırlanır.
@@ -326,17 +333,17 @@ function flyTo(x, y, z, distance = 120, direction = null, sure = 1.3) {
 }
 
 const nameTags = new NameTags(scene);
-if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents, scene };
+if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents, scene, zeplin };
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
-follower = new Follower({ camera, controls, world, people, traffic });
-const ui = createUI({ residents, people, world, dollhouse, stories, traffic, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
+follower = new Follower({ camera, controls, world, people, traffic, zeplin });
+const ui = createUI({ residents, people, world, dollhouse, stories, traffic, zeplin, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
 if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
 // Takip edilen sakin evine ya da işine girince iç mekân açılır, çıkınca kapanır.
 follower.onHide = (i) => { if (ui.selected() === i) ui.select(i, false, false); };
 // Çevrimiçi sayacı yalnızca yayındaki sitede (ya da ?sayac ile denerken).
 if (location.hostname === "mercanada.rumpuskit.com" || params.has("sayac")) startOnline();
-const mapUI = createMapUI({ world, camera, controls, flyTo, ui, residents });
+const mapUI = createMapUI({ world, camera, controls, flyTo, ui, residents, zeplin });
 
 // Bir sakine dokununca kartını aç.
 const raycaster = new THREE.Raycaster();
@@ -354,6 +361,7 @@ canvas.addEventListener("pointerup", (e) => {
   if (index != null && !people.poses[index].inVehicle) return ui.select(index, false);
   const veh = vehicles.pick(raycaster);
   if (veh) return ui.selectVehicle(veh);
+  if (zeplin?.pick(raycaster)) return ui.selectVehicle({ kind: "zeplin" });
   // Aracın içindeki sakine dokunulduysa (camdan) aracı seç; kartta sahibine/yolcuya geçilebilir.
   const inside = index != null ? traffic.active.get(people.poses[index].vehicleKey) : null;
   if (inside) return ui.selectVehicle({ kind: inside.kind, key: inside.key, owner: inside.owner, line: inside.line, dep: inside.dep });
@@ -475,6 +483,7 @@ function adaptQuality(real) {
   if (params.has("denetle")) console.info(`kalite düşürüldü: ${fps.toFixed(1)} fps → piksel oranı ${renderer.getPixelRatio()}, gölge ${renderer.shadowMap.enabled}`);
 }
 let lastSim = null;
+let zeplinNight = 0;
 const bounds = world.bounds;
 function tick() {
   const real = performance.now() / 1000;
@@ -514,6 +523,7 @@ function tick() {
   }
   for (const c of people.staticCars) vehicles.addCar(c.x, world.surfaceY(c.x, c.z) + 0.06, c.z, c.heading, 0, { taxi: c.taxi, record: { kind: "taxi" } });
 
+  zeplin?.update(unix, real, zeplinNight); // takipten önce: kamera zeplinin bu karedeki yerini izler
   if (flight) {
     flight.t = Math.min(1, flight.t + dt / flight.sure);
     const k = 1 - (1 - flight.t) ** 3;
@@ -528,7 +538,7 @@ function tick() {
   {
     const t = controls.target;
     const nx = THREE.MathUtils.clamp(t.x, bounds.x0 - 200, bounds.x1 + 200), nz = THREE.MathUtils.clamp(t.z, bounds.z0 - 200, bounds.z1 + 300);
-    const ny = flight || dollhouse.isOpen() || shoulder ? t.y : THREE.MathUtils.lerp(t.y, Math.max(0, world.height(t.x, t.z)), 0.1);
+    const ny = flight || dollhouse.isOpen() || shoulder || follower.target?.kind === "zeplin" ? t.y : THREE.MathUtils.lerp(t.y, Math.max(0, world.height(t.x, t.z)), 0.1);
     const d = new THREE.Vector3(nx - t.x, ny - t.y, nz - t.z);
     if (!shoulder && d.lengthSq() > 1e-8) { t.add(d); camera.position.add(d); }
   }
@@ -538,6 +548,7 @@ function tick() {
 
   const skyState = sky.update(day, minute, controls.target);
   const light = skyState.light;
+  zeplinNight = 1 - light;
   const dist = camera.position.distanceTo(controls.target);
   fitDepth(dist);
   const size = THREE.MathUtils.clamp(dist * 0.8, 25, 1400);

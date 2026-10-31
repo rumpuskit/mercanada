@@ -1,7 +1,7 @@
 // Ekrandaki paneller: saat ve nüfus, zaman hızı, "Kendini bul" araması, sakin kartı ve ev içi görünümü.
 import * as sim from "./sim.js";
 import { HOME_LABELS, homeActivity } from "./world/life.js";
-import { TIKTOK, TIKTOK_URL, nextMove } from "./config.js";
+import { TIKTOK, TIKTOK_URL, ZEPLIN_REKLAM, nextMove } from "./config.js";
 import { svg, BINA_SIMGE, ARAC_SIMGE } from "./icons.js";
 
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
@@ -23,7 +23,7 @@ const $ = (id) => document.getElementById(id);
 // Sakinin görünen adı: adını gizlemek isteyenler "Gizli komşu" olarak görünür.
 export const at = (r) => (r.hidden ? "Gizli komşu" : "@" + r.handle);
 
-export function createUI({ residents, people, world, dollhouse, stories, traffic, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null }) {
+export function createUI({ residents, people, world, dollhouse, stories, traffic, zeplin = null, follow, setSpeed, flyTo, speed, today, minute, waiting = 0, listError = null, secim = null }) {
   const byHandle = new Map(residents.map((r, i) => [r.handle, i]));
   $("cta").href = TIKTOK_URL;
   // İskelede bekleyenler: takip etmiş, sıradaki taşınmayı bekleyenler. Dokununca iskeleye uçar.
@@ -287,7 +287,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     flushActions();
   }
 
-  const KIND_NAMES = { car: "Otomobil", taxi: "Taksi", bus: "Otobüs", ambulans: "Ambulans", itfaiye: "İtfaiye aracı", cop: "Çöp kamyonu" };
+  const KIND_NAMES = { car: "Otomobil", taxi: "Taksi", bus: "Otobüs", ambulans: "Ambulans", itfaiye: "İtfaiye aracı", cop: "Çöp kamyonu", zeplin: "Zeplin" };
 
   // Kart birkaç karede bir yeniden çizilir; düğmeler değişmediyse yerinde kalır (yoksa basılırken
   // DOM'dan kopar ve dokunuş boşa gider). Yalnızca tıklama işlevleri tazelenir.
@@ -324,6 +324,21 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     $("card-handle").textContent = KIND_NAMES[r.kind] ?? "Araç";
     icon(svg(ARAC_SIMGE[r.kind] ?? "araba"), null, true);
     const rows = [];
+    if (r.kind === "zeplin") {
+      const z = zeplin.pose;
+      $("card-title").textContent = "Mercan Zeplini";
+      const m = minute();
+      $("card-now").textContent = z.visible
+        ? { gelis: "Anakaradan adaya geliyor", tur: "Adanın üstünde tur atıyor", donus: "Anakaraya dönüyor" }[z.phase]
+        : m < 540 ? "Anakarada, 09:00'da adaya gelecek" : "Anakarada, yarın 09:00'da gelecek";
+      if (z.visible) rows.push(["Hız", `${Math.round(z.speed * 3.6)} km/sa`], ["Yükseklik", `${Math.round(z.y)} m`]);
+      rows.push(["Uçuş", "Her gün 09:00–22:00"]);
+      if (ZEPLIN_REKLAM.ad) rows.push(["Reklam", ZEPLIN_REKLAM.ad]);
+      facts(rows);
+      const f = follow.get();
+      if (z.visible) followActions(f?.kind === "zeplin" ? f.view : null, { kind: "zeplin" }, ["kamera", "Yanından izle"]);
+      return;
+    }
     if (r.kind === "bus") {
       const line = traffic.lines[r.line];
       $("card-title").textContent = `${line.name} · ${r.dep + 1}. sefer`;
@@ -367,7 +382,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     vehicle = record;
     dollhouse.close();
     const live = record.key ? traffic.active.get(record.key) : null;
-    if (live && !live.parked) follow.set({ kind: "arac", key: record.key }, "harita");
+    if (record.kind === "zeplin") follow.set({ kind: "zeplin" }, "harita");
+    else if (live && !live.parked) follow.set({ kind: "arac", key: record.key }, "harita");
     else {
       follow.set(null);
       const at = record.slot != null ? traffic.slots[record.slot] : live?.route.position(live.s);

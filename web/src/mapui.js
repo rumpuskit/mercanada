@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 // Arama için: büyük/küçük harf ve Türkçe karakter farkı gözetilmez.
 const fold = (t) => t.replace(/İ/g, "i").replace(/I/g, "ı").toLocaleLowerCase("tr").replace(/[çğıöşü]/g, (c) => "cgiosu"["çğıöşü".indexOf(c)]).trim();
 
-export function createMapUI({ world, camera, controls, flyTo, ui, residents }) {
+export function createMapUI({ world, camera, controls, flyTo, ui, residents, zeplin = null }) {
   const { x0, x1, z0, z1 } = world.bounds;
   const pad = 140;
   const wx0 = x0 - pad, wz0 = z0 - pad, ww = x1 - x0 + 2 * pad, wd = z1 - z0 + 2 * pad + 160;
@@ -74,6 +74,21 @@ export function createMapUI({ world, camera, controls, flyTo, ui, residents }) {
     ctx.fillStyle = "#7cc3d6";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(base, (wx0 - view.x) * k, (wz0 - view.z) * k, ww * k, wd * k);
+    // Zeplin (uçuştaysa): gidiş yönüne dönük küçük zeplin.
+    if (zeplin?.pose.visible) {
+      const zp = zeplin.pose, zx = (zp.x - view.x) * k, zz = (zp.z - view.z) * k;
+      ctx.save();
+      ctx.translate(zx, zz);
+      ctx.rotate(Math.atan2(Math.cos(zp.heading), Math.sin(zp.heading)));
+      ctx.shadowColor = "rgba(0,0,0,0.3)"; ctx.shadowBlur = 3 * dpr;
+      ctx.fillStyle = "#f6f4ef";
+      ctx.beginPath(); ctx.ellipse(0, 0, 9 * dpr, 3.6 * dpr, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#1d3156"; ctx.fillRect(-4.5 * dpr, -1.2 * dpr, 8 * dpr, 2.4 * dpr);
+      ctx.fillStyle = "#e9667f";
+      ctx.beginPath(); ctx.moveTo(-7 * dpr, 0); ctx.lineTo(-11 * dpr, -4 * dpr); ctx.lineTo(-11 * dpr, 4 * dpr); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
     // Kameranın baktığı yer ve yönü (Google Haritalar gibi): yakınlaşmadan bağımsız sabit boyutlu nokta ve
     // bakış yönünde solan ışın.
     const t = controls.target;
@@ -123,9 +138,12 @@ export function createMapUI({ world, camera, controls, flyTo, ui, residents }) {
     ["Fener", world.fener.x, world.fener.z, 90],
     tarla && ["Tarlalar", ...tarla.anchor, 160],
     ...world.labels.filter((l) => /Mahallesi$/.test(l.text)).map((l) => [l.text.replace(" Mahallesi", ""), l.x, l.z, 220]),
+    // Zeplin: yeri sabit değil; dokununca kartı açılır ve uçuştaysa izlenir.
+    zeplin && ["Zeplin", 0, 0, 0, () => ui.selectVehicle({ kind: "zeplin" })],
   ].filter(Boolean);
   const icon = (name) => svg(YER_SIMGE[name] ?? "mahalle");
-  const go = ([, x, z, d]) => {
+  const go = ([, x, z, d, act]) => {
+    if (act) return act();
     ui.close();
     flyTo(x, Math.max(0, world.height(x, z)), z, d);
   };

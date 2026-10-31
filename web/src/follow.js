@@ -6,13 +6,16 @@
 import * as THREE from "three";
 import { FLAT_Y, FLOOR_H } from "./world/layout.js";
 
-const HEAD = { sakin: 1.55, car: 1.3, taxi: 1.3, bus: 2.8, ambulans: 2.2, itfaiye: 2.6, cop: 2.6 };
-const BACK = { sakin: 3.6, car: 7, taxi: 7, bus: 13, ambulans: 9, itfaiye: 12, cop: 11 };
+const HEAD = { sakin: 1.55, car: 1.3, taxi: 1.3, bus: 2.8, ambulans: 2.2, itfaiye: 2.6, cop: 2.6, zeplin: 4 };
+const BACK = { sakin: 3.6, car: 7, taxi: 7, bus: 13, ambulans: 9, itfaiye: 12, cop: 11, zeplin: 105 };
+const ZOOM = { zeplin: [45, 260] }; // omuz görünümünde yaklaşma sınırları (varsayılan 1,6–40 m)
+// Zeplin omuz görünümünde çapraz yandan izlenir (reklam alanı görünsün); kamera bu açıya döner.
+const REST_YAW = { zeplin: 1.05 }, PITCH = { zeplin: 0.14 };
 
 export class Follower {
-  constructor({ camera, controls, world, people, traffic }) {
-    Object.assign(this, { camera, controls, world, people, traffic });
-    this.target = null; // {kind: "arac", key} | {kind: "sakin", i}
+  constructor({ camera, controls, world, people, traffic, zeplin = null }) {
+    Object.assign(this, { camera, controls, world, people, traffic, zeplin });
+    this.target = null; // {kind: "arac", key} | {kind: "sakin", i} | {kind: "zeplin"}
     this.view = "harita";
     this.t = 0;
     this.lastState = null;
@@ -24,7 +27,7 @@ export class Follower {
         this.pitch = THREE.MathUtils.clamp(this.pitch + dy * (Math.PI / h) * 0.8, -0.15, 1.2);
         this.userTurned = performance.now();
       },
-      zoom: (f) => { this.dist = THREE.MathUtils.clamp(this.dist * f, 1.6, 40); },
+      zoom: (f) => { const [lo, hi] = ZOOM[this._kind()] ?? [1.6, 40]; this.dist = THREE.MathUtils.clamp(this.dist * f, lo, hi); },
     };
   }
 
@@ -44,11 +47,12 @@ export class Follower {
     const kind = this._kind();
     // Dikey ekranda (telefon) biraz daha geriden bakılır; kart ekranın altını kapatır.
     this.dist = (BACK[kind] ?? 4) * (innerWidth < innerHeight ? 1.6 : 1);
-    this.pitch = innerWidth < innerHeight ? 0.42 : 0.32;
+    this.pitch = PITCH[kind] ?? (innerWidth < innerHeight ? 0.42 : 0.32);
+    this.yaw = REST_YAW[kind] ?? 0;
     this.controls.custom = view === "omuz" ? this._custom : null;
     this.controls.lockTarget = true;
     // Harita görünümünde uzaktan dokunulduysa hedefe yaklaşılır (sakin 40 m, araç 80 m); yakınsa olduğu gibi.
-    const want = kind === "sakin" ? 40 : 80;
+    const want = kind === "sakin" ? 40 : kind === "zeplin" ? 170 : 80;
     const cd = this.camera.position.distanceTo(this.controls.target);
     this.zoomTo = yaklas && view === "harita" && cd > want * 1.25 ? want : null;
   }
@@ -61,13 +65,17 @@ export class Follower {
 
   _kind() {
     if (!this.target) return null;
-    if (this.target.kind === "sakin") return "sakin";
+    if (this.target.kind === "sakin" || this.target.kind === "zeplin") return this.target.kind;
     return this.traffic.active.get(this.target.key)?.kind ?? "car";
   }
 
   /** Hedefin şu anki yeri: {x, y, z, heading, hidden}; yoksa null (araç yolculuğunu bitirdi). */
   _point() {
     const T = this.target;
+    if (T.kind === "zeplin") {
+      const z = this.zeplin?.pose;
+      return z?.visible ? { x: z.x, y: z.y, z: z.z, heading: z.heading, kind: "zeplin" } : null;
+    }
     if (T.kind === "arac") {
       const v = this.traffic.active.get(T.key);
       if (!v) return null;
@@ -105,7 +113,8 @@ export class Follower {
     if (this.view === "harita") {
       // Hedef ekranın ortasında: ilk anda kısa bir süzülme, sonra kilit (gecikme yok).
       const k = this.t >= 1 ? 1 : 1 - Math.exp(-dt * 14);
-      const d = new THREE.Vector3((p.x - controls.target.x) * k, 0, (p.z - controls.target.z) * k);
+      // Zeplin havada: hedef yüksekliğiyle birlikte izlenir.
+      const d = new THREE.Vector3((p.x - controls.target.x) * k, p.kind === "zeplin" ? (p.y - controls.target.y) * k : 0, (p.z - controls.target.z) * k);
       controls.target.add(d); camera.position.add(d);
       if (this.zoomTo) {
         const cd = camera.position.distanceTo(controls.target);
@@ -123,7 +132,8 @@ export class Follower {
       let dh = p.heading - this.heading;
       dh = Math.atan2(Math.sin(dh), Math.cos(dh));
       this.heading += dh * Math.min(1, dt * 2.5);
-      if (performance.now() - (this.userTurned ?? 0) > 4000) this.yaw *= Math.max(0, 1 - dt * 0.8);
+      const rest = REST_YAW[kind] ?? 0;
+      if (performance.now() - (this.userTurned ?? 0) > 4000) this.yaw = rest + (this.yaw - rest) * Math.max(0, 1 - dt * 0.8);
     }
     const h = (this.heading ?? 0) + Math.PI + this.yaw;
     const dir = new THREE.Vector3(Math.sin(h) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(h) * Math.cos(this.pitch));

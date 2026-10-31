@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as sim from "../web/src/sim.js";
-import { VERI_URL, TIKTOK } from "../web/src/config.js";
+import { VERI_URL, TIKTOK, ZEPLIN_REKLAM } from "../web/src/config.js";
 import { seslendir } from "./seslendir.mjs";
 import { yukle } from "./tiktok.mjs";
 
@@ -142,18 +142,24 @@ let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = 
 if (acilan.length) {
   tur = "acilis";
   const s = acilan.at(-1);
-  govde.push(c(`Bugün ${s.ad} açıldı.`));
+  if (s.acar.includes("zeplin")) {
+    // Zeplin bir yer değil: gelişini anlat, gece ışıklı reklam alanıyla çek.
+    govde.push(c("Bugün adaya bir zeplin geldi."), c("Her sabah dokuzda geliyor, gece onda dönüyor.", "Her sabah 09:00'da geliyor, 22:00'de dönüyor."),
+      c(ZEPLIN_REKLAM.ad ? `Üstünde ${ZEPLIN_REKLAM.ad} yazıyor.` : "Üstünde adamızın adı yazıyor.", null, true));
+    saat = "20:00";
+  } else govde.push(c(`Bugün ${s.ad} açıldı.`));
   // Bu açılışla anakaradan adaya dönenler: dünkü düzeyde anakarada, bugün adada çalışanlar.
   sim.setTown(durum.zirve);
   const once = new Map(residents.map((r) => [r.slot, sim.job(r).id]));
   sim.setTown(level);
   const donen = residents.filter((r) => once.get(r.slot) === "anakara" && sim.job(r).id !== "anakara");
-  if (donen.length) govde.push(c(`${say(donen.length)} kişi artık anakaraya gitmiyor.`, `${fmt(donen.length)} kişi artık anakaraya gitmiyor.`, true));
+  if (s.acar.includes("zeplin")) cekim = ["zeplin", "zeplin2"];
+  else if (donen.length) govde.push(c(`${say(donen.length)} kişi artık anakaraya gitmiyor.`, `${fmt(donen.length)} kişi artık anakaraya gitmiyor.`, true));
   else if (s.acar.some((k) => catalog.isyerleri[k.split(":")[0]])) govde.push(c("Henüz çalışanı yok."), c("Kapısı yine de açık.", null, true));
   else govde.push(c("Oturan kimse yok."), c("Henüz.", null, true));
   etiketler = donen.filter(named).slice(0, 5).map((r) => r.handle);
   soru = next ? c(`Sizce ${next.ad} ne zaman açılır?`) : c("Ada tamamlandı. Sırada ne olsun?");
-  cekim = ["ucus", "meydan"];
+  if (!cekim.length) cekim = ["ucus", "meydan"];
 } else if (yeniler.length) {
   tur = "yeniler";
   govde.push(c(`Bugün ${say(yeniler.length)} kişi taşındı.`, `Bugün ${fmt(yeniler.length)} kişi taşındı.`));
@@ -292,6 +298,9 @@ function CEKIM(ad, v, sure, arayuz) {
     fener: () => ({ adres: a, kamera: [[0, 700, 45, 260, 791, 4, 178], [sure, 715, 40, 250, 791, 4, 178]] }),
     fener2: () => ({ adres: a, kamera: [[0, 812, 22, 205, 791, 18, 178], [sure, 806, 24, 210, 791, 19, 178]] }),
     siradaki: () => yor("siradaki", 48, 30, 0.6 + v, 1.1 + v, 2),
+    // Zeplin: yanından, gidişine göre dönen kamera (dikey kadraja sığacak uzaklıkta); ikincisi iskeleden bakış.
+    zeplin: () => yor("zeplin", 150, -18, 1.1 + 0.3 * v, 1.6 + 0.3 * v, 0),
+    zeplin2: () => yor("zeplin-yer", 0, 0, 0, 0, 0),
     yakamoz: () => yor([0, -270], 160, 110, 0.4 + v, 0.75 + v, 0),
     kapanis: () => ({ adres: a, kamera: [[0, 160, 180, 420, 0, 0, -60], [sure, 200, 250, 500, 0, 0, -80]], yazilar: [{ metin: "Takip et,<br>adaya taşın.", alt: `TikTok'ta<br><small>@${TIKTOK}</small>`, bas: 0.2, son: sure, yer: "ust" }] }),
   };

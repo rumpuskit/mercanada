@@ -57,6 +57,7 @@
     { "nufus": 100, "ad": "Belediye ve ilk başkanlık seçimi", "acar": ["belediye:0"] },
     { "nufus": 120, "ad": "Yakamoz İlkokulu", "acar": ["okul:0"] },
     { "nufus": 140, "ad": "Çocuk parkları", "acar": ["oyun:0"] },
+    { "nufus": 150, "ad": "Mercan Zeplini", "acar": ["zeplin"] },
     { "nufus": 160, "ad": "Plaj şemsiyeleri ve cankurtaran", "acar": ["plaj:0"] },
     { "nufus": 180, "ad": "Lodos Kahvesi", "acar": ["kafe:1"] },
     { "nufus": 200, "ad": "Çevre yolu, otopark ve otobüs", "acar": ["cevre_yolu"] },

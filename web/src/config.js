@@ -16,3 +16,8 @@ export function nextMove(now = Date.now()) {
   const pad = (s) => String(s).padStart(2, "0") + ":00";
   return next != null ? pad(next) : "yarın " + pad(TASINMA_SAATLERI[0]);
 }
+
+// Mercan Zeplini'nin yan reklam alanları (giydirme). gorsel: 3:1 PNG/JPG (önerilen 3000×1000), public/ altında
+// ("zeplin/reklam.png") ya da CORS izinli tam adres; null ise Mercanada'nın kendi tanıtımı. ad: kartta görünen
+// reklamveren adı. İki yana da aynı görsel okunur yönde basılır; gece alan ışıklı parlar.
+export const ZEPLIN_REKLAM = { gorsel: null, ad: null };
