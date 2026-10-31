@@ -78,7 +78,8 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
 # Sitedeki yorumla doğrulama kodu: "kod 1234", "kod: 1234", "kodum 1234".
 KOD = re.compile(r"\bkod\w*\s*:?\s*(\d{4})\b")
 TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
-OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) olmak isti")
+# "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım" (yorumlarda sık).
+OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olacagim|olacam|olcagim)\b)")
 GIZLE = re.compile(r"\b(?:adimi|ismimi|adim|ismim|beni)\b(?: \w+){0,2} (?P<ne>gizle|goster)\w*"
                    r"|\b(?P<ne2>gizle|goster)\w*(?: \w+){0,2} (?:adimi|ismimi)\b")
 

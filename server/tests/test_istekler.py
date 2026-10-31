@@ -31,12 +31,15 @@ class CozumleTest(unittest.TestCase):
             "Polis 👮": {"meslek": "polis"},
             "Meslek Football": {"meslek": "futbolcu"},
             "Meslek çaycı/kahveci": {"meslek": "kahveci"},
+            "abla takipteyim balıkcı olucam": {"meslek": "balikci"},
+            "ben polis olcam": {"meslek": "polis"},
+            "doktor olacağım": {"meslek": "doktor"},
         }
         for text, want in cases.items():
             self.assertEqual(cozumle(text), want, text)
 
     def test_istek_degil(self):
-        for text in ("çok güzel olmuş", "balıkçı amca çok iyi", "balıkçı olmak istemiyorum",
+        for text in ("çok güzel olmuş", "balıkçı amca çok iyi", "balıkçı olmak istemiyorum", "balıkçı olmayacağım",
                      "itfaiyeci olmak istiyorum", "belediye başkanı olmak istiyorum", "kahve içmek istiyorum", "meslek: şef", "meslek: müdür",
                      # Kadrolu işler (kontenjanlı) ve "anakara" istenemez.
                      "meslek: cankurtaran", "meslek: uzman"):
