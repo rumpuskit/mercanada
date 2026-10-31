@@ -3,6 +3,7 @@ import * as sim from "./sim.js";
 import { HOME_LABELS, homeActivity } from "./world/life.js";
 import { TIKTOK, TIKTOK_URL, ZEPLIN_REKLAM, nextMove } from "./config.js";
 import { svg, BINA_SIMGE, ARAC_SIMGE } from "./icons.js";
+import { ETKINLIK } from "./world/etkinlik.js";
 
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
 const PLACE_NAMES = {
@@ -10,6 +11,8 @@ const PLACE_NAMES = {
   tepe: "Tepe", fener: "Fener", kahvehane: "Kahvehane", pazar: "Pazar", saha: "Futbol sahası",
 };
 // Buluşma yerinde ne yapıyor (yer anahtarına göre); yanında kimin olduğu ayrıca eklenir.
+// Etkinliklerin yeri (etkinlik.js yer anahtarları) kart ve "Bugün" listesinde.
+const EXTRA_PLACES = { iskele_vapur: "Vapur iskelesi", kiyi: "Kıyı", kapi: "Kapı önü", market: "Market", firin: "Fırın", cami: "Cami", sahil_yolu: "Sahil yolu", sinema: "Plaj sineması" };
 const OUT_LABELS = {
   meydan: "Meydanda", park: "Parkta geziniyor", sahil_yolu: "Sahil yolunda yürüyüşte",
   kahvehane: "Kahvehanede", pazar: "Pazarda alışverişte", saha: "Futbol sahasında",
@@ -90,12 +93,13 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     if (yer.startsWith("mahalle:")) return sim.isOpen(`cay:${yer.slice(8)}`) ? "Mahallesinin çay bahçesi" : "Mahallesi";
     const key = yer.replace("hobi:", "");
     if (key === "iskele" && !world.places.iskele) return "Kıyı"; // balık iskelesi açılana kadar kıyıdan balık tutulur
-    return PLACE_NAMES[key] ?? yer;
+    if (PLACE_NAMES[key] && !world.places[key]) return "Meydan"; // yeri henüz açılmamış hobi meydanda geçer
+    return PLACE_NAMES[key] ?? EXTRA_PLACES[key] ?? yer;
   }
 
   /** Yolculuğun gerçek varış yeri: "meydan" planı saate göre farklı yerlere dağılır. */
   function destOf(i, seg) {
-    if (seg.nereye !== "meydan") return seg.nereye;
+    if (seg.nereye !== "meydan" && !seg.nereye.startsWith("hobi:")) return seg.nereye;
     const k = people.plans[i].findIndex((q) => q.bas === seg.son);
     return k >= 0 ? people._placeOf(i, k) ?? "meydan" : "meydan";
   }
@@ -121,8 +125,17 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         if (d === "is" && (people.works[i].wp.kind === "anakara" || people.works[i].wp.kind === "zeplin")) return seg.nereden === "ev" ? "Vapura yetişmeye gidiyor" : "Vapurdan indi, eve dönüyor";
         return `Yolda → ${placeLabel(i, d)}`;
       }
-      case "hobi": return `${people.hobbies[i].ad} · ${placeLabel(i, seg.yer)}`;
+      case "hobi":
       case "meydan": {
+        // Günün etkinliği (etkinlik.js): kartta ne yaptığı; sosyal etkinlikte yanında kimin olduğu.
+        const act = people.currentAct[i];
+        if (act && ETKINLIK[act]) {
+          const near = company(i);
+          const e = ETKINLIK[act];
+          if (!e.sosyal) return e.ad;
+          return `${e.ad}, ${near.length === 0 ? "tek başına" : near.length === 1 ? `${at(residents[near[0]])} ile` : act === "kapi_onu" ? "komşularıyla" : "arkadaşlarıyla"}`;
+        }
+        if (seg.ne === "hobi") return `${people.hobbies[i].ad} · ${placeLabel(i, seg.yer)}`;
         const pl = people.currentPlace[i] ?? "meydan";
         const yer = pl.startsWith("mahalle:") ? (sim.isOpen(`cay:${pl.slice(8)}`) ? "Mahallesinin çay bahçesinde" : "Mahallesinde")
           : OUT_LABELS[pl] ?? "Çarşıda";
@@ -398,6 +411,14 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     showCard();
   }
 
+  $("gunun").addEventListener("click", () => {
+    const th = people.theme;
+    if (!th) return;
+    const at = th.yer === "cami" ? world.workplaces.cami?.find(Boolean)?.door
+      : th.id === "sinema" && people.cinema ? people.cinema.spot : world.placeOf(th.yer).anchors[0];
+    if (at) { close(); flyTo(at[0], Math.max(0, world.height(at[0], at[1])), at[1], th.id === "sinema" ? 45 : 90); }
+  });
+
   function showCard() {
     $("card").hidden = false;
     document.body.classList.add("kart-acik");
@@ -538,6 +559,19 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       } else {
         const chip = (ic, n, t, cls = "") => `<span class="chip ${cls}"><b>${svg(ic)}${fmt.format(n)}</b><small>${t}</small></span>`;
         $("stats").innerHTML = chip("sakinler", residents.length, "sakin", "ana") + chip("is", work, "işte") + chip("ev", home, "evde") + chip("yurur", out, "dışarıda");
+      }
+      // Günün olayı (etkinlik.js): üst panelde tek satır; dokununca kamera olayın yerine gider.
+      const th = people.theme, gun = $("gunun");
+      gun.hidden = !th || !residents.length;
+      if (th) {
+        const key = `${th.id}|${th.ad}`;
+        if (gun.dataset.key !== key) {
+          gun.dataset.key = key;
+          const ic = { cuma: "cami", sinema: "kamera", pazar: "sepet", ucurtma: "dag", gunbatimi: "gunes", balik: "balik", temizlik: "dalga", yildiz: "ampul", tavla: "fincan", komsuluk: "mahalle" }[th.id] ?? "gunes";
+          gun.innerHTML = svg(ic);
+          gun.append(`Bugün: ${th.ad}${th.bas != null ? ` · ${sim.formatMinute(th.bas)}` : ""}`);
+          gun.title = gun.textContent;
+        }
       }
       if (!$("card").hidden) render();
     },

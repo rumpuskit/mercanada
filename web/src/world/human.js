@@ -178,6 +178,12 @@ const PROPS = {
     tint(new THREE.CylinderGeometry(0.035, 0.035, 0.03, 8).rotateZ(Math.PI / 2).translate(0.15, 0.04, -0.09), "#1a1a1a"),
   ]),
   havlu: () => merge([tint(new THREE.BoxGeometry(0.8, 0.01, 1.7), "#e8607a")]),
+  // Piknik örtüsü: kırmızı-beyaz kareli (beyaz şeritler kırmızı zeminin hemen üstünde).
+  ortu: () => merge([
+    tint(new THREE.BoxGeometry(1.9, 0.01, 1.9), "#d9534f"),
+    ...[-0.6, 0, 0.6].map((o) => tint(new THREE.BoxGeometry(0.22, 0.012, 1.9).translate(o, 0.002, 0), "#f6f1e9")),
+    ...[-0.6, 0, 0.6].map((o) => tint(new THREE.BoxGeometry(1.9, 0.013, 0.22).translate(0, 0.003, o), "#f6f1e9")),
+  ]),
   ucurtma: () => merge([
     tint(new THREE.ConeGeometry(0.55, 1.1, 4).scale(1, 1, 0.05).rotateX(Math.PI / 2).rotateX(-Math.PI / 2), "#e0463c"),
     tint(new THREE.BoxGeometry(0.03, 1.4, 0.01).translate(0, -1.1, 0), "#f2c230"),
@@ -380,6 +386,14 @@ export class Crowd {
           const sx = Math.cos(p.heading), sz = -Math.sin(p.heading);
           propM.compose(this._p.set(p.x - sx * 0.42 * k, p.groundY ?? p.y, p.z - sz * 0.42 * k), this._q, this._one);
           this._prop("valiz", propM, p.propColor);
+          break;
+        }
+        case "ortu": {
+          // Örtü grubun ortasında yerde (herkes aynı örtüyü aynı yere çizer).
+          if (!p.ortu) break;
+          this._q.setFromAxisAngle(AY, 0.3);
+          propM.compose(this._p.set(p.ortu[0], p.ortu[1] + 0.01, p.ortu[2]), this._q, this._one);
+          this._prop("ortu", propM);
           break;
         }
         case "havlu": {

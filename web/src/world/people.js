@@ -13,7 +13,9 @@ import { activityAt, dayPlan, dreamJob, hobby, isHoliday, job, look, pet, roll, 
 import { Crowd, HAT_HAIR, phonePose } from "./human.js";
 import { PedNav } from "./nav.js";
 import { pedWait } from "./signals.js";
-import { nextArrival, nextDeparture } from "./ferry.js";
+import { ferryOut, nextArrival, nextDeparture } from "./ferry.js";
+import { ETKINLIK, buildCinema, chooseActivity, dayTheme, favorites } from "./etkinlik.js";
+import { sunPosition, sunTimes } from "./sky.js";
 import { craneSeat, forkliftSeat, portMotion, shipWalkY, stackerSeat } from "./port.js";
 import { pointAt } from "./traffic.js";
 import { playgroundItems } from "./layout.js";
@@ -262,6 +264,9 @@ export class People {
     this.slotToIndex = new Map(residents.map((r, i) => [r.slot, i]));
     this.homeActs = new Array(this.n);
     this.currentPlace = new Array(this.n);
+    this.currentAct = new Array(this.n); // dışarıdaki etkinliğin kimliği (etkinlik.js), kart metni için
+    this.favs = residents.map((r) => favorites(r.seed));
+    this.theme = null;
     this.dollhouse = null;
     this.openDoors = new Set();
 
@@ -291,9 +296,11 @@ export class People {
     this.carColor = residents.map((r) => roll(r.seed, "arabaRenk") % 10);
     this.homeSlot = residents.map((r, i) => (this.hasCar[i] && traffic ? traffic.takeSlot(...this.homes[i].door, -1, 1e9, 220) : null));
     this.homeSlot.forEach((slot, i) => { if (slot == null) this.hasCar[i] = false; });
+    this.cinema = buildCinema(world); // plajda açık hava sineması (cumartesi akşamı)
     this._buildPools();
     this.crowd = new Crowd(this.n + 320); // sakinler + şoförler, pazarcılar, öğrenciler
     this.group = this.crowd.group;
+    if (this.cinema) this.group.add(this.cinema.group);
     this._at = {};
     this._tmp = {};
     this._stand = {};
@@ -356,6 +363,23 @@ export class People {
     for (const [bx, bz] of beach) scatter("towel", bx, bz, 7, 3, Math.PI, 19 + Math.round(bx), sea);
     const top = w.places.tepe.anchors[0];
     scatter("kite", top[0], top[1], 16, 10, (x, z) => Math.atan2(x - top[0], z - top[1]), 23);
+    for (const [bx, bz] of beach.filter((_, j) => j % 3 === 0)) scatter("kite", bx, bz - 2, 6, 2, 0, 29 + Math.round(bx), sea);
+
+    // Gün batımı: fenerin seyir noktaları, tepenin zirve halkası, batı kıyısı ve vapur iskelesinin ucu (bakış
+    // yönü güneşe göre o an hesaplanır). Yıldızlar: tepenin çimeninde sırtüstü uzanılacak yerler.
+    for (const v of pools.view ?? []) add("sunset", v);
+    scatter("stars", top[0] - 12, top[1] + 6, 16, 10, 0, 37);
+    // Vapur iskelesinin korkulukları (iki yan, denize bakarak) ve kumsalın su kenarı (taş sektirme).
+    if (pier) {
+      for (let z = pier.z0 + 12; z < pier.z1 - 2; z += 3.2) {
+        add("pier", { x: pier.x0 + 0.55, z, heading: -Math.PI / 2 });
+        add("pier", { x: pier.x1 - 0.55, z: z + 1.6, heading: Math.PI / 2 });
+      }
+    }
+    const wet = (x, z) => w.isWalkable(x, z) && w.height(x, z) > 0.2 && w.height(x, z) < 0.9;
+    for (const [bx, bz] of beach) scatter("skip", bx, bz + 6, 7, 2, 0, 41 + Math.round(bx), wet);
+    // Plajda sinema sandalyeleri.
+    for (const st of this.cinema?.seats ?? []) add("seat:sinema", st);
 
     // Sohbet grupları: meydanda çeşme ile banklar arasında ve dışında; diğer yerlerde çapanın çevresinde.
     const groups = {};
@@ -395,6 +419,21 @@ export class People {
         scatter(`work:${kind}:${idx}`, center[0], center[1], rad, count, toward, 31 + idx * 7 + kind.length);
       });
     }
+    // Piknik: tepenin eteğindeki çimende, kumsalın gerisinde ve parkta örtü yerleri (dört-altı kişilik).
+    const grass = (x, z) => w.isWalkable(x, z) && !w.obstacles.has(w._obKey(x, z));
+    const picnic = (cx, cz, radius, count, salt) => {
+      for (let n = 0, tries = 0; n < count && tries < count * 30; tries++) {
+        const a = frac(roll(salt, "piknik", tries)) * Math.PI * 2, r = Math.sqrt(frac(roll(salt + 1, "piknik", tries))) * radius;
+        const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+        if (![[0, 0], [1.4, 0], [-1.4, 0], [0, 1.4], [0, -1.4]].every(([dx, dz]) => grass(x + dx, z + dz))) continue;
+        if ((groups.piknik ?? []).some((g) => Math.hypot(g.x - x, g.z - z) < 6)) continue;
+        (groups.piknik ??= []).push({ x, z, cap: 4 + (n % 3), slots: Array.from({ length: 4 + (n % 3) }, () => []), picnic: true });
+        n++;
+      }
+    };
+    picnic(top[0] - 40, top[1] + 10, 30, 6, 51);
+    for (const [bx, bz] of beach.filter((_, j) => j % 4 === 1)) picnic(bx, bz - 8, 8, 1, 53 + Math.round(bx));
+    if (park) picnic((park.x0 + park.x1) / 2, (park.z0 + park.z1) / 2, 35, 6, 57);
     this.groupPools = groups;
     this.pools = pools;
   }
@@ -432,7 +471,9 @@ export class People {
         balik: "fish", kitap: "seat:park", resim: "easel", bisiklet: "bike", kosu: "jog", yuzme: "swim",
         yoga: "yoga", ucurtma: "kite", gitar: "seat:meydan", satranc: "seat:meydan", fotograf: "view", tavla: "seat:kahvehane",
       }[this.hobbies[i].id];
-      return this._usable(mode) ? mode : "group:" + seg.yer.replace("hobi:", "");
+      if (this._usable(mode)) return mode;
+      if (this.hobbies[i].id === "kitap" && this._usable("seat:meydan")) return "seat:meydan"; // park yokken meydanda bankta okur
+      return "group:" + seg.yer.replace("hobi:", "");
     }
     if (seg.ne === "meydan") {
       const m = roll(s, "meydanMod", this.day * 16 + k) % 100;
@@ -457,6 +498,7 @@ export class People {
     const w = this.world;
     if (mode === "bike" || mode === "jog") return !!w.promenade;
     if (mode === "shop") return !!w.carsiWalks;
+    if (["hike", "beachwalk", "jog:plaj", "kapi", "cleanup", "stroll"].includes(mode) || mode.startsWith("inside:")) return true;
     if (mode.startsWith("group:")) return true;
     return !!this.pools[mode]?.length;
   }
@@ -483,7 +525,7 @@ export class People {
       for (const q of requests) {
         if (q.seg.ne !== "hobi" && q.seg.ne !== "meydan") continue;
         if (q.seg.bas > m.start + 10 || q.seg.son < m.start + 30) continue;
-        if (this.override[q.i]) continue;
+        if (this.override[q.i]?.has(q.k)) continue;
         const s = this.residents[q.i].seed;
         if (m.players.length < 23 && roll(s, "futbol", m.id) % 100 < 35) {
           const num = m.players.length;
@@ -491,12 +533,45 @@ export class People {
           q.mode = "football";
           q.match = m;
           q.num = num;
-          (this.override[q.i] = new Map()).set(q.k, "saha");
+          (this.override[q.i] ??= new Map()).set(q.k, "saha");
         } else if (roll(s, "seyirci", m.id) % 100 < 30) {
           q.mode = "seat:tribun";
-          (this.override[q.i] = new Map()).set(q.k, "saha");
+          (this.override[q.i] ??= new Map()).set(q.k, "saha");
         }
       }
+    }
+    // Dışarı çıkışlar: günün olayına, saate, açık yerlere ve kişinin sevdiklerine göre bir etkinlik. Hobi
+    // çıkışlarının da bir kısmı (her gün %25) başka bir etkinliğe döner: kimse her gün aynı şeyi yapmaz.
+    this.theme = dayTheme(this.day, this.world);
+    this.acts = this.residents.map(() => null);
+    const ctx = {
+      w: this.world, pools: this.pools, groupPools: this.groupPools, sun: sunTimes(this.day), theme: this.theme,
+      workplace: (kind) => this.world.workplaces[kind]?.find(Boolean), dog: false,
+    };
+    for (const q of requests) {
+      if (q.seg.ne !== "meydan" && q.seg.ne !== "hobi") continue;
+      if (this.override[q.i]?.has(q.k)) continue; // maçta
+      const s = this.residents[q.i].seed;
+      if (q.seg.ne === "hobi" && roll(s, "hobiDegis", this.day * 16 + q.k) % 100 >= 25) {
+        // Hobinin yeri adada henüz yoksa (koşu ve bisiklet sahil yolunu ister) kumsalda yapılır.
+        const alt = !this.world.promenade && { kosu: "kosu", bisiklet: "plaj_yuruyus" }[this.hobbies[q.i].id];
+        if (alt) {
+          q.mode = ETKINLIK[alt].mode; q.act = alt;
+          (this.override[q.i] ??= new Map()).set(q.k, ETKINLIK[alt].yer);
+          (this.acts[q.i] ??= new Map()).set(q.k, alt);
+        }
+        continue;
+      }
+      ctx.dog = this.dogs[q.i];
+      const id = chooseActivity(s, this.day, q.k, q.seg, ctx, this.favs[q.i]);
+      if (!id || id === "meydan_sohbet") continue; // eski seçim (meydan, çay bahçesi, kahvehane...) geçerli
+      const e = ETKINLIK[id];
+      let yer = e.yer;
+      if (id === "kopek") yer = ["plaj", "tepe", ...(this.world.places.sahil_yolu ? ["sahil_yolu"] : [])][roll(s, "kopekYer", this.day) % (this.world.places.sahil_yolu ? 3 : 2)];
+      q.mode = e.mode;
+      q.act = id;
+      (this.override[q.i] ??= new Map()).set(q.k, yer);
+      (this.acts[q.i] ??= new Map()).set(q.k, id);
     }
     for (const q of requests) {
       const { i, k, seg } = q;
@@ -522,6 +597,11 @@ export class People {
           role = { mode };
         } else if (mode === "seat:kahvehane") {
           mode = "inside:kahvehane"; // dışarıda boş masa yok: içeride oturur
+          role = { mode };
+        } else if (q.act) {
+          // Etkinliğin yeri dolu: o yerde sohbet grubuna katılır (yoksa çevresinde dolaşır).
+          const yer = this.override[i].get(k);
+          mode = this.groupPools[yer]?.length ? "group:" + yer : yer === "sinema" ? "group:plaj" : "stroll";
           role = { mode };
         } else {
           mode = "group:" + (mode.startsWith("seat:") ? mode.slice(5).replace("kafe", "meydan").replace("kahvehane", "meydan") : seg.yer.replace("hobi:", ""));
@@ -552,6 +632,7 @@ export class People {
         }
       }
       if (q.mode === "football") role = { mode: "football", match: q.match, num: q.num };
+      if (q.act) role.act = q.act;
       this.roles[i][k] = role;
     }
   }
@@ -630,7 +711,7 @@ export class People {
     if (!seg) return this.homes[i].door;
     if (seg.ne === "ev" || seg.ne === "uyku" || seg.ne === "yol") return this.homes[i].door; // (yol: olmamalı)
     if (seg.ne === "is" && !this.works[i].loc.outdoor) return this.works[i].loc.door;
-    if (this.roles[i]?.[k]?.mode?.startsWith("inside:")) return this.world.places.kahvehane?.anchors[0] ?? this.homes[i].door;
+    if (this.roles[i]?.[k]?.mode?.startsWith("inside:")) return this._insideDoor(this.roles[i][k].mode.slice(7)) ?? this.homes[i].door;
     const p = this._tmp;
     p.height = this.colors[i].height;
     resetPose(p);
@@ -640,6 +721,12 @@ export class People {
       return loc?.innerDoor ?? loc?.door ?? this.homes[i].door;
     }
     return [p.x, p.z];
+  }
+
+  /** İçeride geçen etkinliğin kapısı (kahvehane, market, fırın, cami). */
+  _insideDoor(kind) {
+    if (kind === "kahvehane") return this.world.places.kahvehane?.anchors[0];
+    return this.world.workplaces[kind]?.find(Boolean)?.door;
   }
 
   /** Bir sonraki yolculuğun başladığı dakika (park kaydı bu saate kadar). */
@@ -1285,6 +1372,10 @@ export class People {
           const sip = Math.max(0, Math.sin(t * 0.35 + ph)) ** 10;
           idleGesture(p, t, ph, sip < 0.1 && roll(s, "konuskan") % 2 === 0);
           p.shR = Math.max(p.shR, 0.5 + 0.9 * sip); p.elR = Math.max(p.elR, 1.2 + 1.0 * sip); p.lean = 0.12;
+        } else if (it.place === "sinema") {
+          // Sinemada perdeye bakar; arada yanındakine eğilip bir şey söyler.
+          p.headPitch = -0.12; p.shL = p.shR = 0.35; p.elL = p.elR = 0.9;
+          if (Math.sin(t * 0.13 + ph) > 0.93) { p.headYaw = 0.6; p.lean = 0.1; }
         } else {
           idleGesture(p, t, ph, roll(s, "konuskan") % 2 === 0);
           p.shL = 0.35; p.elL = 0.9;
@@ -1400,6 +1491,68 @@ export class People {
         }
         return true;
       }
+      case "sunset": {
+        // Gün batımı: yüzü güneşe dönük; kimi telefonla fotoğraf çeker, kimi kollarını kavuşturup izler.
+        const sp = sunPosition(this.day, minute);
+        const sx = Math.sin(sp.az), sz = -Math.cos(sp.az);
+        stand(it.x, it.z, Math.atan2(sx, sz) + 0.25 * Math.sin(t * 0.04 + ph));
+        if (roll(s, "gbFoto", this.day) % 3 === 0 && Math.sin(t * 0.09 + ph) > 0.2) { phonePose(p); p.shR = 1.35; p.elR = 1.3; p.props = ["telefon"]; }
+        else if (roll(s, "gbKol") % 2) { p.shL = p.shR = 0.55; p.elL = p.elR = 2.2; p.abL = p.abR = 0.25; }
+        else idleGesture(p, t, ph, false);
+        p.dog = true;
+        return true;
+      }
+      case "pier": {
+        // Vapur iskelesinde korkuluğa yaslanır; vapur yanaşırken el sallar.
+        stand(it.x, it.z, it.heading + 0.15 * Math.sin(t * 0.05 + ph));
+        const f = ferryOut(minute), g = ferryOut(minute - 0.5);
+        if (f < 0.98 && f < g) { p.shR = 2.7 + 0.25 * Math.sin(t * 7 + ph); p.elR = 0.35; p.headYaw = 0; }
+        else { p.lean = 0.18; p.shL = p.shR = 1.05; p.elL = p.elR = 1.35; p.headPitch = 0.1; }
+        return true;
+      }
+      case "skip": {
+        // Su kenarında taş sektirir: birkaç saniyede bir eğilip yandan fırlatır, sonra taşın gidişine bakar.
+        const cyc = (sec + ph * 9) % 7;
+        stand(it.x, it.z, it.heading + 0.2 * Math.sin(ph));
+        if (cyc < 1.2) { const u = cyc / 1.2; p.lean = 0.45 * Math.sin(u * Math.PI); p.twist = -0.5 + u * 0.9; p.shR = 0.4 + 1.3 * u; p.abR = 0.9 - 0.6 * u; p.elR = 0.3; p.kneeL = p.kneeR = 0.3 * Math.sin(u * Math.PI); }
+        else { idleGesture(p, t, ph, false); p.headPitch = -0.05; }
+        return true;
+      }
+      case "hike": case "beachwalk": case "jog:plaj": case "cleanup": {
+        // Tepe patikası ya da kumsal boyunca gidip gelir; koşanlar hızlı; temizlik yapanlar durup eğilip toplar.
+        const pts = role.mode === "hike" ? this._hikePath() : this._beachPath(role.mode === "cleanup" ? 1.5 : 3);
+        if (!pts) break;
+        const run = role.mode === "jog:plaj", clean = role.mode === "cleanup";
+        const speed = run ? 2.6 : clean ? 0.45 : role.mode === "hike" ? 1.05 : 0.9;
+        const r = pingPong(pts, speed, ph * 300 + (s % 97) * 13);
+        const stop = clean && Math.sin(sec * 0.35 + ph * 4) > 0.45;
+        stand(at.x, at.z, stop ? r.heading + 0.6 : r.heading);
+        if (stop) { p.lean = 0.85; p.hipL = p.hipR = 0.45; p.kneeL = p.kneeR = 0.5; p.drop = 0.12; p.shL = p.shR = 1.0; p.elR = 0.3 + 0.3 * Math.sin(t * 2 + ph); }
+        else { walkPose(p, r.d / ((run ? 1.1 : 0.72) * kk) * Math.PI, run ? 1 : 0); if (run) p.sleeves = false; }
+        p.dog = !run && !clean;
+        return true;
+      }
+      case "kapi": {
+        // Kapı önü: aynı binadan komşular kapının birkaç metre önünde halka olur, sohbet eder.
+        const h = this.homes[i], b = h.building;
+        const [dx, dz] = h.door;
+        let ox = b ? dx - b.x : 0, oz = b ? dz - b.z : 1;
+        const L = Math.hypot(ox, oz) || 1; ox /= L; oz /= L;
+        const cx = dx + ox * 3.2, cz = dz + oz * 3.2;
+        const a = ((this.residents[i].slot % 7) / 7) * Math.PI * 2 + ph * 0.2;
+        const [x, z] = w.nearestWalkable(cx + Math.cos(a) * 1.05, cz + Math.sin(a) * 1.05, 3);
+        stand(x, z, Math.atan2(cx - x, cz - z));
+        idleGesture(p, t, ph, roll(s, "konuskan") % 2 === 0);
+        p.dog = true;
+        return true;
+      }
+      case "stars": {
+        // Tepenin çimeninde sırtüstü uzanır, gökyüzüne bakar.
+        p.x = it.x; p.z = it.z; p.heading = ph; p.y = w.groundY(it.x, it.z) + 0.12; p.lie = Math.PI / 2;
+        p.shL = p.shR = 0.25; p.abL = p.abR = 0.5; p.elL = p.elR = 1.9; p.kneeL = 0.5; p.hipL = 0.3;
+        p.props = ["havlu"];
+        return true;
+      }
       case "shop": {
         const walk = w.carsiWalks[roll(s, "carsiYol", this.day) % w.carsiWalks.length];
         // 40 sn yürür, 15 sn vitrine bakar: bakarken yerinde durur (kaymaz).
@@ -1425,6 +1578,20 @@ export class People {
 
     // Sohbet grubu (ya da yer kalmadıysa yerin yakınında durma).
     const g = role.group;
+    if (g && role.groupRef?.picnic) {
+      // Piknik: örtünün çevresinde yere oturur, bacaklar önde; ara ara bir şey alıp yer, sohbet eder.
+      const G = role.groupRef, gy = w.groundY(G.x, G.z);
+      stand(g.x, g.z, g.heading);
+      p.x = G.x + (g.x - G.x) * 0.72; p.z = G.z + (g.z - G.z) * 0.72; // örtünün kenarında, üstünde
+      sitPose(p, gy + 0.1, kk);
+      p.kneeL = p.kneeR = 0.35; p.hipL = p.hipR = 1.45; p.lean = 0.12;
+      const eat = Math.max(0, Math.sin(t * 0.4 + ph)) ** 8;
+      idleGesture(p, t, ph, eat < 0.1);
+      p.shR = Math.max(p.shR, 0.6 + 1.1 * eat); p.elR = Math.max(p.elR, 1.0 + 1.2 * eat);
+      p.ortu = [G.x, gy, G.z];
+      p.props = ["ortu"];
+      return true;
+    }
     if (g) {
       stand(g.x, g.z, g.heading);
     } else {
@@ -1450,6 +1617,25 @@ export class People {
     idleGesture(p, t, ph, true);
     p.dog = true;
     return true;
+  }
+
+  /** Tepe patikası (kasabadan zirveye; gidip gelme için). */
+  _hikePath() {
+    if (this._hike !== undefined) return this._hike;
+    const tp = this.world.places.tepe;
+    const pts = tp?.path ? tp.path.slice(0, -1).reverse() : null; // yol kasaba ucundan zirveye
+    return (this._hike = pts && pts.length >= 2 ? pts.slice(Math.max(0, pts.length - 4)) : null);
+  }
+
+  /** Kumsal boyunca, su kenarına yakın yürüyüş çizgisi (deniz yönünde off metre). */
+  _beachPath(off) {
+    (this._beachPaths ??= new Map());
+    if (this._beachPaths.has(off)) return this._beachPaths.get(off);
+    const w = this.world;
+    const a = [...(w.places.plaj?.anchors ?? [])].sort((p, q) => p[0] - q[0]).map(([x, z]) => w.nearestWalkable(x, z + off, 3));
+    const pts = a.length >= 2 ? a : null;
+    this._beachPaths.set(off, pts);
+    return pts;
   }
 
   /**
@@ -1692,6 +1878,7 @@ export class People {
 
   /** Sakinlerin konumlarını verilen dakikaya göre günceller ve çizim listesini kurar. */
   update(minute, time) {
+    this.cinema?.update(this.theme, minute, time);
     const crowd = this.crowd, at = this._at;
     const w = this.world;
     this.openDoors.clear();
@@ -1706,6 +1893,7 @@ export class People {
       const seg = activityAt(plan, minute);
       this.activities[i] = seg;
       this.currentPlace[i] = seg.ne === "meydan" ? this._placeOf(i, k) : null;
+      this.currentAct[i] = seg.ne === "meydan" || seg.ne === "hobi" ? this.acts?.[i]?.get(k) ?? null : null;
       this.athome[i] = seg.ne === "ev" ? 1 : 0;
       const c = this.colors[i];
       const p = this.poses[i];

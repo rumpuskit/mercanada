@@ -1,6 +1,7 @@
 // Sakinlerin hikâyeleri: kişilik özellikleri, ilişkiler (en yakın arkadaş, komşular, iş arkadaşları),
 // adaya gelişten bugüne olaylar ve günün akışı. Hepsi simülasyondan ve tohumdan türetilir; aynı kişiye
 // bakan herkes aynı hikâyeyi okur.
+import { ETKINLIK } from "./etkinlik.js";
 import * as sim from "../sim.js";
 
 const PET_NAMES = {
@@ -151,12 +152,16 @@ export class Stories {
       if (seg.ne === "yol") {
         const trip = p.tripStore?.[i]?.get(k) ?? p._trip(i, seg, k);
         const how = { araba: "arabasıyla", otobus: "otobüsle", taksi: "taksiyle", yaya: "yürüyerek" }[trip?.mode];
-        out.push([at, how ? `${placeLabel(seg.nereye)} · ${how}` : `${placeLabel(seg.nereye)} yolunda`]);
+        // Dışarı çıkışta gidilen gerçek yer (etkinliğin yeri), plandaki genel "meydan" değil.
+        const to = seg.nereye === "meydan" || seg.nereye.startsWith("hobi:") ? p._placeOf(i, k + 1) ?? seg.nereye : seg.nereye;
+        out.push([at, how ? `${placeLabel(to)} · ${how}` : `${placeLabel(to)} yolunda`]);
         return;
       }
       if (seg.ne === "is") { out.push([at, `İşte · ${p.works[i].loc.name}`]); return; }
       const withFriend = f >= 0 && p.plans[f]?.some((q) => q.yer === seg.yer && q.bas < seg.son && q.son > seg.bas) ? ` (@${p.residents[f].handle} ile)` : "";
-      if (seg.ne === "hobi") out.push([at, `${p.hobbies[i].ad} · ${placeLabel(seg.yer)}${withFriend}`]);
+      const act = p.acts?.[i]?.get(k);
+      if (act && ETKINLIK[act]) out.push([at, `${ETKINLIK[act].ad}${withFriend}`]);
+      else if (seg.ne === "hobi") out.push([at, `${p.hobbies[i].ad} · ${placeLabel(seg.yer)}${withFriend}`]);
       else if (seg.ne === "meydan") out.push([at, `Dışarıda · ${placeLabel(p._placeOf(i, k) ?? "meydan")}${withFriend}`]);
     });
     return out;
