@@ -431,7 +431,9 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
         addGlass(b, lx, f * FLOOR_H + 1.6, -b.d / 2 - 0.05, bay - 0.25, FLOOR_H - 0.5, true, owner(f * perFloor + c + 1));
       } else {
         // Garajlı binalarda zemin katın önü kapılarla dolu: orada pencere yok.
-        if (!(f === 0 && st.garage)) addWindow(b, lx, f * FLOOR_H + 0.95, 1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c));
+        // Resmî binanın en üst katında tabelanın arkasında kalan ön pencereler çizilmez (tabela üstüne biniyordu).
+        const plateBehind = full && st.plate && floors > 1 && f === floors - 1 && Math.abs(lx) < 4.3;
+        if (!(f === 0 && st.garage) && !plateBehind) addWindow(b, lx, f * FLOOR_H + 0.95, 1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c));
         addWindow(b, lx, f * FLOOR_H + 0.95, -1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c + 7));
       }
       if (st.balconies && f > 0) {
@@ -458,7 +460,11 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   // Resmî binalar (polis merkezi, muhtarlık): zemin kat üstünde renk şeridi, girişin üstünde tabela.
   if (st.band) B.signs.add(local(b, 0, FLOOR_H - 0.15, b.d / 2 + 0.14), b.rot, s.set(b.w + 0.1, 0.4, 0.1), st.band);
   if (st.plate) {
-    if (floors > 1) B.signs.add(local(b, 0, h - 1.5, b.d / 2 + 0.14), b.rot, s.set(7, 1.1, 0.12), st.plate);
+    if (floors > 1) {
+      B.signs.add(local(b, 0, h - 1.5, b.d / 2 + 0.14), b.rot, s.set(7, 1.1, 0.12), st.plate);
+      // Levhada binanın adı ("Polis Merkezi", "Adalet Sarayı"); ad yoksa düz levha kalır.
+      if (b.isim) K.named.push({ owner: b, pos: local(b, 0, h - 1.5, b.d / 2 + 0.205).clone(), rot: b.rot, w: 6.7, h: 0.9, text: b.isim, bg: st.plate, fg: "#fbf6ec" });
+    }
     else B.signs.add(local(b, 0, h - 0.42, b.d / 2 + 0.14), b.rot, s.set(4, 0.36, 0.1), st.plate);
   }
   if (st.sign) {

@@ -162,12 +162,35 @@ for (const [ci, shot] of S.cekimler.entries()) {
         : h === "meydan" ? [0, -12]
         : typeof h === "string" && h.startsWith("isyeri:") ? W.workplaces[h.split(":")[1]]?.[Number(h.split(":")[2])]?.door : h;
       const [x, z] = at ?? [0, 0];
+      // İş yerinde açılar binanın önüne göredir (kapı - bina merkezi yönü); yoksa dünya açısı.
+      const wb = typeof h === "string" && h.startsWith("isyeri:") ? W.workplaces[h.split(":")[1]]?.[Number(h.split(":")[2])]?.building : null;
+      const yon = wb ? Math.atan2(x - wb.x, z - wb.z) : 0;
+      // Karşıdaki bina kameranın önüne ya da içine düşmesin: yörüngenin üç açısında kapıdan kameraya giden doğru
+      // başka bir binanın kutusuna giriyorsa uzaklığı (ve yüksekliği aynı oranda) kısalt.
+      let { r, h: yh } = yorunge;
+      if (wb) {
+        // Geniş binada (karakol, market) cephenin tamamı dikey kadraja girsin diye uzaklık bina boyuyla büyür.
+        r = Math.max(r, 1.7 * Math.max(wb.w, wb.d));
+        const gy0 = Math.max(0, W.groundY(x, z)), by = gy0 + (yorunge.bak ?? 2);
+        const icinde = (px, py, pz) => W.buildings.some((b) => {
+          if (b === wb) return false;
+          const c = Math.cos(b.rot), sn = Math.sin(b.rot), lx = (px - b.x) * c - (pz - b.z) * sn, lz = (px - b.x) * sn + (pz - b.z) * c;
+          return Math.abs(lx) < b.w / 2 + 1 && Math.abs(lz) < b.d / 2 + 1 && py < gy0 + b.floors * 3.2 + 3;
+        });
+        const temiz = (rr) => [0, 0.5, 1].every((k) => {
+          const a = yon + yorunge.a0 + (yorunge.a1 - yorunge.a0) * k, hh = (yh * rr) / yorunge.r;
+          for (let t = 0.15; t <= 1.0001; t += 0.05) if (icinde(x + Math.sin(a) * rr * t, by + (gy0 + hh - by) * t, z + Math.cos(a) * rr * t)) return false;
+          return true;
+        });
+        while (r > 10 && !temiz(r)) r -= 1;
+        yh = (yorunge.h * r) / yorunge.r;
+      }
       const gy = Math.max(0, W.groundY(x, z));
       const ease = (u) => u * u * (3 - 2 * u);
       globalThis.__yonetmen = () => {
         const u = ease(Math.min(1, (globalThis.__shotT ?? 0) / sure));
-        const a = yorunge.a0 + (yorunge.a1 - yorunge.a0) * u;
-        A.camera.position.set(x + Math.sin(a) * yorunge.r, gy + yorunge.h, z + Math.cos(a) * yorunge.r);
+        const a = yon + yorunge.a0 + (yorunge.a1 - yorunge.a0) * u;
+        A.camera.position.set(x + Math.sin(a) * r, gy + yh, z + Math.cos(a) * r);
         A.controls.target.set(x, gy + (yorunge.bak ?? 2), z);
         A.camera.lookAt(A.controls.target);
       };

@@ -306,8 +306,8 @@ function CEKIM(ad, v, sure, arayuz) {
     yakamoz: () => yor([0, -270], 160, 110, 0.4 + v, 0.75 + v, 0),
     kapanis: () => ({ adres: a, kamera: [[0, 160, 180, 420, 0, 0, -60], [sure, 200, 250, 500, 0, 0, -80]], yazilar: [{ metin: "Takip et,<br>adaya taşın.", alt: `TikTok'ta<br><small>@${TIKTOK}</small>`, bas: 0.2, son: sure, yer: "ust" }] }),
   };
-  // "isyeri:firin:0": o iş yerinin kapısı çevresinde dönen kamera.
-  if (typeof ad === "string" && ad.startsWith("isyeri:")) L[ad] = () => yor(ad, 26, 11, 0.2 + v, 0.7 + v, 3);
+  // "isyeri:firin:0": o iş yerinin kapısı çevresinde, binanın önünden dönen kamera (açı kaydet.mjs'de bina yönüne göre).
+  if (typeof ad === "string" && ad.startsWith("isyeri:")) L[ad] = () => { const a0 = -0.3 + 0.5 * (v % 2); return yor(ad, 26, 11, a0, a0 + 0.5, 3); };
   const shot = (L[ad] ?? L.ucus)();
   // Zeplin henüz açılmadıysa çekimde önizleme olarak gösterilir (?zeplin); metin bunu söylemeli ("150. sakinde").
   if (typeof ad === "string" && ad.startsWith("zeplin") && !sim.isOpen("zeplin")) shot.adres += "&zeplin";
