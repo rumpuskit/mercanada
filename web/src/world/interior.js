@@ -309,7 +309,7 @@ export class Dollhouse {
     const spots = { entry: { p: entry, heading: 0 } };
     const occupant = this.people.slotToIndex.get(slot);
     const job = occupant != null ? this.people.works[occupant].job : "";
-    const ctx = { x0, x1, cx, A, B, sA, wood, pick, spots, job, key };
+    const ctx = { x0, x1, cx, A, B, sA, wood, pick, spots, job, key, pref };
     for (const r of rooms) this._furnish(add, r, ctx);
 
     // Evcil hayvan.
@@ -337,7 +337,7 @@ export class Dollhouse {
 
   /** Oda döşeme: türüne göre eşyalar; noktalar spots'a yazılır. Orta aks (cx ± 0,5) boş kalır. */
   _furnish(add, r, o) {
-    const { A, B, sA, wood, pick, spots } = o;
+    const { A, B, sA, wood, pick, spots, pref } = o;
     const zc = (r.z0 + r.z1) / 2, dz = r.z1 - r.z0;
     const ax = (d) => A + sA * d; // A duvarından içeri d metre
     const bx = (d) => B - sA * d; // B duvarından içeri d metre
