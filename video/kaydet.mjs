@@ -18,7 +18,7 @@
 //   yorunge: { hedef: "siradaki" | "iskele" | "fener" | "meydan" | [x, z], r, h, a0, a1, bak } hedefin
 //            çevresinde a0'dan a1'e (radyan) dönen kamera; hedef sitede o anda hesaplanır (ör. sıradaki şantiye).
 //            "zeplin": uçan zeplinin yanında, gidiş yönüne göre a açısında (h zeplinin altı/üstü); "zeplin-yer":
-//            vapur iskelesinden (önü açık) zeplini izleyen sabit kamera.
+//            vapur iskelesinden (önü açık) zeplini izleyen sabit kamera. "isyeri:firin:0": o iş yerinin kapısı.
 //   serbest: true ise kamerayı site yönetir (ör. adres "bul=kullanici": sakini bulup izler, evdeyse içini açar)
 // Senaryo dosyası .mjs (default export) ya da .json olabilir (gunluk.mjs JSON yazar). olcek: 2 ise sayfa
 // yarı boyutta, iki kat piksel yoğunluğuyla çizilir: arayüz (kart, üst bilgi) videoda okunur boyutta görünür.
@@ -53,7 +53,8 @@ const CLOCK = `(() => {
 })();`;
 
 const CSS = `
-#hud .links, #hud .waiting, #speed, #card, #navbtns, #minimap, #arama, #floorbar, #loading, #online { display: none !important; }
+#hud .links, #hud .waiting, #speed, #card, #navbtns, #minimap, #arama, #floorbar, #loading, #online,
+#dock, #sayfa, #foto-bar, #foto-onizleme, #tur-bitir, #toast { display: none !important; }
 body:not(.arayuz) #hud { display: none !important; }
 body.arayuz #sol { transform: scale(calc(2.1 * var(--k))); transform-origin: top left; top: calc(150px * var(--k)) !important; left: calc(60px * var(--k)) !important; }
 body.kart #card { display: block !important; }
@@ -158,7 +159,8 @@ for (const [ci, shot] of S.cekimler.entries()) {
     if (yorunge) {
       const W = A.world, h = yorunge.hedef;
       const at = h === "siradaki" ? W.nextStage?.at : h === "iskele" ? [0, W.ferryPier.z0 + 14] : h === "fener" ? [W.fener.x, W.fener.z]
-        : h === "meydan" ? [0, -12] : h;
+        : h === "meydan" ? [0, -12]
+        : typeof h === "string" && h.startsWith("isyeri:") ? W.workplaces[h.split(":")[1]]?.[Number(h.split(":")[2])]?.door : h;
       const [x, z] = at ?? [0, 0];
       const gy = Math.max(0, W.groundY(x, z));
       const ease = (u) => u * u * (3 - 2 * u);
