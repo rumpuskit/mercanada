@@ -7,7 +7,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { stations } from "./roads.js";
-import { CELL_D, CELL_W } from "./layout.js";
+import { CELL_D, CELL_W, unitLayout } from "./layout.js";
 import { MinHeap } from "./heap.js";
 import { mahalleName } from "../sim.js";
 import { pedState, signalState } from "./signals.js";
@@ -493,6 +493,23 @@ export class Traffic {
     this.lines = [];
     if (w.vehicles === false) return;
     const halfW = CELL_W / 2, halfD = CELL_D / 2;
+    // Sundurma bir girişin önüne konmaz: apartman bahçe yolunun kaldırım ucu ve iş yeri kapıları (6 m'lik ızgara).
+    const girisler = new Map();
+    const gk = (x, z) => `${Math.floor(x / 6)},${Math.floor(z / 6)}`;
+    const giris = (x, z) => { const k = gk(x, z); if (!girisler.has(k)) girisler.set(k, []); girisler.get(k).push([x, z]); };
+    for (const b of w.buildings) {
+      if (!b.perFloor) continue;
+      const lx = unitLayout(b).cx, lz = b.d / 2 + (b.yard ?? 0), c = Math.cos(b.rot), sn = Math.sin(b.rot);
+      giris(b.x + lx * c + lz * sn, b.z - lx * sn + lz * c);
+    }
+    for (const list of Object.values(w.workplaces ?? {})) for (const p of list) if (p?.door) giris(p.door[0], p.door[1]);
+    const girisOnu = (x, z) => {
+      const i = Math.floor(x / 6), j = Math.floor(z / 6);
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+        for (const [gx, gz] of girisler.get(`${i + a},${j + b}`) ?? []) if (Math.hypot(gx - x, gz - z) < 3.5) return true;
+      }
+      return false;
+    };
     const make = (name, color, waypoints, headway) => {
       const seq = this._loopSeq(waypoints);
       if (!seq) return;
@@ -517,7 +534,7 @@ export class Traffic {
           const cx = pos.x - r[0] * off, cz = pos.z - r[1] * off;
           const hw = L.road.width / 2, hc = L.road.carriage / 2;
           const shelter = [cx + r[0] * (hw + 1.3), cz + r[1] * (hw + 1.3)];
-          if (!w.isLand(...shelter) || w.obstacles?.has(w._obKey(...shelter))) continue;
+          if (!w.isLand(...shelter) || w.obstacles?.has(w._obKey(...shelter)) || girisOnu(...shelter)) continue;
           stops.push({ s, x: pos.x, z: pos.z, heading: pos.heading, shelter, wait: [cx + r[0] * (hc + 1.0), cz + r[1] * (hc + 1.0)], curb: [cx + r[0] * (hc + 0.7), cz + r[1] * (hc + 0.7)] });
           nextAt = s + 230;
         }

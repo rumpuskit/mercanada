@@ -1411,11 +1411,10 @@ export class World {
         if (!built.has(r)) built.set(r, []);
         built.get(r).push(home.bx);
         const key = cell.mahalle * 1000 + s * 10 + b;
-        const floors = 3 + Math.floor(hash2(key, 1, 5) * 3);
-        const perFloor = Math.ceil(perBina / floors);
+        const { floors, perFloor, w } = binaPlan(key);
         this.addBuilding({
           kind: "konut", x: home.bx, z: home.bz, rot: home.rot,
-          w: perFloor * 4.6 + 2.4, d: BINA_D, floors, perFloor, yard: style.yard, pathSeed: key,
+          w, d: BINA_D, floors, perFloor, yard: style.yard, pathSeed: key,
           roofType: hash2(key, 2, 5) < 0.75 ? "hip" : "flat",
           wall: HOUSE_WALLS[Math.floor(hash2(key, 3, 5) * HOUSE_WALLS.length)],
           roof: HOUSE_ROOFS[Math.floor(hash2(key, 4, 5) * HOUSE_ROOFS.length)],
@@ -1609,7 +1608,9 @@ export class World {
     const facade = ROADS.sokak.width / 2 + style.yard;
     const bx = bx0 + sgn * nx * (facade + BINA_D / 2), bz = streetZ + sgn * nz * (facade + BINA_D / 2);
     const rot = north ? -Math.atan(slope) : Math.PI - Math.atan(slope);
-    const door = [bx0 + sgn * nx * (facade + 0.35), streetZ + sgn * nz * (facade + 0.35)];
+    // Kapı noktası giriş kapısının (çekirdeğin) önünde; çekirdek binanın yerel x ekseninde kayabilir (unitLayout).
+    const cxDoor = unitLayout(binaPlan(p.mahalle * 1000 + p.sokak * 10 + p.bina)).cx;
+    const door = [bx0 + sgn * nx * (facade + 0.35) + Math.cos(rot) * cxDoor, streetZ + sgn * nz * (facade + 0.35) - Math.sin(rot) * cxDoor];
     const entryZ = this._entryZ(cell);
     // Sokak boyunca (kavisi izleyerek) mahalle caddesine, oradan meydana.
     const along = [];
@@ -1675,10 +1676,20 @@ export function unitLayout(b) {
   const n = b.perFloor;
   const L = Math.ceil(n / 2);
   const u = (b.w - core) / n;
+  // Çekirdek soldaki L daire ile sağdakilerin arasında: daire sayısı tekse (4 katlıda katta 3) ortadan
+  // kayar, daireler eşit genişlikte kalır. Giriş kapısı, merdiven penceresi ve bahçe yolu da çekirdeğin önünde.
+  const cx = -b.w / 2 + L * u + core / 2;
   const units = [];
   for (let c = 0; c < n; c++) {
-    const x0 = c < L ? -b.w / 2 + c * u : core / 2 + (c - L) * u;
+    const x0 = c < L ? -b.w / 2 + c * u : cx + core / 2 + (c - L) * u;
     units.push({ col: c, x0, x1: x0 + u, cx: x0 + u / 2, side: c < L ? -1 : 1, adjacent: c === L - 1 || c === L });
   }
-  return { core: [-core / 2, core / 2], units, corridor: n > 2, corridorDepth: 1.5 };
+  return { core: [cx - core / 2, cx + core / 2], cx, units, corridor: n > 2, corridorDepth: 1.5 };
+}
+
+/** Apartmanın kat sayısı, kattaki daire ve genişliği (anahtar: mahalle·1000 + sokak·10 + bina). */
+function binaPlan(key) {
+  const floors = 3 + Math.floor(hash2(key, 1, 5) * 3);
+  const perFloor = Math.ceil(cap("daire_per_bina") / floors);
+  return { floors, perFloor, w: perFloor * 4.6 + 2.4 };
 }

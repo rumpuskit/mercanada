@@ -289,7 +289,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     }
     // Merdiven penceresi (çekirdeğin önünde, kat aralarında) ve yanlarda birer pencere.
     for (let f = 0; f < floors; f++) {
-      if (f > 0) addWindow(b, 0, f * FLOOR_H - 0.6, 1, 0.8, 1.2, { workplace: "merdiven", seed: f });
+      if (f > 0) addWindow(b, plan.cx, f * FLOOR_H - 0.6, 1, 0.8, 1.2, { workplace: "merdiven", seed: f });
       for (const side of [-1, 1]) {
         const fake = { ...b, rot: b.rot + (side * Math.PI) / 2, w: b.d, d: b.w };
         addWindow(fake, -side * 2.4, f * FLOOR_H + 1.0, 1, 0.9, 1.1, { workplace: "yan", seed: f });
@@ -303,9 +303,9 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
       }
     }
     // Giriş: kapı, saçak, basamak.
-    b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.3, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.3, h: 2.3 };
-    B.slabs.add(local(b, 0, 2.6, b.d / 2 + 0.6), b.rot, s.set(2.2, 0.12, 1.2));
-    B.slabs.add(local(b, 0, 0, b.d / 2 + 0.7), b.rot, s.set(2.2, 0.15, 1.4));
+    b.door = { idx: B.doors.add(local(b, plan.cx, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.3, 2.3, 0.1)), x: plan.cx, y: 0.15, z: b.d / 2 + 0.02, w: 1.3, h: 2.3 };
+    B.slabs.add(local(b, plan.cx, 2.6, b.d / 2 + 0.6), b.rot, s.set(2.2, 0.12, 1.2));
+    B.slabs.add(local(b, plan.cx, 0, b.d / 2 + 0.7), b.rot, s.set(2.2, 0.15, 1.4));
     return;
   }
 
@@ -362,7 +362,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
       for (let r = 1; r < Math.floor(dh / 0.45); r++) B.trims.add(local(b, lx, 0.1 + r * 0.45, b.d / 2 + 0.1), b.rot, s.set(dw, 0.04, 0.03), "#3f4a57");
       B.rails.add(local(b, lx, 0.1 + dh, b.d / 2 + 0.12), b.rot, s.set(dw + 0.5, 0.18, 0.18));
     }
-    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.6, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
+    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.6, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), x: b.w / 2 - 1.6, y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
     B.slabs.add(local(b, b.w / 2 - 1.6, 2.6, b.d / 2 + 0.5), b.rot, s.set(1.8, 0.1, 1.0));
     if (tall) {
       const ly = h - 1.35;
@@ -414,7 +414,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
       B.signs.add(local(b, lx, 0.15, b.d / 2 + 0.04), b.rot, s.set(4.2, 3.6, 0.08), st.garage);
       for (let r = 1; r < 6; r++) B.trims.add(local(b, lx, 0.15 + r * 0.6, b.d / 2 + 0.09), b.rot, s.set(4.2, 0.05, 0.04), "#f2f2ef");
     }
-    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.4, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
+    b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.4, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), x: b.w / 2 - 1.4, y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
     B.signs.add(local(b, 0, 4.4, b.d / 2 + 0.1), b.rot, s.set(Math.min(b.w - 2, 9), 0.9, 0.12), st.garage);
   } else if (!st.glass) {
     const dw = b.w > 20 ? 2.6 : 1.6;
@@ -522,7 +522,7 @@ export function buildCity(world) {
       for (const b of open) {
         if (!b?.door || this._hidden === b) continue;
         const a = 1.25, d = b.door;
-        const lx = -d.w / 2 + (d.w / 2) * Math.cos(a), lz = d.z + (d.w / 2) * Math.sin(a);
+        const lx = (d.x ?? 0) - d.w / 2 + (d.w / 2) * Math.cos(a), lz = d.z + (d.w / 2) * Math.sin(a);
         const c = Math.cos(b.rot), sn = Math.sin(b.rot);
         pp.set(b.x + lx * c + lz * sn, FLAT_Y + d.y, b.z - lx * sn + lz * c);
         qq.setFromAxisAngle(UP, b.rot - a);
@@ -575,7 +575,9 @@ function buildFrontPaths(world) {
     const L = y1 - y0;
     const kind = Math.floor(rnd(seed, 1) * 4);
     const w = 1.2 + rnd(seed, 2) * 0.7;
-    const slab = (lx, lz, sw, sd, color, batch, rot = 0) => batch.add(local(b, lx, -0.06, lz), b.rot + rot, s.set(sw, 0.1, sd), color);
+    // Yol giriş kapısının önünden başlar (kapı çekirdeğin önünde; daire sayısı tekse ortadan kayık).
+    const ox = b.perFloor ? unitLayout(b).cx : 0;
+    const slab = (lx, lz, sw, sd, color, batch, rot = 0) => batch.add(local(b, ox + lx, -0.06, lz), b.rot + rot, s.set(sw, 0.1, sd), color);
     if (kind === 0) {
       slab(0, (y0 + y1) / 2, w, L, GRAVELS[Math.floor(rnd(seed, 3) * 4)], gravel);
     } else if (kind === 1) {
@@ -605,8 +607,8 @@ function buildFrontPaths(world) {
       for (const e of [-1, 1]) {
         for (let i = 0; i < n; i++) {
           const lz = y0 + 0.5 + i * 0.9, lx = e * (w / 2 + 0.6 + rnd(seed, 30 + i) * 0.3);
-          if (rnd(seed, 40 + i + e) < 0.65) hedge.add(local(b, lx, 0, lz), b.rot, s.set(0.9, 0.8 + rnd(seed, 50 + i) * 0.5, 0.9), HEDGES[(i + seed) % 3]);
-          else for (let f = 0; f < 3; f++) flowers.add(local(b, lx + (f - 1) * 0.2, 0.15, lz + (f % 2) * 0.15), 0, s.set(1, 1, 1), BLOOMS[(seed + f + i) % 5]);
+          if (rnd(seed, 40 + i + e) < 0.65) hedge.add(local(b, ox + lx, 0, lz), b.rot, s.set(0.9, 0.8 + rnd(seed, 50 + i) * 0.5, 0.9), HEDGES[(i + seed) % 3]);
+          else for (let f = 0; f < 3; f++) flowers.add(local(b, ox + lx + (f - 1) * 0.2, 0.15, lz + (f % 2) * 0.15), 0, s.set(1, 1, 1), BLOOMS[(seed + f + i) % 5]);
         }
       }
     }

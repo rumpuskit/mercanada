@@ -1,7 +1,7 @@
 // İç mekân (bebek evi) görünümü: seçilen binanın seçilen katı kesilir; alt katlar dışarıdan, o kat
 // içeriden görünür.
 //
-// Apartmanlar: ortada merdiven ve asansör çekirdeği; katta ikiden fazla daire varsa arkada ortak
+// Apartmanlar: daireler arasında merdiven ve asansör çekirdeği; katta ikiden fazla daire varsa arkada ortak
 // koridor. Her dairenin planı tohumdan seçilir (önde salon, arkada salon, açık mutfaklı salon,
 // çalışma odalı) ve eşyalar sağa ya da sola aynalanır. Odalar arasında kapı boşlukları vardır;
 // sakinler bir işten ötekine dairenin orta aksından yürüyerek geçer, duvarların içinden geçmez.
@@ -215,7 +215,7 @@ export class Dollhouse {
     if (plan.corridor) {
       // Ortak koridor: arkada boydan boya; dairelerin kapıları koridor duvarında.
       add(b.w - 0.3, 0.06, plan.corridorDepth, 0, 0, -hd + 0.15 + plan.corridorDepth / 2, "#d9d4ca", 0, { shadow: false });
-      const gaps = plan.units.map((u) => [u.cx, DOOR]).concat([[0, 2.4]]);
+      const gaps = plan.units.map((u) => [u.cx, DOOR]).concat([[plan.cx, 2.4]]);
       this._wallX(add, -b.w / 2, b.w / 2, zb, CUT, "#ece6da", gaps);
       for (let x = -b.w / 2 + 2; x < b.w / 2 - 1; x += 4) {
         add(0.3, 0.05, 0.3, x, WALL_H - 0.08, -hd + 0.15 + plan.corridorDepth / 2, "#fff6e0", 0, { mat: { emissive: "#fff1d0", emissiveIntensity: 0.5 }, shadow: false });
@@ -223,7 +223,7 @@ export class Dollhouse {
     }
     // Daireler arası duvarlar (çekirdeğe ve dış duvara denk gelmeyen sınırlar).
     for (const u of plan.units) {
-      if (u.x1 < b.w / 2 - 0.2 && Math.abs(u.x1) > 1.3) this._wallZ(add, zb, zf, u.x1, CUT, "#e9e3d8");
+      if (u.x1 < b.w / 2 - 0.2 && (u.x1 < plan.core[0] - 0.1 || u.x1 > plan.core[1] + 0.1)) this._wallZ(add, zb, zf, u.x1, CUT, "#e9e3d8");
     }
     for (const unit of plan.units) {
       const k = f * b.perFloor + unit.col;
@@ -236,31 +236,32 @@ export class Dollhouse {
   _buildCore(b, f, add, plan, zb) {
     const hd = b.d / 2;
     const [cx0, cx1] = plan.core;
+    const c = plan.cx; // çekirdeğin ortası (daire sayısı tekse binanın ortasında değil)
     // Çekirdek duvarları; koridor yoksa daire kapıları bu duvarlarda.
     for (const x of [cx0, cx1]) this._wallZ(add, zb, hd - 0.15, x, CUT, "#ece6da", plan.corridor ? [] : [[1.6, DOOR]]);
-    add(cx1 - cx0 - 0.1, 0.06, hd - 0.15 - zb, 0, 0, (zb + hd - 0.15) / 2, "#cfc8bc", 0, { shadow: false });
+    add(cx1 - cx0 - 0.1, 0.06, hd - 0.15 - zb, c, 0, (zb + hd - 0.15) / 2, "#cfc8bc", 0, { shadow: false });
     // Merdiven: sol kol arkaya doğru yarım kata çıkar, sahanlık, sağ kol öne doğru üst kata (stairs.js).
-    doubleStair(add, { xa: -0.6, xb: 0.6, zFront: 0.6, zBack: zb + 1.0, land: 0.85, H: FLOOR_H, upper: f < b.floors - 1 });
+    doubleStair(add, { xa: c - 0.6, xb: c + 0.6, zFront: 0.6, zBack: zb + 1.0, land: 0.85, H: FLOOR_H, upper: f < b.floors - 1 });
     // Asansör yalnız 4 ve daha çok katlı apartmanda (yönetmelik gibi); 3 katlıda o köşede saksı.
     const ez0 = 2.4, ez1 = Math.min(hd - 0.3, 4.2);
     if (b.floors < 4) {
-      add(0.45, 0.4, 0.45, 0.5, 0.06, (ez0 + ez1) / 2, "#b5653f");
-      add(0.7, 0.8, 0.7, 0.5, 0.85, (ez0 + ez1) / 2, "#5f8f4a", 0, { geo: new THREE.IcosahedronGeometry(0.4, 0) });
+      add(0.45, 0.4, 0.45, c + 0.5, 0.06, (ez0 + ez1) / 2, "#b5653f");
+      add(0.7, 0.8, 0.7, c + 0.5, 0.85, (ez0 + ez1) / 2, "#5f8f4a", 0, { geo: new THREE.IcosahedronGeometry(0.4, 0) });
     }
     const steel = { metalness: 0.4, roughness: 0.4 };
     if (b.floors >= 4) {
       // Kuyu duvarları da kesik (içerisi görünsün); kapı kasası ve kat göstergesi tam boy.
-      add(1.7, CUT, 0.1, 0, 0, ez1, "#9aa3ad", 0, { mat: steel });
-      for (const x of [-0.85, 0.85]) add(0.1, CUT, ez1 - ez0, x, 0, (ez0 + ez1) / 2, "#9aa3ad", 0, { mat: steel });
-      for (const x of [-0.82, 0.82]) add(0.08, 2.3, 0.12, x, 0, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
-      add(1.72, 0.1, 0.12, 0, 2.25, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
-      for (const x of [-0.38, 0.38]) add(0.74, CUT + 0.2, 0.05, x, 0.06, ez0, "#c9ced4", 0, { mat: { metalness: 0.7, roughness: 0.25 } });
-      add(0.6, 0.02, 1.3, 0, 0.06, (ez0 + ez1) / 2, "#5a5f66", 0, { shadow: false });
-      add(0.12, 0.25, 0.04, 1.0, 1.0, ez0 - 0.06, "#2a2a2e");
-      add(0.3, 0.08, 0.03, 0, 2.38, ez0 - 0.07, null, 0, { material: new THREE.MeshBasicMaterial({ color: "#5fe08a", toneMapped: false }), shadow: false });
+      add(1.7, CUT, 0.1, c, 0, ez1, "#9aa3ad", 0, { mat: steel });
+      for (const x of [-0.85, 0.85]) add(0.1, CUT, ez1 - ez0, c + x, 0, (ez0 + ez1) / 2, "#9aa3ad", 0, { mat: steel });
+      for (const x of [-0.82, 0.82]) add(0.08, 2.3, 0.12, c + x, 0, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
+      add(1.72, 0.1, 0.12, c, 2.25, ez0, "#9aa3ad", 0, { mat: steel, shadow: false });
+      for (const x of [-0.38, 0.38]) add(0.74, CUT + 0.2, 0.05, c + x, 0.06, ez0, "#c9ced4", 0, { mat: { metalness: 0.7, roughness: 0.25 } });
+      add(0.6, 0.02, 1.3, c, 0.06, (ez0 + ez1) / 2, "#5a5f66", 0, { shadow: false });
+      add(0.12, 0.25, 0.04, c + 1.0, 1.0, ez0 - 0.06, "#2a2a2e");
+      add(0.3, 0.08, 0.03, c, 2.38, ez0 - 0.07, null, 0, { material: new THREE.MeshBasicMaterial({ color: "#5fe08a", toneMapped: false }), shadow: false });
     }
     if (f === 0) {
-      add(1.4, 0.02, 0.9, 0, 0.06, hd - 0.7, "#6b4a35", 0, { shadow: false });
+      add(1.4, 0.02, 0.9, c, 0.06, hd - 0.7, "#6b4a35", 0, { shadow: false });
       for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) {
         add(0.06, 0.2, 0.26, cx0 + 0.09, 1.1 + r * 0.22, 0.95 + c * 0.28, "#b8a06a", 0, { mat: { metalness: 0.5, roughness: 0.4 }, shadow: false });
       }
