@@ -35,7 +35,7 @@ MAX_METIN = 300
 # Katalogda adı geçmeyen ama sık yazılacak karşılıklar.
 EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilimci", "hekim": "doktor",
              "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis",
-             "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu"}
+             "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu", "footballcu": "futbolcu"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
@@ -78,8 +78,11 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
 # Sitedeki yorumla doğrulama kodu: "kod 1234", "kod: 1234", "kodum 1234".
 KOD = re.compile(r"\bkod\w*\s*:?\s*(\d{4})\b")
 TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
-# "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım" (yorumlarda sık).
-OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olacagim|olacam|olcagim)\b)")
+# "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım / olabilir miyim / olurum" (yorumlarda sık).
+OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olacagim|olacam|olcagim|olabilir\w*|olurum|olayim)\b)")
+# "ben olurum fırıncı" (videonun sorusuna cevap) ve yorumun tamamı "ben garson" / "ben de futbolcu".
+BEN_OLURUM = re.compile(r"\bben (?:de )?olurum ((?:\w+ ){0,2}\w+)")
+BEN = re.compile(r"^(?:ben de|bende|ben) ")
 GIZLE = re.compile(r"\b(?:adimi|ismimi|adim|ismim|beni)\b(?: \w+){0,2} (?P<ne>gizle|goster)\w*"
                    r"|\b(?P<ne2>gizle|goster)\w*(?: \w+){0,2} (?:adimi|ismimi)\b")
 
@@ -106,7 +109,7 @@ def cozumle(text: str) -> dict[str, str]:
         if deger and tur not in out:
             out[tur] = deger
     if "meslek" not in out:
-        for m in OLMAK.finditer(t):
+        for m in [*OLMAK.finditer(t), *BEN_OLURUM.finditer(t)]:
             deger = _bul("meslek", m.group(1))
             if deger:
                 out["meslek"] = deger
@@ -114,7 +117,7 @@ def cozumle(text: str) -> dict[str, str]:
     if not out:
         # Yorumun tamamı bir meslek adıysa ("okul müdürü", "polis 👮") o da istektir; cümle içinde geçen
         # ad ("balıkçı amca çok iyi") istek sayılmaz.
-        tam = dict(secenekler()["meslek"]).get(t)
+        tam = dict(secenekler()["meslek"]).get(BEN.sub("", t))
         if tam:
             out["meslek"] = tam
     g = GIZLE.search(t)

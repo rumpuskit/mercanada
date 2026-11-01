@@ -34,6 +34,13 @@ class CozumleTest(unittest.TestCase):
             "abla takipteyim balıkcı olucam": {"meslek": "balikci"},
             "ben polis olcam": {"meslek": "polis"},
             "doktor olacağım": {"meslek": "doktor"},
+            # 1 Kasım yorumları: videonun sorusuna "ben X" cevabı.
+            "ben garson": {"meslek": "garson"},
+            "Ben de futbolcu": {"meslek": "futbolcu"},
+            "ben olurum fırınçı": {"meslek": "firinci"},
+            "polis olabilirmiyim": {"meslek": "polis"},
+            "abla garson olabilir miyim": {"meslek": "garson"},
+            "Footballcu": {"meslek": "futbolcu"},
         }
         for text, want in cases.items():
             self.assertEqual(cozumle(text), want, text)
@@ -42,7 +49,8 @@ class CozumleTest(unittest.TestCase):
         for text in ("çok güzel olmuş", "balıkçı amca çok iyi", "balıkçı olmak istemiyorum", "balıkçı olmayacağım",
                      "itfaiyeci olmak istiyorum", "belediye başkanı olmak istiyorum", "kahve içmek istiyorum", "meslek: şef", "meslek: müdür",
                      # Kadrolu işler (kontenjanlı) ve "anakara" istenemez.
-                     "meslek: cankurtaran", "meslek: uzman"):
+                     "meslek: cankurtaran", "meslek: uzman",
+                     "ben de geldim", "ben bilim adamı", "ben avm açmak istiyorum"):
             self.assertEqual(cozumle(text), {}, text)
 
     def test_katla(self):
