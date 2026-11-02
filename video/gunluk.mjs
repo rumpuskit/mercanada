@@ -6,7 +6,7 @@
 //
 // --hikaye: günün hikâyesi elle (gerçek olaylardan, sitede doğrulanmış): {"tur", "kanca", "govde": [{ses, yazi?,
 // vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], "saat": "19:40",
-// "imza2": {ses, yazi?} (kilit sayacının ikinci cümlesi: sıradaki yer yerine başka bir hedef, ör. zeplin),
+// "onsoz": [{ses, yazi?, vurus?}] (imzadan önce vurucu açılış; ilk çekimde ya da "onsozCekim": [çekimler] ile kendi çekimlerinde), "imza2": {ses, yazi?} (kilit sayacının ikinci cümlesi: sıradaki yer yerine başka bir hedef, ör. zeplin),
 // "ilk": imza çekimi (varsayılan "ucus"), "ornek": kapanıştaki örnek meslek (varsayılan "balıkçı"; katalogda, kadrosuz), "soruCekim": soru karesinin çekimi}. İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
 //
 // Yuva: akşam (21:00 taşınmasından sonra, günün özeti), öğle (bir sakinin hikâyesi ya da istek), sabah
@@ -139,7 +139,7 @@ const BOS = [
   { id: "gece", govde: [c("Akşam oldu."), c("Fener yandı."), c("Bakan kimse yok.", null, true)], soru: c("Adanın ilk gecesini kim geçirecek?"), cekim: ["fener", "ucus"], saat: "20:10" },
 ];
 
-let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", ornek = "balıkçı", soruCekim = null;
+let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", ornek = "balıkçı", soruCekim = null, onsoz = [], onsozCekim = null;
 if (acilan.length) {
   tur = "acilis";
   const s = acilan.at(-1);
@@ -208,6 +208,7 @@ if (opt("--hikaye")) {
   tur = h.tur ?? "ozel"; govde = h.govde.map(cc); soru = cc(h.soru); cekim = h.cekim; etiketler = h.etiketler ?? [];
   saat = h.saat ?? saat; ozelKanca = h.kanca ?? null;
   imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim; ornek = h.ornek ?? ornek; soruCekim = h.soruCekim ?? null;
+  onsoz = (h.onsoz ?? []).map(cc); onsozCekim = h.onsozCekim ?? null;
 }
 if (!tur || !govde.length) {
   tur = "bos";
@@ -216,14 +217,18 @@ if (!tur || !govde.length) {
   govde = konu.govde; soru = konu.soru; cekim = konu.cekim; saat = konu.saat ?? saat;
 }
 
-// İmza (kilit sayacı) ve kapanış (soru + takip + istek kalıbı).
-const imza = N === 0
+// İmza (kilit sayacı) ve kapanış (soru + takip + istek kalıbı). "onsoz" (isteğe bağlı) imzadan önce, ilk çekimde
+// söylenen vurucu açılış (izleyici ilk 1–2 sn'de kaydırıyor): gerçek bir çelişki, ör. "Adada beş zeplin pilotu var."
+const imza = [...onsoz, ...(N === 0
   ? [c("Bu adada kimse yaşamıyor."), c(`${next.ad} için ${say(need)} kişi lazım.`, `${next.ad} için ${fmt(need)} kişi lazım.`)]
-  : [c(`Bu adada ${say(N)} kişi yaşıyor.`, `Bu adada ${fmt(N)} kişi yaşıyor.`), ...(imza2 ? [imza2] : next ? [c(`${next.ad} için ${say(need)} kişi daha lazım.`, `${next.ad} için ${fmt(need)} kişi daha lazım.`)] : [])];
+  : [c(`Bu adada ${say(N)} kişi yaşıyor.`, `Bu adada ${fmt(N)} kişi yaşıyor.`), ...(imza2 ? [imza2] : next ? [c(`${next.ad} için ${say(need)} kişi daha lazım.`, `${next.ad} için ${fmt(need)} kişi daha lazım.`)] : [])])];
 const kapanis = [soru, c("Takip eden adaya taşınıyor."), c("Mesleğini sen seç."), c(`Yorumuna yaz: meslek, ${ornek}.`, `Yorumuna yaz:\nmeslek: ${ornek}`)];
 const cumleler = [...imza, ...govde, ...kapanis];
+// "onsozCekim" verilirse önsöz kendi çekimlerinde (bilgi kartı yok, ilk kare temiz), imza ardından ilk çekimde.
+const onGrup = onsoz.length && onsozCekim ? onsoz.length : 0;
 const gruplar = [
-  { cekim: ilkCekim, arayuz: true, ilk: 0, son: imza.length - 1 },
+  ...(onGrup ? splitGovde(onGrup, onsozCekim).map(([a, b, ck]) => ({ cekim: ck, ilk: a, son: b })) : []),
+  { cekim: ilkCekim, arayuz: true, ilk: onGrup, son: imza.length - 1 },
   ...splitGovde(govde.length, cekim).map(([a, b, ck]) => ({ cekim: ck, ilk: imza.length + a, son: imza.length + b })),
   // Kapanış üç çekim: soru (konunun son açısı), "takip eden adaya taşınıyor" (iskele), istek kalıbı (yazılı son kare).
   { cekim: soruCekim ?? (typeof cekim.at(-1) === "object" ? "meydan" : cekim.at(-1)), varyantEk: 1, ilk: imza.length + govde.length, son: imza.length + govde.length },
