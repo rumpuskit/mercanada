@@ -84,7 +84,7 @@ TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>e
 OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olacagim|olacam|olcagim|olabilir\w*|olabilr|olurum|olayim)\b)")
 # "ben olurum fırıncı" (videonun sorusuna cevap) ve yorumun tamamı "ben garson" / "ben de futbolcu".
 BEN_OLURUM = re.compile(r"\bben (?:de )?olurum ((?:\w+ ){0,2}\w+)")
-BEN = re.compile(r"^(?:ben de|bende|ben) ")
+BEN = re.compile(r"^(?:(?:abla|abi|hocam|kanka) )?(?:ben de|bende|ben) ")
 # "beni topçu yap", "beni zeplin pilotu yapar mısın"
 BENI_YAP = re.compile(r"\bbeni ((?:\w+ ){0,2}\w+) (?:yap|yapar|yapabilir|yapin|yapsana)\w*")
 GIZLE = re.compile(r"\b(?:adimi|ismimi|adim|ismim|beni)\b(?: \w+){0,2} (?P<ne>gizle|goster)\w*"
