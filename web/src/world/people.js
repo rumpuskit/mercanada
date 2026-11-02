@@ -727,6 +727,8 @@ export class People {
     // Evden çalışanlar bugün mesaide mi (ev etkinliği "çalışma" olur).
     this.homeWork = this.residents.map((r, i) => this.works[i].job === "uzaktan" && worksOn(r, day));
     this.dogs = this.residents.map((r) => pet(r, day) === "Köpek");
+    // Robot yoldaş (yalnız istekle, evcil_ozel): dışarıdayken her yerde sahibinin yanında, işe giderken de.
+    this.robots = this.residents.map((r) => pet(r, day) === "Robot");
     this.travelCache.fill(null);
     this.tripStore = this.residents.map(() => new Map());
     if (this.traffic) { this.traffic.busRequests = new Map(); this.traffic.stopRiders = new Map(); } // yolculuklar yeniden kurulurken duraklar yeniden bildirilir
@@ -2065,6 +2067,16 @@ export class People {
         }
         if (w.isWalkable(x, z)) crowd.addDog(x, w.groundY(x, z), z, p.heading + (p.moving ? 0 : 0.6), (p.phase ?? 0) * 1.6, DOG_COLORS[this.residents[i].seed % DOG_COLORS.length], !!p.moving, time, this.residents[i].seed % 97, i);
       }
+      if (this.robots[i] && !p.indoor) {
+        // Robot sahibinin sol omzunun biraz gerisinde süzülür; orası yol ya da yürünmez yerse sağda, olmazsa arkada.
+        const fx = Math.sin(p.heading), fz = Math.cos(p.heading), sx = Math.cos(p.heading), sz = -Math.sin(p.heading);
+        let x = p.x - sx * 0.7 - fx * 0.25, z = p.z - sz * 0.7 - fz * 0.25;
+        if (w.inCarriage(x, z) || !w.isWalkable(x, z)) {
+          x = p.x + sx * 0.7 - fx * 0.25; z = p.z + sz * 0.7 - fz * 0.25;
+          if (w.inCarriage(x, z) || !w.isWalkable(x, z)) { x = p.x - fx * 0.9; z = p.z - fz * 0.9; }
+        }
+        if (w.isWalkable(x, z)) crowd.addRobot(x, w.groundY(x, z), z, p.heading, !!p.moving, time, this.residents[i].seed % 97, i);
+      }
     }
     // Taksi, otobüs ve hizmet aracı şoförleri (sakin değil).
     const drv = (this._driverPose ??= {});
@@ -2354,6 +2366,13 @@ export class People {
       const hit = raycaster.intersectObject(mesh)[0];
       if (hit?.instanceId != null && hit.distance < bd) {
         const i = this.crowd.dogOwner[hit.instanceId];
+        if (i >= 0) { best = i; bd = hit.distance; }
+      }
+    }
+    for (const mesh of this.crowd.robotTargets()) {
+      const hit = raycaster.intersectObject(mesh)[0];
+      if (hit?.instanceId != null && hit.distance < bd) {
+        const i = this.crowd.robotOwner[hit.instanceId];
         if (i >= 0) { best = i; bd = hit.distance; }
       }
     }

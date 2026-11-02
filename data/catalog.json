@@ -155,6 +155,7 @@
     { "id": "yoga", "ad": "Yoga", "yer": "plaj" }
   ],
   "evcil_hayvanlar": ["Kedi", "Köpek", "Papağan", "Kaplumbağa"],
+  "evcil_ozel": ["Robot"],
   "evcil_orani": 35,
   "gorunus": { "ten": 5, "sac": 8, "sac_renk": 6, "ust": 10, "alt": 6 },
   "adalar": ["Mercanada", "Yakamoz Adası", "İnci Adası", "Lodos Adası", "Martı Adası", "Poyraz Adası", "Yosun Adası", "Kumsal Adası"],

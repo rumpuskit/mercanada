@@ -10,6 +10,7 @@ const PET_NAMES = {
   Köpek: ["Karabaş", "Çomar", "Paşa", "Lokum", "Kömür", "Badem", "Rüzgar", "Max"],
   Papağan: ["Cıvıl", "Yeşil", "Maviş", "Tüylü"],
   Kaplumbağa: ["Ağır Abi", "Kabuk", "Sabır", "Taş"],
+  Robot: ["Robi", "Bilge", "Volt", "Pıtırcık"],
 };
 
 const HOBBY_TRAIT = {
@@ -69,7 +70,9 @@ export class Stories {
     add(HOBBY_TRAIT[p.hobbies[i].id]);
     add(JOB_TRAIT[p.works[i].job]);
     const day = p.day;
-    if (sim.pet(r, day)) add("Hayvansever");
+    const yoldas = sim.pet(r, day);
+    if (yoldas === "Robot") add("Teknoloji meraklısı");
+    else if (yoldas) add("Hayvansever");
     const plan = p.plans?.[i];
     if (plan) {
       // Erkenci: sabah erken uyanan (gece vardiyasından dönenler sayılmaz).

@@ -71,7 +71,9 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
     meslek += list(EK_MESLEK.items())
     hobi = [(katla(h["id"]), h["id"]) for h in c["hobiler"]] + [(katla(h["ad"]), h["id"]) for h in c["hobiler"]]
     hobi += list(EK_HOBI.items())
-    evcil = [(katla(p), p) for p in c["evcil_hayvanlar"]]
+    # Özel yoldaşlar (Robot) rastgele dağıtılmaz, yalnız istenir (sim.pet override'ı döndürür).
+    evcil = [(katla(p), p) for p in c["evcil_hayvanlar"] + c.get("evcil_ozel", [])]
+    evcil += [("ai robot", "Robot"), ("yapay zeka robotu", "Robot"), ("robot asistan", "Robot")]
     return {"meslek": _sozluk(meslek), "hobi": _sozluk(hobi), "evcil": _sozluk(evcil)}
 
 

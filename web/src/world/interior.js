@@ -491,6 +491,20 @@ export class Dollhouse {
       if (!cat) add(0.8, 0.08, 0.6, base[0] + (spots.sofa?.heading > 0 ? 1.6 : -1.6), 0.06, base[1] + 1.2, "#8a5a32", 0, { shadow: false });
       return { kind: cat ? "kedi" : "kopek", body, head, base, facing: spots.sofa?.heading ?? 0, ph: t * 40 };
     }
+    if (animal === "Robot") {
+      // Robot yoldaş evde koltuğun yanında bekler (dışarıda sahibinin yanında süzülür: people.js).
+      const rx = base[0] + (spots.sofa?.heading > 0 ? 1.6 : -1.6), rz = base[1] + 1.2; // köpek kabının yeri
+      add(0.16, 0.08, 0.16, rx, 0.06, rz, "#9aa4ae", 0, { shadow: false });
+      add(0.3, 0.34, 0.24, rx, 0.18, rz, "#eef1f4");
+      add(0.16, 0.06, 0.01, rx, 0.36, rz + 0.125, "#5fe3ff", 0, { shadow: false });
+      add(0.3, 0.22, 0.26, rx, 0.56, rz, "#eef1f4");
+      add(0.24, 0.12, 0.01, rx, 0.61, rz + 0.13, "#1d2733", 0, { shadow: false });
+      add(0.04, 0.04, 0.01, rx - 0.05, 0.65, rz + 0.136, "#5fe3ff", 0, { shadow: false });
+      add(0.04, 0.04, 0.01, rx + 0.05, 0.65, rz + 0.136, "#5fe3ff", 0, { shadow: false });
+      add(0.015, 0.1, 0.015, rx, 0.78, rz, "#9aa4ae", 0, { shadow: false });
+      add(0.04, 0.04, 0.04, rx, 0.88, rz, "#5fe3ff", 0, { shadow: false });
+      return null;
+    }
     if (animal === "Papağan") {
       add(0.4, 0.55, 0.4, base[0], 1.0, base[1] - 1.6, "#cfd6de", 0, { mat: { metalness: 0.6, wireframe: true } });
       add(0.03, 1.0, 0.03, base[0], 0.06, base[1] - 1.6, "#3c4148", 0, { shadow: false });

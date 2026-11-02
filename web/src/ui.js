@@ -244,7 +244,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
     facts([
       ["Adres", sim.addressText(r.slot)],
       ["Hobi", people.hobbies[selected].ad],
-      ["Evcil", pet || "Henüz yok"],
+      ["Evcil", pet === "Robot" ? "Robot yoldaş" : pet || "Henüz yok"],
       ["Adada", t === 0 ? "Bugün geldi" : t === 1 ? "Dün geldi" : `${fmt.format(t)} gündür`],
       ["Ulaşım", (people.hasCar[selected] ? "Kendi arabası" : world.vehicles ? "Otobüs ve yürüyüş" : "Yürüyerek (adada henüz araç yok)") + (["anakara", "zeplin"].includes(people.works[selected].wp.kind) ? " · işe vapurla" : "")],
       // İstekler videolarımızın yorumlarından okunur (sunucuda istekler.py; biçim orada).
