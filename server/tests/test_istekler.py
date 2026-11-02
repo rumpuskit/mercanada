@@ -41,6 +41,9 @@ class CozumleTest(unittest.TestCase):
             "polis olabilirmiyim": {"meslek": "polis"},
             "abla garson olabilir miyim": {"meslek": "garson"},
             "Footballcu": {"meslek": "futbolcu"},
+            "Beni topçu yap": {"meslek": "futbolcu"},
+            "beni zeplin pilotu yapar misin teşekkürler": {"meslek": "zeplin_pilotu"},
+            "hemşire olabilr miyim": {"meslek": "hemsire"},
         }
         for text, want in cases.items():
             self.assertEqual(cozumle(text), want, text)
