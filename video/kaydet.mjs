@@ -190,7 +190,8 @@ for (const [ci, shot] of S.cekimler.entries()) {
       globalThis.__yonetmen = () => {
         const u = ease(Math.min(1, (globalThis.__shotT ?? 0) / sure));
         const a = yon + yorunge.a0 + (yorunge.a1 - yorunge.a0) * u;
-        A.camera.position.set(x + Math.sin(a) * r, gy + yh, z + Math.cos(a) * r);
+        const m = 1 + ((yorunge.r1 ?? yorunge.r) / yorunge.r - 1) * u; // r1: bitiş uzaklığı (itme/çekme)
+        A.camera.position.set(x + Math.sin(a) * r * m, gy + yh * m, z + Math.cos(a) * r * m);
         A.controls.target.set(x, gy + (yorunge.bak ?? 2), z);
         A.camera.lookAt(A.controls.target);
       };
