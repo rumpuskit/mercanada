@@ -342,7 +342,8 @@ function canlandir(shot, v) {
 
 /** Çekim kütüphanesi: gerçek adanın sabit ve dinamik açıları (koordinatlar: senaryolar/acilis.mjs notları). */
 function CEKIM(ad, v, sure, arayuz) {
-  const a = `saat=${typeof ad === "string" && ad.startsWith("iskele") ? vapurSaati : saat}&hiz=4`;
+  // Bilgi kartlı (arayuz) çekim kartta saati gösterir: gerçek saatte kalır (iskele bile olsa).
+  const a = `saat=${!arayuz && typeof ad === "string" && ad.startsWith("iskele") ? vapurSaati : saat}&hiz=4`;
   // Sakin: site onu bulup izler (evdeyse evinin içi açılır). Kart gizli: telefon düzeninde altyazının üstüne biner.
   if (typeof ad === "object") return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, yazilar: [{ metin: "@" + esc(ad.sakin), bas: 0.15, son: sure, yer: "ust" }] };
   const yor = (hedef, r, h, a0, a1, bak = 2) => ({ adres: a, yorunge: { hedef, r, h, a0, a1, bak } });
