@@ -121,7 +121,9 @@ def cozumle(text: str) -> dict[str, str]:
     if not out:
         # Yorumun tamamı bir meslek adıysa ("okul müdürü", "polis 👮") o da istektir; cümle içinde geçen
         # ad ("balıkçı amca çok iyi") istek sayılmaz.
-        tam = dict(secenekler()["meslek"]).get(BEN.sub("", t))
+        # "abla futbolcu", "futbolcu bennn": hitap ve sondaki "ben" de atılır.
+        govde = re.sub(r" ben+$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
+        tam = dict(secenekler()["meslek"]).get(BEN.sub("", govde))
         if tam:
             out["meslek"] = tam
     g = GIZLE.search(t)

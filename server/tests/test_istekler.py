@@ -43,6 +43,8 @@ class CozumleTest(unittest.TestCase):
             "Footballcu": {"meslek": "futbolcu"},
             "Beni topçu yap": {"meslek": "futbolcu"},
             "abla ben futbolcu": {"meslek": "futbolcu"},
+            "Abla futbolcu": {"meslek": "futbolcu"},
+            "futbolcu bennn": {"meslek": "futbolcu"},
             "beni zeplin pilotu yapar misin teşekkürler": {"meslek": "zeplin_pilotu"},
             "hemşire olabilr miyim": {"meslek": "hemsire"},
         }
