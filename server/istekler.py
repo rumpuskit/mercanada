@@ -81,12 +81,12 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
 KOD = re.compile(r"\bkod\w*\s*:?\s*(\d{4})\b")
 TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
 # "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım / olabilir miyim / olurum" (yorumlarda sık).
-OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olacagim|olacam|olcagim|olabilir\w*|olabilr|olurum|olayim)\b)")
+OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olurum|olayim)\b)")
 # "ben olurum fırıncı" (videonun sorusuna cevap) ve yorumun tamamı "ben garson" / "ben de futbolcu".
 BEN_OLURUM = re.compile(r"\bben (?:de )?olurum ((?:\w+ ){0,2}\w+)")
 BEN = re.compile(r"^(?:(?:abla|abi|hocam|kanka) )?(?:ben de|bende|ben) ")
 # "beni topçu yap", "beni zeplin pilotu yapar mısın"
-BENI_YAP = re.compile(r"\bbeni ((?:\w+ ){0,2}\w+) (?:yap|yapar|yapabilir|yapin|yapsana)\w*")
+BENI_YAP = re.compile(r"\bbeni? ((?:\w+ ){0,2}\w+) (?:yap|yapar|yapabilir|yapin|yapsana)\w*")
 GIZLE = re.compile(r"\b(?:adimi|ismimi|adim|ismim|beni)\b(?: \w+){0,2} (?P<ne>gizle|goster)\w*"
                    r"|\b(?P<ne2>gizle|goster)\w*(?: \w+){0,2} (?:adimi|ismimi)\b")
 
