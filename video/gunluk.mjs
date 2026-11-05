@@ -7,7 +7,14 @@
 // --hikaye: günün hikâyesi elle (gerçek olaylardan, sitede doğrulanmış): {"tur", "kanca", "govde": [{ses, yazi?,
 // vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], ("saat" artık yok sayılır: ada saati üretim anı),
 // "onsoz": [{ses, yazi?, vurus?}] (imzadan önce vurucu açılış; ilk çekimde ya da "onsozCekim": [çekimler] ile kendi çekimlerinde), "imza2": {ses, yazi?} (kilit sayacının ikinci cümlesi: sıradaki yer yerine başka bir hedef, ör. zeplin),
-// "ilk": imza çekimi (varsayılan "ucus"), "ornek": kapanıştaki örnek meslek (varsayılan "balıkçı"; katalogda, kadrosuz), "soruCekim": soru karesinin çekimi}. İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
+// "ilk": imza çekimi (varsayılan "ucus"), "ornek": kapanıştaki örnek meslek (varsayılan "balıkçı"; katalogda, kadrosuz), "soruCekim": soru karesinin çekimi,
+// "tasinCekim": "Takip eden adaya taşınıyor" karesi (varsayılan "iskele")}. İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
+// Çekim tanımı (cekim/ilk/onsozCekim/soruCekim/tasinCekim öğeleri): "iskele" (kütüphane adı) | {"sakin": "ad"} |
+//   kadraj ayarı {"yer": "iskele", "aci": rad (hedef çevresinde döndür, + saat yönünün tersi), "uzak": çarpan,
+//   "yuk": yükseklik çarpanı, "varyant": n (kütüphanedeki n. açı)} | ham kamera {"kamera": [[kx,ky,kz, bx,by,bz] başta,
+//   [..] sonda], "vapur": true (iskelede vapur dakikası)}. Ayarlı/ham çekim otomatik döndürülmez (yalnız itme/çekme).
+// --cekim-dene N: önizleme ölçeğinde yalnız N. çekimi çizer (sesi önbellekten), cekimN-kareler.jpg (baş/orta/son) yazar;
+//   kadrajı tek tek düzeltmek için (tam önizlemeden ~10 kat hızlı). Durum yazılmaz.
 //
 // Yuva: akşam (21:00 taşınmasından sonra, günün özeti), öğle (bir sakinin hikâyesi ya da istek), sabah
 // (09:00 taşınma haberi). Kaç yuvanın üretileceği takipçi sayısına bağlı (SIKLIK); gerekmeyen yuva sessizce
@@ -140,7 +147,7 @@ const BOS = [
   { id: "gece", govde: [c("Akşam oldu."), c("Fener yandı."), c("Bakan kimse yok.", null, true)], soru: c("Adanın ilk gecesini kim geçirecek?"), cekim: ["fener", "ucus"], saat: "20:10" },
 ];
 
-let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", ornek = "balıkçı", soruCekim = null, onsoz = [], onsozCekim = null;
+let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", ornek = "balıkçı", soruCekim = null, onsoz = [], onsozCekim = null, tasinCekim = "iskele";
 if (acilan.length) {
   tur = "acilis";
   const s = acilan.at(-1);
@@ -209,6 +216,7 @@ if (opt("--hikaye")) {
   tur = h.tur ?? "ozel"; govde = h.govde.map(cc); soru = cc(h.soru); cekim = h.cekim; etiketler = h.etiketler ?? [];
   saat = h.saat ?? saat; ozelKanca = h.kanca ?? null;
   imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim; ornek = h.ornek ?? ornek; soruCekim = h.soruCekim ?? null;
+  tasinCekim = h.tasinCekim ?? tasinCekim;
   onsoz = (h.onsoz ?? []).map(cc); onsozCekim = h.onsozCekim ?? null;
 }
 if (!tur || !govde.length) {
@@ -245,10 +253,13 @@ const gruplar = [
   { cekim: ilkCekim, arayuz: true, ilk: onGrup, son: imza.length - 1 },
   ...splitGovde(govde.length, cekim).map(([a, b, ck]) => ({ cekim: ck, ilk: imza.length + a, son: imza.length + b })),
   // Kapanış üç çekim: soru (konunun son açısı), "takip eden adaya taşınıyor" (iskele), istek kalıbı (yazılı son kare).
-  { cekim: soruCekim ?? (typeof cekim.at(-1) === "object" ? "meydan" : cekim.at(-1)), varyantEk: 1, ilk: imza.length + govde.length, son: imza.length + govde.length },
-  { cekim: "iskele", ilk: imza.length + govde.length + 1, son: imza.length + govde.length + 1 },
+  { cekim: soruCekim ?? (sakinMi(cekim.at(-1)) ? "meydan" : cekim.at(-1)), varyantEk: 1, ilk: imza.length + govde.length, son: imza.length + govde.length },
+  { cekim: tasinCekim, tasin: true, ilk: imza.length + govde.length + 1, son: imza.length + govde.length + 1 },
   { cekim: "kapanis", ilk: imza.length + govde.length + 2, son: cumleler.length - 1 },
 ];
+function sakinMi(ck) { return !!ck && typeof ck === "object" && "sakin" in ck; }
+/** Kullanım sayacı anahtarı: aynı yer (ayarlı ya da değil) aynı sayacı paylaşır; ham kamera kendi başına. */
+function ckAnahtar(ck) { return typeof ck === "string" ? ck : sakinMi(ck) ? "sakin:" + ck.sakin : ck.yer ?? JSON.stringify(ck.kamera); }
 function splitGovde(n, ck) {
   // Gövde cümleleri çekimlere sırayla bölünür (en az bir cümle).
   const k = Math.min(ck.length, n), out = [];
@@ -279,7 +290,9 @@ const aciklama = [
 writeFileSync(`${out}/ACIKLAMA.txt`, aciklama + "\n");
 writeFileSync(`${out}/malzeme.json`, JSON.stringify({ tarih, yuva, tur, konuId, nufus: N, takipci, level, sıradaki: next?.ad, need, yeniler: yeniler.map((r) => r.handle), etiketler }, null, 2));
 
-if (!args.includes("--uret")) {
+const dene = opt("--cekim-dene"); // tek çekim denemesi (önizleme ölçeği, durum yazılmaz)
+const onizleme = args.includes("--onizleme") || !!dene;
+if (!args.includes("--uret") && !dene) {
   writeFileSync(`${out}/senaryo-taslak.json`, JSON.stringify({ ...S0, gruplar }, null, 2));
   console.log(`taslak: ${out} (üretmek için --uret)`);
   process.exit(0);
@@ -297,17 +310,19 @@ const kesitler = [];
 gruplar.forEach((g, gi) => {
   const t0 = gi === 0 ? 0 : bas(g.ilk) - 0.15;
   const t1 = gi === gruplar.length - 1 ? bitis : bas(gruplar[gi + 1].ilk) - 0.15;
-  const sakin = typeof g.cekim === "object";
+  const sakin = sakinMi(g.cekim);
   const parca = g.cekim === "kapanis" ? 1 : Math.max(1, Math.ceil((t1 - t0) / (sakin ? 4.2 : PARCA)));
-  for (let k = 0; k < parca; k++) kesitler.push({ ...g, cekim: sakin && k > 0 ? "meydan" : g.cekim, t0: t0 + ((t1 - t0) * k) / parca, t1: t0 + ((t1 - t0) * (k + 1)) / parca });
+  for (let k = 0; k < parca; k++) kesitler.push({ ...g, parca: k, cekim: sakin && k > 0 ? "meydan" : g.cekim, t0: t0 + ((t1 - t0) * k) / parca, t1: t0 + ((t1 - t0) * (k + 1)) / parca });
 });
 const kullanim = {};
 const cekimler = kesitler.map((k, i) => {
   const sure = +(k.t1 - k.t0 + (i < kesitler.length - 1 ? X : 0)).toFixed(3);
-  const anahtar = typeof k.cekim === "object" ? "sakin:" + k.cekim.sakin : k.cekim;
+  const anahtar = ckAnahtar(k.cekim);
   const v = (kullanim[anahtar] = (kullanim[anahtar] ?? -1) + 1);
+  // "Taşın" karesi iskelenin geniş açısı (v çift): yakın açıda vapurun önüne ev giriyordu (4–5 Kasım raporları).
+  if (k.tasin && k.cekim === "iskele") return { sure, ...canlandir(CEKIM({ yer: "iskele", varyant: 0 }, 0, sure, false), 0) };
   const shot = CEKIM(k.cekim, v, sure, k.arayuz);
-  return { sure, ...(k.cekim === "kapanis" ? shot : canlandir(shot, v)) };
+  return { sure, ...(k.cekim === "kapanis" ? shot : canlandir(shot, shot.ayarli ? k.parca : v)) };
 });
 // Art arda iki çekim aynı kalmasın (aynı adres + kamera): olursa ikincisi döndürülür (güvenlik ağı).
 for (let i = 1; i < cekimler.length; i++) {
@@ -320,7 +335,9 @@ for (let i = 1; i < cekimler.length; i++) {
  *  itilir, tekte dışarı çekilir. Yörüngede yay en az 0,5 rad, r1 bitiş uzaklığı (kaydet.mjs uygular). */
 function canlandir(shot, v) {
   const DUZEN = [[0, 1], [0.6, 0.55], [-0.6, 1.45], [1.1, 0.75], [-1.1, 1.25], [1.6, 0.6], [-1.6, 1.1]];
-  const [aci, olc] = DUZEN[v % DUZEN.length], m = v % 2 ? 1.12 : 0.82;
+  // Ayarlı/ham çekim (hikâyede kadraj elle verildi): v = grubun parça sırası; ilk parça verilen kadraj (yalnız
+  // itme), sonrakiler ondan yarım ölçüde sapar (uzun grupta art arda aynı kare olmasın).
+  const d = DUZEN[v % DUZEN.length], [aci, olc] = shot.ayarli ? [d[0] * 0.5, 1 + (d[1] - 1) * 0.5] : d, m = v % 2 ? 1.12 : 0.82;
   if (shot.kamera) {
     const [, kx0, ky0, kz0, bx0, by0, bz0] = shot.kamera[0];
     const yakin = Math.hypot(kx0 - bx0, ky0 - by0, kz0 - bz0) < 25; // sokak düzeyi: binaya girmesin
@@ -342,16 +359,25 @@ function canlandir(shot, v) {
 
 /** Çekim kütüphanesi: gerçek adanın sabit ve dinamik açıları (koordinatlar: senaryolar/acilis.mjs notları). */
 function CEKIM(ad, v, sure, arayuz) {
+  // Kadraj ayarı: kütüphane çekimi hedefi çevresinde döndürülür/uzaklaştırılır (hikâyeden, kod değişmeden).
+  if (ad && typeof ad === "object" && ad.yer) return kadraj(CEKIM(ad.yer, ad.varyant ?? v, sure, arayuz), ad);
+  const vapurlu = typeof ad === "string" ? ad.startsWith("iskele") : !!ad?.vapur;
   // Bilgi kartlı (arayuz) çekim kartta saati gösterir: gerçek saatte kalır (iskele bile olsa).
-  const a = `saat=${!arayuz && typeof ad === "string" && ad.startsWith("iskele") ? vapurSaati : saat}&hiz=4`;
+  const a = `saat=${!arayuz && vapurlu ? vapurSaati : saat}&hiz=4`;
+  if (ad && typeof ad === "object" && ad.kamera) {
+    const [p0, p1 = p0] = ad.kamera;
+    return { adres: a, kamera: [[0, ...p0], [sure, ...p1]], ayarli: true, ...(arayuz ? { arayuz: true } : {}) };
+  }
   // Sakin: site onu bulup izler (evdeyse evinin içi açılır). Kart gizli: telefon düzeninde altyazının üstüne biner.
-  if (typeof ad === "object") return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, yazilar: [{ metin: "@" + esc(ad.sakin), bas: 0.15, son: sure, yer: "ust" }] };
+  if (sakinMi(ad)) return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, yazilar: [{ metin: "@" + esc(ad.sakin), bas: 0.15, son: sure, yer: "ust" }] };
   const yor = (hedef, r, h, a0, a1, bak = 2) => ({ adres: a, yorunge: { hedef, r, h, a0, a1, bak } });
   const L = {
     ucus: () => ({ adres: a, kamera: v % 2 ? [[0, 160, 150, 380, 0, 0, -40], [sure, 120, 110, 300, 0, 0, -20]] : [[0, -150, 120, 420, 0, 0, 40], [sure, -95, 80, 300, 0, 0, 15]] }),
     // Vapur dakika 0-7 (mod 20) arasında iskelede: 16:40, 19:40 uygun.
-    iskele: () => ({ adres: a, kamera: v % 2 ? [[0, -11, 6.5, 236, -22, 4, 184], [sure, -13, 6, 228, -24, 4, 183]] : [[0, -40, 24, 186, 0, 2, 232], [sure, -30, 18, 194, 1, 2, 235]] }),
-    iskele2: () => ({ adres: a, kamera: [[0, 30, 14, 250, 0, 3, 240], [sure, 24, 12, 258, 0, 3, 238]] }),
+    // Tek v: sudan, vapurun yanından yakın açı. (6 Kasım: eski yakın açı [-11,6.5,236 → -22,4,184] karaya, bir evin
+    // cephesine bakıyordu, karede vapur yoktu; eski iskele2 [30,14,250] vapurun çatısının içindeydi.)
+    iskele: () => ({ adres: a, kamera: v % 2 ? [[0, -33, 15, 227, 0, 2, 232], [sure, -26.5, 11.5, 229, 1, 2, 235]] : [[0, -40, 24, 186, 0, 2, 232], [sure, -30, 18, 194, 1, 2, 235]] }),
+    iskele2: () => ({ adres: a, kamera: [[0, -14, 7, 214, 6, 5, 244], [sure, -12, 6.5, 220, 6, 5, 244]] }),
     meydan: () => ({ adres: a, kamera: v % 2 ? [[0, 9, 1.7, -11, 0, 10.5, -25.5], [sure, 5, 2.2, -14, 0, 11, -25.5]] : [[0, 26, 13, 30, 0, 5, -22], [sure, 19, 10, 23, 0, 6, -24]] }),
     meydan2: () => ({ adres: a, kamera: [[0, 9, 1.7, -11, 0, 10.5, -25.5], [sure, 5, 2.2, -14, 0, 11, -25.5]] }),
     fener: () => ({ adres: a, kamera: [[0, 700, 45, 260, 791, 4, 178], [sure, 715, 40, 250, 791, 4, 178]] }),
@@ -364,7 +390,10 @@ function CEKIM(ad, v, sure, arayuz) {
     kapanis: () => ({ adres: a, kamera: [[0, 160, 180, 420, 0, 0, -60], [sure, 200, 250, 500, 0, 0, -80]], yazilar: [{ metin: "Takip et,<br>adaya taşın.", alt: `TikTok'ta<br><small>@${TIKTOK}</small>`, bas: 0.2, son: sure, yer: "ust" }] }),
   };
   // "isyeri:firin:0": o iş yerinin kapısı çevresinde, binanın önünden dönen kamera (açı kaydet.mjs'de bina yönüne göre).
-  if (typeof ad === "string" && ad.startsWith("isyeri:")) L[ad] = () => { const a0 = -0.3 + 0.5 * (v % 2); return yor(ad, 26, 11, a0, a0 + 0.5, 3); };
+  // Açık alan iş yerleri uzaktan ve yüksekten (6 Kasım: Balıkçı Koyu 26 m'den kulübe çatısını gösteriyordu; 62/20'de
+  // koy, tekneler ve iskele kadrajda).
+  const ISYERI_UZAK = { balikci_koyu: [62, 20] };
+  if (typeof ad === "string" && ad.startsWith("isyeri:")) L[ad] = () => { const a0 = -0.3 + 0.5 * (v % 2), [r, h] = ISYERI_UZAK[ad.split(":")[1]] ?? [26, 11]; return yor(ad, r, h, a0, a0 + 0.5, 3); };
   const shot = (L[ad] ?? L.ucus)();
   // Zeplin henüz açılmadıysa çekimde önizleme olarak gösterilir (?zeplin); metin bunu söylemeli ("150. sakinde").
   if (typeof ad === "string" && ad.startsWith("zeplin") && !sim.isOpen("zeplin")) shot.adres += "&zeplin";
@@ -372,20 +401,52 @@ function CEKIM(ad, v, sure, arayuz) {
   return shot;
 }
 
+/** {aci, uzak, yuk}: kamera hedef çevresinde aci kadar döner, yatay uzaklık ×uzak, hedefe göre yükseklik ×yuk. */
+function kadraj(shot, { aci = 0, uzak = 1, yuk = 1 }) {
+  shot.ayarli = true;
+  if (shot.kamera) {
+    const c = Math.cos(aci), s = Math.sin(aci);
+    shot.kamera = shot.kamera.map(([t, kx, ky, kz, bx, by, bz]) => {
+      const dx = kx - bx, dz = kz - bz;
+      return [t, bx + (dx * c - dz * s) * uzak, by + (ky - by) * yuk, bz + (dx * s + dz * c) * uzak, bx, by, bz];
+    });
+  } else if (shot.yorunge && shot.yorunge.hedef !== "zeplin-yer") {
+    const y = shot.yorunge;
+    y.a0 += aci; y.a1 += aci; y.r = +(y.r * uzak).toFixed(2); y.h = +(y.h * yuk).toFixed(2);
+  }
+  return shot;
+}
+
 const S = { ...S0, olcek: 2, gecis: X, muzik: "cikti/muzik/ada-1.mp3", fps: 30, w: 1080, h: 1920, cekimler, aciklama };
 writeFileSync(`${out}/senaryo.json`, JSON.stringify(S, null, 2));
 
+if (dene) {
+  // Çekim listesi (numara → yer, cümleler): kadrajı düzeltilecek çekimi seçmek için.
+  kesitler.forEach((k, i) => console.log(`  çekim ${i + 1}: ${JSON.stringify(k.cekim)} · ${cekimler[i].sure} sn · ${cumleler.slice(k.ilk, k.son + 1).map((x) => x.ses).join(" / ")}`));
+  if (!cekimler[Number(dene) - 1]) { console.error(`çekim ${dene} yok (1–${cekimler.length})`); process.exit(1); }
+}
 // --- çizim: site derlenir, yerel önizleme sunucusu açılır, kaydet.mjs çalışır ---
 const PORT = 4179;
 execFileSync("npx", ["vite", "build"], { cwd: resolve(HERE, "../web"), stdio: "ignore" });
 const server = spawn("npx", ["vite", "preview", "--port", String(PORT), "--strictPort"], { cwd: resolve(HERE, "../web"), stdio: "ignore", detached: true });
 try {
   await new Promise((ok) => setTimeout(ok, 3000));
-  execFileSync("node", ["kaydet.mjs", `${out}/senaryo.json`, ...(args.includes("--onizleme") ? ["--onizleme"] : [])], { stdio: "inherit", env: { ...process.env, SITE: `http://localhost:${PORT}/` } });
+  execFileSync("node", ["kaydet.mjs", `${out}/senaryo.json`, ...(onizleme ? ["--onizleme"] : []), ...(dene ? ["--cekim", dene] : [])], { stdio: "inherit", env: { ...process.env, SITE: `http://localhost:${PORT}/` } });
 } finally {
   try { process.kill(-server.pid); } catch {}
 }
-const video = `${out}/${ad.split("/").pop()}${args.includes("--onizleme") ? "-onizleme" : ""}.mp4`;
+if (dene) {
+  // Baş/orta/son kare yan yana: kadrajı Read ile kontrol et.
+  const n = Number(dene), c = cekimler[n - 1], mp4 = `${out}/cekim${n}.mp4`, jpg = `${out}/cekim${n}-kareler.jpg`;
+  const zaman = [0.1, c.sure / 2, Math.max(0.1, c.sure - 0.25)];
+  execFileSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", ...zaman.flatMap((t) => ["-ss", t.toFixed(2), "-i", mp4]),
+    "-filter_complex", "[0:v]scale=360:-2[a];[1:v]scale=360:-2[b];[2:v]scale=360:-2[c];[a][b][c]hstack=3", "-frames:v", "1", "-q:v", "3", jpg]);
+  const grup = kesitler[n - 1];
+  console.log(`çekim ${n}/${cekimler.length}: ${JSON.stringify(grup.cekim)} · ${c.sure} sn · cümleler: ${cumleler.slice(grup.ilk, grup.son + 1).map((x) => x.ses).join(" / ")}`);
+  console.log("kareler:", jpg);
+  process.exit(0);
+}
+const video = `${out}/${ad.split("/").pop()}${onizleme ? "-onizleme" : ""}.mp4`;
 
 // Durum: bir sonraki çalıştırmada "bugün ne değişti" buna göre bulunur.
 if (!args.includes("--onizleme")) {

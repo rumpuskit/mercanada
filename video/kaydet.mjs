@@ -158,12 +158,24 @@ for (const [ci, shot] of S.cekimler.entries()) {
     }
     if (yorunge) {
       const W = A.world, h = yorunge.hedef;
+      // "isyeri:cami:0": o sıradaki iş yeri; o sıra boşsa türün ilk açık iş yeri (6 Kasım: cami 0. sırada değildi,
+      // kamera meydana düşüyordu; site de ui.js'te find(Boolean) kullanıyor).
+      // İş yeri kaydı yoksa (cami bir mahalle yeri: yalnız bina olarak eklenir) aynı türün n. binası; kapı ön cephenin
+      // önü (binanın yerel +z yönü, layout.js toWorld).
+      const isyeriBul = (W, h) => {
+        const [, k, i] = h.split(":"), l = W.workplaces[k], w = l?.[Number(i)] ?? l?.find(Boolean);
+        if (w) return w;
+        const bs = W.buildings.filter((b) => b.kind === k), b = bs[Number(i)] ?? bs[0];
+        if (!b) return null;
+        const o = (b.d ?? 10) / 2 + 3;
+        return { building: b, door: [b.x + o * Math.sin(b.rot ?? 0), b.z + o * Math.cos(b.rot ?? 0)] };
+      };
       const at = h === "siradaki" ? W.nextStage?.at : h === "iskele" ? [0, W.ferryPier.z0 + 14] : h === "fener" ? [W.fener.x, W.fener.z]
         : h === "meydan" ? [0, -12]
-        : typeof h === "string" && h.startsWith("isyeri:") ? W.workplaces[h.split(":")[1]]?.[Number(h.split(":")[2])]?.door : h;
+        : typeof h === "string" && h.startsWith("isyeri:") ? isyeriBul(W, h)?.door : h;
       const [x, z] = at ?? [0, 0];
       // İş yerinde açılar binanın önüne göredir (kapı - bina merkezi yönü); yoksa dünya açısı.
-      const wb = typeof h === "string" && h.startsWith("isyeri:") ? W.workplaces[h.split(":")[1]]?.[Number(h.split(":")[2])]?.building : null;
+      const wb = typeof h === "string" && h.startsWith("isyeri:") ? isyeriBul(W, h)?.building : null;
       const yon = wb ? Math.atan2(x - wb.x, z - wb.z) : 0;
       // Karşıdaki bina kameranın önüne ya da içine düşmesin: yörüngenin üç açısında kapıdan kameraya giden doğru
       // başka bir binanın kutusuna giriyorsa uzaklığı (ve yüksekliği aynı oranda) kısalt.
