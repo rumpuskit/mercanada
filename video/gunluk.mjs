@@ -368,8 +368,10 @@ function CEKIM(ad, v, sure, arayuz) {
     const [p0, p1 = p0] = ad.kamera;
     return { adres: a, kamera: [[0, ...p0], [sure, ...p1]], ayarli: true, ...(arayuz ? { arayuz: true } : {}) };
   }
-  // Sakin: site onu bulup izler (evdeyse evinin içi açılır). Kart gizli: telefon düzeninde altyazının üstüne biner.
-  if (sakinMi(ad)) return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, yazilar: [{ metin: "@" + esc(ad.sakin), bas: 0.15, son: sure, yer: "ust" }] };
+  // Sakin: site onu bulup izler (evdeyse evinin içi açılır); dışarıdaysa kamera onun çevresinde döner (sakinYorunge).
+  // Kart gizli: telefon düzeninde altyazının üstüne biner. Üstte ayrıca "@ad" yazısı YOK (6 Kasım): sitenin pembe ad
+  // etiketi sakinin başında zaten görünüyor, ikisi üst üste binip ad iki kez okunuyordu.
+  if (sakinMi(ad)) return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, sakinYorunge: { yon: v % 2 ? -1 : 1 } };
   const yor = (hedef, r, h, a0, a1, bak = 2) => ({ adres: a, yorunge: { hedef, r, h, a0, a1, bak } });
   const L = {
     ucus: () => ({ adres: a, kamera: v % 2 ? [[0, 160, 150, 380, 0, 0, -40], [sure, 120, 110, 300, 0, 0, -20]] : [[0, -150, 120, 420, 0, 0, 40], [sure, -95, 80, 300, 0, 0, 15]] }),

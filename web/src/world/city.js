@@ -432,7 +432,7 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
       } else {
         // Garajlı binalarda zemin katın önü kapılarla dolu: orada pencere yok.
         // Resmî binanın en üst katında tabelanın arkasında kalan ön pencereler çizilmez (tabela üstüne biniyordu).
-        const plateBehind = full && st.plate && floors > 1 && f === floors - 1 && Math.abs(lx) < 4.3;
+        const plateBehind = full && st.plate && !st.columns && floors > 1 && f === floors - 1 && Math.abs(lx) < 4.3;
         if (!(f === 0 && st.garage) && !plateBehind) addWindow(b, lx, f * FLOOR_H + 0.95, 1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c));
         addWindow(b, lx, f * FLOOR_H + 0.95, -1, Math.min(1.4, bay - 0.8), 1.5, owner(f * perFloor + c + 7));
       }
@@ -461,9 +461,12 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
   if (st.band) B.signs.add(local(b, 0, FLOOR_H - 0.15, b.d / 2 + 0.14), b.rot, s.set(b.w + 0.1, 0.4, 0.1), st.band);
   if (st.plate) {
     if (floors > 1) {
-      B.signs.add(local(b, 0, h - 1.5, b.d / 2 + 0.14), b.rot, s.set(7, 1.1, 0.12), st.plate);
+      // Sütunlu binada (adliye) levha cepheden sütunların önüne, saçağın ön kirişinin altına alınır: cephede
+      // 7 m'lik levha ortadaki 4 m'lik sütun aralığından taşıyor, adı sütun arkasında kalıyordu (6 Kasım videosu).
+      const pz = st.columns ? b.d / 2 + 3.06 : b.d / 2 + 0.14;
+      B.signs.add(local(b, 0, h - 1.5, pz), b.rot, s.set(7, 1.1, 0.12), st.plate);
       // Levhada binanın adı ("Polis Merkezi", "Adalet Sarayı"); ad yoksa düz levha kalır.
-      if (b.isim) K.named.push({ owner: b, pos: local(b, 0, h - 1.5, b.d / 2 + 0.205).clone(), rot: b.rot, w: 6.7, h: 0.9, text: b.isim, bg: st.plate, fg: "#fbf6ec" });
+      if (b.isim) K.named.push({ owner: b, pos: local(b, 0, h - 1.5, pz + 0.065).clone(), rot: b.rot, w: 6.7, h: 0.9, text: b.isim, bg: st.plate, fg: "#fbf6ec" });
     }
     else B.signs.add(local(b, 0, h - 0.42, b.d / 2 + 0.14), b.rot, s.set(4, 0.36, 0.1), st.plate);
   }
