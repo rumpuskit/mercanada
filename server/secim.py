@@ -3,6 +3,7 @@
 
 Seçim 3 gün sürer; kazananın dönemi 30 gün, sonra yeni seçim. Her şey yorumlarla:
     adayım / başkan adayıyım / belediye başkanı olmak istiyorum   → aday olur (adada oturuyorsa)
+    başkan olcam / başkan olabilir miyim / başkan benim           → aday (yalnız birinci tekil; "kim başkan olacak" değil)
     oy: @kullaniciadi / oyum @kullaniciadi                         → o adaya oy (seçmen adada oturmalı)
 Seçmen başına tek oy; en son yazılan geçer. Sonuç: en çok oy, eşitlikte önce aday olan. Aday ya da oy
 yoksa seçim bir dönem (3 gün) uzar. Kazanana "belediye_baskani" mesleği verilir (sim: belediyede çalışır);
@@ -57,7 +58,8 @@ CREATE TABLE IF NOT EXISTS secim_oylar (
 """
 
 ADAY = re.compile(r"\b(?:aday(?:im|iyim|ligimi|ligimizi)?|baskan adayi\w*|belediye baskani ol\w*|baskan olmak isti\w*"
-                  r"|mesle[kg]\w* (?:belediye )?baskan\w*)\b")
+                  r"|mesle[kg]\w* (?:belediye )?baskan\w*"
+                  r"|baskan\w* (?:ben )?ol(?:acagim|acam|cagim|cam|ucam|urum|ayim|abilir ?miyim|abilr\w*)|baskan\w* benim)\b")
 OY = re.compile(r"\boy(?:um|umu|u|lar|larimi|umuz)?\b")
 ETIKET = re.compile(r"@([A-Za-z0-9._]{2,24})")
 
