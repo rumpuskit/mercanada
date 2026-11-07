@@ -8,8 +8,10 @@
 // vurus?}], "soru": {ses, yazi?}, "cekim": ["fener", {"sakin": "ad"}, ...], "etiketler": [...], ("saat" artık yok sayılır: ada saati üretim anı),
 // "onsoz": [{ses, yazi?, vurus?}] (imzadan önce vurucu açılış; ilk çekimde ya da "onsozCekim": [çekimler] ile kendi çekimlerinde), "imza2": {ses, yazi?} (kilit sayacının ikinci cümlesi: sıradaki yer yerine başka bir hedef, ör. zeplin),
 // "ilk": imza çekimi (varsayılan "ucus"), "ornek": kapanıştaki örnek meslek (varsayılan "balıkçı"; katalogda, kadrosuz), "soruCekim": soru karesinin çekimi,
-// "tasinCekim": "Takip eden adaya taşınıyor" karesi (varsayılan "iskele")}. İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
-// Çekim tanımı (cekim/ilk/onsozCekim/soruCekim/tasinCekim öğeleri): "iskele" (kütüphane adı) | {"sakin": "ad"} |
+// "tasinCekim": "Takip eden adaya taşınıyor" karesi (varsayılan "iskele"), "acilis": videonun İLK cümlesinin çekimi
+// (varsayılan "bayrak": meydan gönderinde dalgalanan bayrak, kart yok; null = açılış çekimi yok)}. "ilk" bir dizi de
+// olabilir (imza cümleleri sırayla bu çekimlere bölünür, bilgi kartı yalnız ilkinde). İmza ve kapanış yine standarttan gelir. --ac: üretim bitince klasörü Finder'da açar.
+// Çekim tanımı (cekim/ilk/onsozCekim/soruCekim/tasinCekim öğeleri): "iskele" (kütüphane adı) | {"sakin": "ad", "yon"?: 1|-1 (kameranın dönüş yönü; varsayılan sırayla)} |
 //   kadraj ayarı {"yer": "iskele", "aci": rad (hedef çevresinde döndür, + saat yönünün tersi), "uzak": çarpan,
 //   "yuk": yükseklik çarpanı, "varyant": n (kütüphanedeki n. açı)} | ham kamera {"kamera": [[kx,ky,kz, bx,by,bz] başta,
 //   [..] sonda], "vapur": true (iskelede vapur dakikası)}. Ayarlı/ham çekim otomatik döndürülmez (yalnız itme/çekme).
@@ -109,7 +111,8 @@ const level = Math.max(data.zirve ?? 0, residents.reduce((m, r) => Math.max(m, r
 sim.setTown(level);
 const stages = catalog.gelisim;
 const next = stages.find((s) => s.nufus > level);
-const need = next ? Math.max(1, next.nufus - N) : 0;
+// Kaç kişi daha: eşik gelişim düzeyine göre (sitedeki kartla aynı, ui.js): ayrılanların sırası yeniden verilmez.
+const need = next ? Math.max(1, next.nufus - level) : 0;
 
 // --- hikâye seçimi ---
 const named = (r) => r.handle != null; // adını gizleyenler adlarıyla anılmaz
@@ -147,7 +150,7 @@ const BOS = [
   { id: "gece", govde: [c("Akşam oldu."), c("Fener yandı."), c("Bakan kimse yok.", null, true)], soru: c("Adanın ilk gecesini kim geçirecek?"), cekim: ["fener", "ucus"], saat: "20:10" },
 ];
 
-let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", ornek = "balıkçı", soruCekim = null, onsoz = [], onsozCekim = null, tasinCekim = "iskele";
+let tur, govde = [], soru, cekim = [], etiketler = [], saat = "16:40", konuId = null, ozelKanca = null, imza2 = null, ilkCekim = "ucus", ornek = "balıkçı", soruCekim = null, onsoz = [], onsozCekim = null, tasinCekim = "iskele", acilis = "bayrak";
 if (acilan.length) {
   tur = "acilis";
   const s = acilan.at(-1);
@@ -218,6 +221,7 @@ if (opt("--hikaye")) {
   imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim; ornek = h.ornek ?? ornek; soruCekim = h.soruCekim ?? null;
   tasinCekim = h.tasinCekim ?? tasinCekim;
   onsoz = (h.onsoz ?? []).map(cc); onsozCekim = h.onsozCekim ?? null;
+  if (h.acilis !== undefined) acilis = h.acilis;
 }
 if (!tur || !govde.length) {
   tur = "bos";
@@ -247,10 +251,17 @@ const imza = [...onsoz, ...(N === 0
 const kapanis = [soru, c("Takip eden adaya taşınıyor."), c("Mesleğini sen seç."), c(`Yorumuna yaz: meslek, ${ornek}.`, `Yorumuna yaz:\nmeslek: ${ornek}`)];
 const cumleler = [...imza, ...govde, ...kapanis];
 // "onsozCekim" verilirse önsöz kendi çekimlerinde (bilgi kartı yok, ilk kare temiz), imza ardından ilk çekimde.
+// Açılış (7 Kasım, kullanıcı: "bayrakla başlayan videolar daha çok izlendi, varsayılan olsun ama kurgu bayrak etrafında
+// dönmesin"): videonun İLK cümlesi kendi çekiminde, varsayılan "bayrak" (kart yok, bölünmez). Bayrak yalnız burada;
+// önsözün kalan cümleleri onsozCekim'e, imza "ilk"e sırayla dağılır.
+const A = acilis ? 1 : 0;
 const onGrup = onsoz.length && onsozCekim ? onsoz.length : 0;
+const imzaBas = Math.max(onGrup, A);
+const ilkler = Array.isArray(ilkCekim) ? ilkCekim : [ilkCekim];
 const gruplar = [
-  ...(onGrup ? splitGovde(onGrup, onsozCekim).map(([a, b, ck]) => ({ cekim: ck, ilk: a, son: b })) : []),
-  { cekim: ilkCekim, arayuz: true, ilk: onGrup, son: imza.length - 1 },
+  ...(A ? [{ cekim: acilis, acilis: true, ilk: 0, son: 0 }] : []),
+  ...(onGrup > A ? splitGovde(onGrup - A, onsozCekim).map(([a, b, ck]) => ({ cekim: ck, ilk: A + a, son: A + b })) : []),
+  ...(imza.length > imzaBas ? splitGovde(imza.length - imzaBas, ilkler).map(([a, b, ck], i) => ({ cekim: ck, ...(i === 0 ? { arayuz: true } : {}), ilk: imzaBas + a, son: imzaBas + b })) : []),
   ...splitGovde(govde.length, cekim).map(([a, b, ck]) => ({ cekim: ck, ilk: imza.length + a, son: imza.length + b })),
   // Kapanış üç çekim: soru (konunun son açısı), "takip eden adaya taşınıyor" (iskele), istek kalıbı (yazılı son kare).
   { cekim: soruCekim ?? (sakinMi(cekim.at(-1)) ? "meydan" : cekim.at(-1)), varyantEk: 1, ilk: imza.length + govde.length, son: imza.length + govde.length },
@@ -311,7 +322,9 @@ gruplar.forEach((g, gi) => {
   const t0 = gi === 0 ? 0 : bas(g.ilk) - 0.15;
   const t1 = gi === gruplar.length - 1 ? bitis : bas(gruplar[gi + 1].ilk) - 0.15;
   const sakin = sakinMi(g.cekim);
-  const parca = g.cekim === "kapanis" ? 1 : Math.max(1, Math.ceil((t1 - t0) / (sakin ? 4.2 : PARCA)));
+  // Bölme eşiğinde %12 pay: grup 2,6 sn'ye çok yakınken ses yenilenince kendiliğinden ikiye bölünüp AYNI/BENZER
+  // veriyordu (7 Kasım kod notu). Açılış çekimi hiç bölünmez.
+  const parca = g.cekim === "kapanis" || g.acilis ? 1 : Math.max(1, Math.ceil((t1 - t0) / (sakin ? 4.2 : PARCA) - 0.12));
   for (let k = 0; k < parca; k++) kesitler.push({ ...g, parca: k, cekim: sakin && k > 0 ? "meydan" : g.cekim, t0: t0 + ((t1 - t0) * k) / parca, t1: t0 + ((t1 - t0) * (k + 1)) / parca });
 });
 const kullanim = {};
@@ -371,9 +384,13 @@ function CEKIM(ad, v, sure, arayuz) {
   // Sakin: site onu bulup izler (evdeyse evinin içi açılır); dışarıdaysa kamera onun çevresinde döner (sakinYorunge).
   // Kart gizli: telefon düzeninde altyazının üstüne biner. Üstte ayrıca "@ad" yazısı YOK (6 Kasım): sitenin pembe ad
   // etiketi sakinin başında zaten görünüyor, ikisi üst üste binip ad iki kez okunuyordu.
-  if (sakinMi(ad)) return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, sakinYorunge: { yon: v % 2 ? -1 : 1 } };
+  if (sakinMi(ad)) return { adres: `${a}&bul=${encodeURIComponent(ad.sakin)}`, serbest: true, isinma: 60, sakinYorunge: { yon: ad.yon ?? (v % 2 ? -1 : 1) } };
   const yor = (hedef, r, h, a0, a1, bak = 2) => ({ adres: a, yorunge: { hedef, r, h, a0, a1, bak } });
   const L = {
+    // Açılış: meydan gönderi (0, -25.5; bayrak ~12 m, doğuya uzanır, geniş yüzü güneye) alttan, gökyüzü önünde; kamera
+    // yavaşça yükselip yaklaşır. Alçak açı (yer 2,2 m) şantiye kutusunu ve binaları kadraja almaz (7 Kasım: 4,5 m'lik
+    // eski bayrak kamerası sıradaki yerin şantiye kutusunu gösterdi). İkinci kullanım (nadir) karşı çapraz.
+    bayrak: () => ({ adres: a, kamera: v % 2 ? [[0, 6, 2, -13, 1.5, 12.5, -25], [sure, 4.5, 2.6, -16, 1.5, 12.8, -25]] : [[0, -5, 2.2, -14, 2.5, 12.5, -25], [sure, -3.5, 2, -17, 1.5, 13, -25]] }),
     ucus: () => ({ adres: a, kamera: v % 2 ? [[0, 160, 150, 380, 0, 0, -40], [sure, 120, 110, 300, 0, 0, -20]] : [[0, -150, 120, 420, 0, 0, 40], [sure, -95, 80, 300, 0, 0, 15]] }),
     // Vapur dakika 0-7 (mod 20) arasında iskelede: 16:40, 19:40 uygun.
     // Tek v: sudan, vapurun yanından yakın açı. (6 Kasım: eski yakın açı [-11,6.5,236 → -22,4,184] karaya, bir evin
@@ -394,8 +411,17 @@ function CEKIM(ad, v, sure, arayuz) {
   // "isyeri:firin:0": o iş yerinin kapısı çevresinde, binanın önünden dönen kamera (açı kaydet.mjs'de bina yönüne göre).
   // Açık alan iş yerleri uzaktan ve yüksekten (6 Kasım: Balıkçı Koyu 26 m'den kulübe çatısını gösteriyordu; 62/20'de
   // koy, tekneler ve iskele kadrajda).
-  const ISYERI_UZAK = { balikci_koyu: [62, 20] };
-  if (typeof ad === "string" && ad.startsWith("isyeri:")) L[ad] = () => { const a0 = -0.3 + 0.5 * (v % 2), [r, h] = ISYERI_UZAK[ad.split(":")[1]] ?? [26, 11]; return yor(ad, r, h, a0, a0 + 0.5, 3); };
+  // Belediye (7 Kasım kod notu): varsayılan açı (a0 −0,3) ilk karede komşu çatıyı öne alıyordu, a0 ~0,5'te kamera ağaçta
+  // başlıyordu; temiz bant a0 ≈ 0,15, alçak (h ~3,5), r ~25: levha, kule ve meydan.
+  // Belediyenin iki yanı kapalı (solda komşu bina, sağda ağaçlar; kaydet.mjs bina engelinde kamerayı kapıya kadar
+  // çekiyor): ±0,6 otomatik döndürme yok (ayarli), çeşitlilik bant içinde alçak/yüksek iki açıyla.
+  const ISYERI_UZAK = { balikci_koyu: [62, 20], belediye: (v) => (v % 2 ? [30, 14] : [25, 3.5]) };
+  const ISYERI_ACI = { belediye: [0.15, 0.3] };
+  if (typeof ad === "string" && ad.startsWith("isyeri:")) L[ad] = () => {
+    const tur = ad.split(":")[1], u = ISYERI_UZAK[tur], [r, h] = typeof u === "function" ? u(v) : u ?? [26, 11], aa = ISYERI_ACI[tur];
+    const a0 = aa ? aa[v % 2] : -0.3 + 0.5 * (v % 2);
+    return { ...yor(ad, r, h, a0, a0 + 0.5, 3), ...(aa ? { ayarli: true } : {}) };
+  };
   const shot = (L[ad] ?? L.ucus)();
   // Zeplin henüz açılmadıysa çekimde önizleme olarak gösterilir (?zeplin); metin bunu söylemeli ("150. sakinde").
   if (typeof ad === "string" && ad.startsWith("zeplin") && !sim.isOpen("zeplin")) shot.adres += "&zeplin";

@@ -41,7 +41,7 @@ const BINA_D = 12;
 
 // İş yeri türlerinin bina biçimi (metre).
 const STYLES = {
-  belediye: { w: 30, d: 20, floors: 3, roof: "hip", wall: "#f3ece0", roofColor: "#b5563f", tower: true },
+  belediye: { w: 30, d: 20, floors: 3, roof: "hip", wall: "#f3ece0", roofColor: "#b5563f", tower: true, plate: "#8a3b2c", plateW: 11 },
   muze: { w: 26, d: 18, floors: 2, roof: "hip", wall: "#efe6d6", roofColor: "#8c4b3a", columns: true },
   kutuphane: { w: 20, d: 14, floors: 2, roof: "gable", wall: "#dfe8f0", roofColor: "#a85a44" },
   saglik: { w: 26, d: 16, floors: 3, roof: "flat", wall: "#f7f6f2", roofColor: "#c9c4bb", sign: "#d8433d" },

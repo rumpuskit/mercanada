@@ -464,9 +464,11 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
       // Sütunlu binada (adliye) levha cepheden sütunların önüne, saçağın ön kirişinin altına alınır: cephede
       // 7 m'lik levha ortadaki 4 m'lik sütun aralığından taşıyor, adı sütun arkasında kalıyordu (6 Kasım videosu).
       const pz = st.columns ? b.d / 2 + 3.06 : b.d / 2 + 0.14;
-      B.signs.add(local(b, 0, h - 1.5, pz), b.rot, s.set(7, 1.1, 0.12), st.plate);
+      // Belediyede de levha var (7 Kasım: adı karede okunmuyordu); uzun ad için geniş levha (plateW).
+      const pw = st.plateW ?? 7;
+      B.signs.add(local(b, 0, h - 1.5, pz), b.rot, s.set(pw, 1.1, 0.12), st.plate);
       // Levhada binanın adı ("Polis Merkezi", "Adalet Sarayı"); ad yoksa düz levha kalır.
-      if (b.isim) K.named.push({ owner: b, pos: local(b, 0, h - 1.5, pz + 0.065).clone(), rot: b.rot, w: 6.7, h: 0.9, text: b.isim, bg: st.plate, fg: "#fbf6ec" });
+      if (b.isim) K.named.push({ owner: b, pos: local(b, 0, h - 1.5, pz + 0.065).clone(), rot: b.rot, w: pw - 0.3, h: 0.9, text: b.isim, bg: st.plate, fg: "#fbf6ec" });
     }
     else B.signs.add(local(b, 0, h - 0.42, b.d / 2 + 0.14), b.rot, s.set(4, 0.36, 0.1), st.plate);
   }
@@ -475,13 +477,22 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     B.signs.add(local(b, 0, h - 2.5, b.d / 2 + 0.12), b.rot, s.set(0.8, 2.6, 0.12), st.sign);
   }
   if (b.kind === "belediye" || (st.flag && floors > 1)) { // okulun bayrağı bahçede (okul_bahce)
-    // Bayrak direği ve bayrak.
-    B.rails.add(local(b, b.w / 2 - 2, 0, b.d / 2 + 4), b.rot, s.set(0.12, 10, 0.12));
-    B.signs.add(local(b, b.w / 2 - 2 + 1.2, 8.4, b.d / 2 + 4), b.rot, s.set(2.4, 1.6, 0.04), "#d8233a");
+    // Bayrak direği; bayrağın kendisi bayram.js'te (ay yıldızlı, dalgalanan; BINA_BAYRAK). 7 Kasım: düz kırmızı
+    // kutu bazı açılardan ay yıldızsız kırmızı dikdörtgen görünüyordu.
+    B.rails.add(local(b, BINA_BAYRAK.buyuk.lx(b), 0, BINA_BAYRAK.buyuk.lz(b)), b.rot, s.set(0.12, BINA_BAYRAK.buyuk.h, 0.12));
   } else if (st.flag) { // küçük yapı (muhtarlık): yan duvarın dibinde kısa direk
-    B.rails.add(local(b, b.w / 2 + 1, 0, b.d / 2 - 0.5), b.rot, s.set(0.08, 5.5, 0.08));
-    B.signs.add(local(b, b.w / 2 + 1 + 0.75, 4.6, b.d / 2 - 0.5), b.rot, s.set(1.5, 1.0, 0.03), "#d8233a");
+    B.rails.add(local(b, BINA_BAYRAK.kucuk.lx(b), 0, BINA_BAYRAK.kucuk.lz(b)), b.rot, s.set(0.08, BINA_BAYRAK.kucuk.h, 0.08));
   }
+}
+
+/** Resmî binaların bayrak direği (bina yerel koordinatı; bayrak bayram.js'te direğin tepesinde). */
+export const BINA_BAYRAK = {
+  buyuk: { lx: (b) => b.w / 2 - 2, lz: (b) => b.d / 2 + 4, h: 10, w: 2.4 },
+  kucuk: { lx: (b) => b.w / 2 + 1, lz: (b) => b.d / 2 - 0.5, h: 5.5, w: 1.5 },
+};
+export function binaBayragi(b) {
+  const st = b.style ?? {};
+  return b.kind === "belediye" || (st.flag && b.floors > 1) ? BINA_BAYRAK.buyuk : st.flag ? BINA_BAYRAK.kucuk : null;
 }
 
 export function buildCity(world) {

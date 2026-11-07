@@ -4,6 +4,7 @@
 // Meydandaki gönderde bayrak her gün dalgalanır (boş adada da).
 import * as THREE from "three";
 import { FLAT_Y, FLOOR_H, unitLayout } from "./layout.js";
+import { binaBayragi } from "./city.js";
 
 const DAYS = [[4, 23], [5, 19], [8, 30], [10, 29]]; // [ay, gün]
 const FIREWORKS = { month: 10, day: 29, from: 20 * 60 + 30, to: 21 * 60 + 5 };
@@ -147,6 +148,16 @@ export function buildBayram(world) {
     mast.add(inst(poleGeo, poleMat, masts.map((o) => new THREE.Matrix4().compose(p.set(o.x, o.y, o.z), q.identity(), sc.set(o.r * 2, o.h, o.r * 2)))));
     mast.add(inst(knobGeo, new THREE.MeshStandardMaterial({ color: "#e8c35a", roughness: 0.3, metalness: 0.7 }), masts.map((o) => new THREE.Matrix4().compose(p.set(o.x, o.y + o.h + o.r * 1.6, o.z), q.identity(), sc.setScalar(o.r * 1.9)))));
   }
+  // Resmî binaların direklerinde (belediye, karakol, adliye, muhtarlık; direk city.js'te) her gün dalgalanan bayrak,
+  // binanın cephesi boyunca uzanır.
+  const binaFlags = [];
+  for (const b of world.buildings) {
+    const f = binaBayragi(b);
+    if (!f) continue;
+    const lx = f.lx(b), lz = f.lz(b), c = Math.cos(b.rot), sn = Math.sin(b.rot);
+    put(binaFlags, b.x + lx * c + lz * sn, FLAT_Y + f.h - 0.1, b.z - lx * sn + lz * c, b.rot, f.w);
+  }
+  if (binaFlags.length) mast.add(inst(flagGeo, waveMaterial(tex, 0.1, mastU), binaFlags));
 
   let active = null;
   return {
