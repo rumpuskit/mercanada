@@ -14,7 +14,9 @@
 // Çekim tanımı (cekim/ilk/onsozCekim/soruCekim/tasinCekim öğeleri): "iskele" (kütüphane adı) | {"sakin": "ad", "yon"?: 1|-1 (kameranın dönüş yönü; varsayılan sırayla)} |
 //   kadraj ayarı {"yer": "iskele", "aci": rad (hedef çevresinde döndür, + saat yönünün tersi), "uzak": çarpan,
 //   "yuk": yükseklik çarpanı, "varyant": n (kütüphanedeki n. açı)} | ham kamera {"kamera": [[kx,ky,kz, bx,by,bz] başta,
-//   [..] sonda], "vapur": true (iskelede vapur dakikası)}. Ayarlı/ham çekim otomatik döndürülmez (yalnız itme/çekme).
+//   [..] sonda], "vapur": true (iskelede vapur dakikası)}. Ayarlı/ham çekim otomatik döndürülmez (yalnız itme/çekme);
+//   2,6 sn'yi geçip bölünürse sonraki parçalar ondan yarım ölçüde sapar, ya da "parcalar": [{aci, uzak, yuk}] ile
+//   parça başına kadraj (kamera için {"kamera": ..} de olur).
 // --cekim-dene N: önizleme ölçeğinde yalnız N. çekimi çizer (sesi önbellekten), cekimN-kareler.jpg (baş/orta/son) yazar;
 //   kadrajı tek tek düzeltmek için (tam önizlemeden ~10 kat hızlı). Durum yazılmaz.
 //
@@ -334,6 +336,10 @@ const cekimler = kesitler.map((k, i) => {
   const v = (kullanim[anahtar] = (kullanim[anahtar] ?? -1) + 1);
   // "Taşın" karesi iskelenin geniş açısı (v çift): yakın açıda vapurun önüne ev giriyordu (4–5 Kasım raporları).
   if (k.tasin && k.cekim === "iskele") return { sure, ...canlandir(CEKIM({ yer: "iskele", varyant: 0 }, 0, sure, false), 0) };
+  // Bölünen ayarlı çekimde parça başına kadraj (7 Kasım kod notu: 2. parçanın sabit 0,3 rad sapması temiz kadrajı
+  // bozuyordu): {"yer": .., "aci": .., "parcalar": [{aci, uzak, yuk}, ...]} → k. parça (k ≥ 1) parcalar[k − 1] ile.
+  const pk = k.parca > 0 && k.cekim && typeof k.cekim === "object" ? k.cekim.parcalar?.[k.parca - 1] : null;
+  if (pk) return { sure, ...canlandir(CEKIM({ ...k.cekim, ...pk, parcalar: undefined }, v, sure, k.arayuz), 0) };
   const shot = CEKIM(k.cekim, v, sure, k.arayuz);
   return { sure, ...(k.cekim === "kapanis" ? shot : canlandir(shot, shot.ayarli ? k.parca : v)) };
 });
