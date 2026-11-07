@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS secim_oylar (
 ADAY = re.compile(r"\b(?:aday(?:im|iyim|ligimi|ligimizi)?|baskan adayi\w*|belediye baskani ol\w*|baskan olmak isti\w*"
                   r"|mesle[kg]\w* (?:belediye )?baskan\w*"
                   r"|baskan\w* (?:ben )?ol(?:acagim|acam|cagim|cam|ucam|urum|ayim|abilir ?miyim|abilr\w*)|baskan\w* benim)\b")
+# Yorumun tamamı "belediye başkanı" / "başkan ben" ise de adaylık (seçim videolarına kısa cevaplar).
+TAM_ADAY = re.compile(r"^(?:ben )?(?:belediye |ada )?baskan(?:i|lik|ligi)?(?: ben\w*)?$")
 OY = re.compile(r"\boy(?:um|umu|u|lar|larimi|umuz)?\b")
 ETIKET = re.compile(r"@([A-Za-z0-9._]{2,24})")
 
@@ -77,7 +79,7 @@ def cozumle(text: str) -> dict:
     m = ETIKET.search(text)
     if m and OY.search(t):
         out["oy"] = sim.normalize_handle(m.group(1).rstrip("."))
-    elif ADAY.search(t):
+    elif ADAY.search(t) or TAM_ADAY.match(t):
         out["aday"] = True
     return out
 

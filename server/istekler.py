@@ -41,7 +41,7 @@ GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
            "ucurtma": "ucurtma", "gitar": "gitar", "fotograf": "fotograf", "kosu": "kosu", "kosmak": "kosu"}
 
-_FOLD = str.maketrans("çğıöşüâîû", "cgiosuaiu")
+_FOLD = str.maketrans("çğıöşüâîûê", "cgiosuaiue")
 
 
 def katla(text: str) -> str:

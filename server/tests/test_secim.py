@@ -9,11 +9,11 @@ class SecimCozumleTest(unittest.TestCase):
     def test_aday(self):
         for t in ["adayım", "Başkan adayıyım", "belediye başkanı olmak istiyorum", "ben başkan olcam",
                   "ada başkanı olacağım", "ilk ben dedim başkan benim", "başkan olabilir miyim",
-                  "Başkan ben olurum", "başkan olayım"]:
+                  "Başkan ben olurum", "başkan olayım", "Bêlêdîyê başkanî", "başkan ben", "Belediye başkanlığı"]:
             self.assertEqual(cozumle(t), {"aday": True}, t)
 
     def test_aday_degil(self):
-        for t in ["kim başkan olacak", "başkan olsun", "başkanımız çok iyi", "futbolcu olcam"]:
+        for t in ["kim başkan olacak", "başkan olsun", "başkanımız çok iyi", "futbolcu olcam", "başkan kim", "belediye"]:
             self.assertEqual(cozumle(t), {}, t)
 
     def test_oy(self):
