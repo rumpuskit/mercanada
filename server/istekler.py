@@ -36,7 +36,9 @@ MAX_METIN = 300
 EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilimci", "hekim": "doktor",
              "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis",
              "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu", "footballcu": "futbolcu", "topcu": "futbolcu",
-             "yazilim muhendisi": "yazilimci", "bakkal": "kasiyer"}
+             "yazilim muhendisi": "yazilimci", "bakkal": "kasiyer",
+             # Olmayan meslekler: en yakını (cevapta söylenir)
+             "komiser": "polis", "komser": "polis", "asker": "polis", "subay": "polis", "veteriner": "doktor"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
