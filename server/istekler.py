@@ -35,7 +35,8 @@ MAX_METIN = 300
 # Katalogda adı geçmeyen ama sık yazılacak karşılıklar.
 EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilimci", "hekim": "doktor",
              "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis",
-             "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu", "footballcu": "futbolcu", "topcu": "futbolcu"}
+             "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu", "footballcu": "futbolcu", "topcu": "futbolcu",
+             "yazilim muhendisi": "yazilimci", "bakkal": "kasiyer"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
@@ -81,7 +82,7 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
 KOD = re.compile(r"\bkod\w*\s*:?\s*(\d{4})\b")
 TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
 # "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım / olabilir miyim / olurum" (yorumlarda sık).
-OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olurum|olur ?mu ?yum|olayim|olim)\b)")
+OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olurum|olur ?mu ?yum|olayim|oliyim|olim)\b)")
 # "ben olurum fırıncı" (videonun sorusuna cevap) ve yorumun tamamı "ben garson" / "ben de futbolcu".
 BEN_OLURUM = re.compile(r"\bben (?:de )?olurum ((?:\w+ ){0,2}\w+)")
 BEN = re.compile(r"^(?:(?:abla|abi|hocam|kanka) )?(?:ben de|bende|ben) ")
