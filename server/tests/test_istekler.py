@@ -63,6 +63,7 @@ class CozumleTest(unittest.TestCase):
             "ben subay olabilir miyim": {"meslek": "polis"},
             "meslek asker": {"meslek": "polis"},
             "veteriner": {"meslek": "doktor"},
+            "Evcil hayvan =muhabbet kuşu": {"evcil": "Papağan"},
             "ben oliyim asker": {"meslek": "polis"},
             "Meslek:yargıç": {"meslek": "hakim"},
             "insaatciyim": {"meslek": "mimar"},
@@ -122,3 +123,11 @@ class DogrulamaKoduTest(unittest.TestCase):
             ortak.kayit, istekler.kaydet, istekler.psql, istekler.uygula = eski_kayit, eski_kaydet, eski_psql, eski_uygula
         self.assertEqual(gelen, [("POST", "/api/onayla", {"ciftler": [["4821", "ali"]]})])
         self.assertEqual(out["dogrulanan"], ["ali"])
+
+
+class KodTest(unittest.TestCase):
+    def test_kod(self):
+        from istekler import KOD, KOD_TEK
+        self.assertEqual(KOD.search(katla("kod: 1234")).group(1), "1234")
+        self.assertEqual(KOD_TEK.match(katla(" 8538 ")).group(1), "8538")
+        self.assertIsNone(KOD_TEK.match(katla("2026 yılı")))

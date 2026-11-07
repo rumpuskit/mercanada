@@ -79,11 +79,14 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
     # Özel yoldaşlar (Robot) rastgele dağıtılmaz, yalnız istenir (sim.pet override'ı döndürür).
     evcil = [(katla(p), p) for p in c["evcil_hayvanlar"] + c.get("evcil_ozel", [])]
     evcil += [("ai robot", "Robot"), ("yapay zeka robotu", "Robot"), ("robot asistan", "Robot")]
+    evcil += [("muhabbet kusu", "Papağan"), ("kus", "Papağan")]  # adadaki tek kuş papağan
     return {"meslek": _sozluk(meslek), "hobi": _sozluk(hobi), "evcil": _sozluk(evcil)}
 
 
 # Sitedeki yorumla doğrulama kodu: "kod 1234", "kod: 1234", "kodum 1234".
 KOD = re.compile(r"\bkod\w*\s*:?\s*(\d{4})\b")
+# Yorumun tamamı yalnız kod ("8538"): Worker kodu yalnız o kullanıcı adına verildiyse bağlar, yanlış eşleşme olmaz.
+KOD_TEK = re.compile(r"^(\d{4})$")
 TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
 # "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım / olabilir miyim / olurum" (yorumlarda sık).
 OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olablir\w*|olurum|olur ?mu ?yum|olayim ?mi|olayim|oliyim|olim)\b)")
@@ -225,7 +228,7 @@ def yorumlar(items: list, hesap: str | None = None, db: str = DB) -> dict:
         cid, handle = str(it[0])[:40], sim.normalize_handle(str(it[1]))
         if not cid or not handle or handle == hesap:
             continue
-        if m := KOD.search(katla(it[3][:200])):
+        if m := KOD.search(katla(it[3][:200])) or KOD_TEK.match(katla(it[3][:200])):
             kodlar.append([m.group(1), handle])
         for tur, deger in cozumle(it[3]).items():
             # Aynı yorumda birden çok istek: kaynak kimliği türle ayrılır.
