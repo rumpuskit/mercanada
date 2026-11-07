@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS secim_oylar (
 
 ADAY = re.compile(r"\b(?:aday(?:im|iyim|ligimi|ligimizi)?|baskan adayi\w*|belediye baskani ol\w*|baskan olmak isti\w*"
                   r"|mesle[kg]\w* (?:belediye )?baskan\w*"
-                  r"|baskan\w* (?:ben )?ol(?:acagim|acam|cagim|cam|ucam|urum|ayim|abilir ?miyim|abilr\w*)|baskan\w* benim)\b")
+                  r"|baskan\w* (?:ben )?ol(?:acagim|acam|cagim|cam|ucam|urum|ayim|abilirim|abilir ?miyim|abilr\w*)|baskan\w* benim)\b")
 # Yorumun tamamı "belediye başkanı" / "başkan ben" ise de adaylık (seçim videolarına kısa cevaplar).
 TAM_ADAY = re.compile(r"^(?:ben )?(?:belediye |ada )?baskan(?:i|lik|ligi)?(?: ben\w*)?$")
 OY = re.compile(r"\boy(?:um|umu|u|lar|larimi|umuz)?\b")
