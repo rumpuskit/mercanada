@@ -64,6 +64,8 @@ ADAY = re.compile(r"\b(?:aday(?:im|iyim|ligimi|ligimizi)?|baskan adayi\w*|beledi
 TAM_ADAY = re.compile(r"^(?:ben )?(?:belediye |ada )?baskan(?:i|lik|ligi)?(?: ben\w*)?$")
 OY = re.compile(r"\boy(?:um|umu|u|lar|larimi|umuz)?\b")
 ETIKET = re.compile(r"@([A-Za-z0-9._]{2,24})")
+# "@" unutulmuş oy: yorumun tamamı "oy:kullaniciadi" (iki nokta şart; "oyum yok" oy değil).
+OY_DUZ = re.compile(r"^\s*oy\w*\s*:\s*([A-Za-z0-9._]{2,24})\s*$", re.I)
 
 
 # Makamı bırakan (dönemi biten, yenilen ya da adadan ayrılan) başkanın önceki mesleği geri gelir.
@@ -79,6 +81,8 @@ def cozumle(text: str) -> dict:
     m = ETIKET.search(text)
     if m and OY.search(t):
         out["oy"] = sim.normalize_handle(m.group(1).rstrip("."))
+    elif (d := OY_DUZ.match(text)):
+        out["oy"] = sim.normalize_handle(d.group(1).rstrip("."))
     elif ADAY.search(t) or TAM_ADAY.match(t):
         out["aday"] = True
     return out

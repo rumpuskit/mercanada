@@ -18,6 +18,9 @@ class SecimCozumleTest(unittest.TestCase):
 
     def test_oy(self):
         self.assertEqual(cozumle("oy: @Nar21437"), {"oy": "nar21437"})
+        self.assertEqual(cozumle("oy:exo45526"), {"oy": "exo45526"})
+        self.assertEqual(cozumle("Oyum: kurox120"), {"oy": "kurox120"})
+        self.assertEqual(cozumle("oyum yok"), {})
         self.assertEqual(cozumle("oyum @kurox120, başkan benim değil"), {"oy": "kurox120"})
 
 

@@ -126,7 +126,9 @@ def cozumle(text: str) -> dict[str, str]:
         # ad ("balıkçı amca çok iyi") istek sayılmaz.
         # "abla futbolcu", "futbolcu bennn": hitap ve sondaki "ben" de atılır.
         govde = re.sub(r" ben+$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
-        tam = dict(secenekler()["meslek"]).get(BEN.sub("", govde))
+        ad = BEN.sub("", govde)
+        # "ben öğrenciyim", "ben doktorum": kişi ekiyle de (yalnız yorumun tamamıysa)
+        tam = dict(secenekler()["meslek"]).get(ad) or dict(secenekler()["meslek"]).get(re.sub(r"y?[iu]m$", "", ad))
         if tam:
             out["meslek"] = tam
     g = GIZLE.search(t)
