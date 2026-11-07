@@ -39,7 +39,8 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "yazilim muhendisi": "yazilimci", "bakkal": "kasiyer",
              # Olmayan meslekler: en yakını (cevapta söylenir)
              "komiser": "polis", "komser": "polis", "asker": "polis", "subay": "polis", "veteriner": "doktor",
-             "pilot": "zeplin_pilotu", "cerrah": "doktor"}
+             "pilot": "zeplin_pilotu", "cerrah": "doktor",
+             "yargic": "hakim", "insaatci": "mimar"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
@@ -87,7 +88,7 @@ TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>e
 # "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım / olabilir miyim / olurum" (yorumlarda sık).
 OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olablir\w*|olurum|olur ?mu ?yum|olayim ?mi|olayim|oliyim|olim)\b)")
 # "ben olurum fırıncı" (videonun sorusuna cevap) ve yorumun tamamı "ben garson" / "ben de futbolcu".
-BEN_OLURUM = re.compile(r"\bben (?:de )?olurum ((?:\w+ ){0,2}\w+)")
+BEN_OLURUM = re.compile(r"\bben (?:de )?(?:olurum|oliyim|olayim) ((?:\w+ ){0,2}\w+)")
 BEN = re.compile(r"^(?:(?:abla|abi|hocam|kanka) )?(?:ben de|bende|ben) ")
 # "beni topçu yap", "beni zeplin pilotu yapar mısın"
 BENI_YAP = re.compile(r"\bbeni? ((?:\w+ ){0,2}\w+) (?:yap|yapar|yapabilir|yapin|yapsana)\w*")
