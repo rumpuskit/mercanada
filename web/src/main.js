@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { MapControls2 } from "./controls.js";
 import catalog from "../../data/catalog.json";
 import * as sim from "./sim.js";
-import { World } from "./world/layout.js";
+import { World, playgroundItems } from "./world/layout.js";
 import { buildTerrain, buildWater } from "./world/terrain.js";
 import { buildGrounds, buildRoads } from "./world/roads.js";
 import { buildCity, buildSites } from "./world/city.js";
@@ -366,7 +366,7 @@ function flyTo(x, y, z, distance = 120, direction = null, sure = 1.3) {
 }
 
 const nameTags = new NameTags(scene);
-if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents, scene, zeplin };
+if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents, scene, zeplin, camera, controls, playgroundItems };
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic, zeplin });

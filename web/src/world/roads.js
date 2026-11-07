@@ -411,8 +411,10 @@ export function buildRoads(world) {
     if (!l.hidden) world.addObstacleCircle(l.x, l.z, 0.2);
     if (i % 3 !== 1 || l.hidden) return;
     const ax = Math.cos(l.dir) * 1.3, az = -Math.sin(l.dir) * 1.3;
-    const x = l.x + ax, z = l.z + az;
-    if (!world.isLand(x, z)) return;
+    // Lambanın yanındaki iki yerden taşıt şeridine düşmeyeni (kaldırımsız köy yolunda biri şeride düşüyordu).
+    const spot = [[l.x + ax, l.z + az], [l.x - ax, l.z - az]].find(([x, z]) => world.isLand(x, z) && !world.inCarriage(x, z));
+    if (!spot) return;
+    const [x, z] = spot;
     world.features.push({ type: "cop_kutusu", x, z, rot: l.dir });
     world.addObstacleCircle(x, z, 0.3);
   });

@@ -131,12 +131,16 @@ const FILMS = {
 export function buildCinema(world) {
   const beach = world.places.plaj?.anchors ?? [];
   const sand = (x, z) => world.isWalkable(x, z) && world.height(x, z) > 0.25;
-  let spot = null;
-  for (const [bx, bz] of [...beach].sort((a, b) => Math.abs(a[0] - beach[beach.length >> 1][0]) - Math.abs(b[0] - beach[beach.length >> 1][0]))) {
-    // Perde denize yakın (kıyıya bakarak), sıralar onun kara tarafında.
+  // Plaj düzenlendiyse (şemsiyeler açıldıysa) sinemaya ayrılan şemsiyesiz alan; yoksa kumsalda boş bir yer.
+  const fits = (bx, bz) => {
     let ok = sand(bx, bz + 3);
     for (let r = 0; r < 4 && ok; r++) for (let cI = -3; cI <= 3 && ok; cI++) ok = sand(bx + cI * 1.1, bz - 3 - r * 1.3);
-    if (ok) { spot = [bx, bz]; break; }
+    return ok;
+  };
+  let spot = world.beach?.cinema && fits(...world.beach.cinema) ? world.beach.cinema : null;
+  if (!spot) for (const [bx, bz] of [...beach].sort((a, b) => Math.abs(a[0] - beach[beach.length >> 1][0]) - Math.abs(b[0] - beach[beach.length >> 1][0]))) {
+    // Perde denize yakın (kıyıya bakarak), sıralar onun kara tarafında.
+    if (fits(bx, bz)) { spot = [bx, bz]; break; }
   }
   if (!spot) return null;
   const [sx, sz] = spot;

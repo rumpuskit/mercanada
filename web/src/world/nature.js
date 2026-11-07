@@ -209,6 +209,7 @@ export function buildTrees(world) {
     if (world.isLand(x, pz) && !world.roadIndex.at(x, pz)) spots.push({ x, z: pz, y: world.height(x, pz) - 0.1, kind: "palmiye", r: (i % 5) / 5, t: (i % 7) / 7 });
   }
 
+  world.trees = []; // dikilen ağaçlar (gövde yarıçapı ve boyuyla; çakışma denetimi ve yerleşim için)
   const group = new THREE.Group();
   const crowns = [];
   group.userData.crowns = crowns;
@@ -217,16 +218,64 @@ export function buildTrees(world) {
   const color = new THREE.Color();
   const tilt = new THREE.Quaternion(), axis = new THREE.Vector3();
   const VARIANTS = 3;
+  // Taç binaya (ve fener, minare gibi yüksek yapılara) girmesin: gövde engel ızgarasından kaçsa da taç 3-4 m
+  // yayılır; ağaç yasağı 4 m'lik kareler ve 2 m payla olduğundan taçlar duvarlara, fenerin kaidesine giriyordu.
+  const tall = world.buildings.map((b) => ({ x: b.x, z: b.z, w: b.w, d: b.d, rot: b.rot, h: (b.floors ?? 1) * 3.2 + 3 }));
+  for (const f of world.features) {
+    if (f.type === "fener") tall.push({ x: f.x, z: f.z, r: 3.2, h: 26 });
+    if (f.type === "minare") tall.push({ x: f.x, z: f.z, r: 1.4, h: 34 });
+  }
+  const TG = 30, tallGrid = new Map();
+  for (const o of tall) {
+    const e = o.r ?? Math.hypot(o.w, o.d) / 2;
+    for (let gx = Math.floor((o.x - e) / TG); gx <= Math.floor((o.x + e) / TG); gx++) {
+      for (let gz = Math.floor((o.z - e) / TG); gz <= Math.floor((o.z + e) / TG); gz++) {
+        const k = gx * 100003 + gz;
+        if (!tallGrid.has(k)) tallGrid.set(k, []);
+        tallGrid.get(k).push(o);
+      }
+    }
+  }
+  const crowds = (x, z, R, bottom) => {
+    const seen = new Set();
+    for (let gx = Math.floor((x - R) / TG); gx <= Math.floor((x + R) / TG); gx++) {
+      for (let gz = Math.floor((z - R) / TG); gz <= Math.floor((z + R) / TG); gz++) {
+        for (const o of tallGrid.get(gx * 100003 + gz) ?? []) {
+          if (seen.has(o) || bottom >= o.h) continue;
+          seen.add(o);
+          let d;
+          if (o.r != null) d = Math.hypot(x - o.x, z - o.z) - o.r;
+          else {
+            const c = Math.cos(o.rot), sn = Math.sin(o.rot), dx = x - o.x, dz = z - o.z;
+            const lx = Math.abs(dx * c - dz * sn) - o.w / 2, lz = Math.abs(dx * sn + dz * c) - o.d / 2;
+            d = Math.hypot(Math.max(lx, 0), Math.max(lz, 0)) + Math.min(Math.max(lx, lz), 0);
+          }
+          if (d < R * 0.8) return true;
+        }
+      }
+    }
+    return false;
+  };
   for (const [name, kind] of Object.entries(KINDS)) {
-    const all = spots.filter((t) => t.kind === name && world.isWalkable(t.x, t.z));
+    // Gövdenin çevresi de boş olmalı (yalnız merkezi denetlenince gövde çöp kutusuna, banka değebiliyordu).
+    const r0 = kind.trunkR * 1.25 + 0.15;
+    const all = spots.filter((t) => t.kind === name && [[0, 0], [r0, 0], [-r0, 0], [0, r0], [0, -r0]].every(([dx, dz]) => world.isWalkable(t.x + dx, t.z + dz)));
     for (let v = 0; v < VARIANTS; v++) {
       // Her türün üç biçimi: gövde eğimi, dal yapısı ve taç şekli farklı.
-      const list = all.filter((t) => Math.floor(t.t * 1000) % VARIANTS === v);
+      const crownGeo = kind.crown(v);
+      crownGeo.computeBoundingBox();
+      const bb = crownGeo.boundingBox;
+      const crownR = Math.max(-bb.min.x, bb.max.x, -bb.min.z, bb.max.z), crownY = bb.min.y;
+      const list = all.filter((t) => {
+        if (Math.floor(t.t * 1000) % VARIANTS !== v) return false;
+        const k = (kind.h[0] + t.r * (kind.h[1] - kind.h[0])) / REF[name];
+        return !crowds(t.x, t.z, crownR * k * 1.17, crownY * k);
+      });
       if (!list.length) continue;
       const trunk = new THREE.InstancedMesh(kind.trunk(v), bark, list.length);
       const crownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: name !== "servi", transparent: true, opacity: 1, side: name === "palmiye" ? THREE.DoubleSide : THREE.FrontSide });
       crowns.push(crownMat);
-      const crown = new THREE.InstancedMesh(kind.crown(v), crownMat, list.length);
+      const crown = new THREE.InstancedMesh(crownGeo, crownMat, list.length);
       list.forEach((t, i) => {
         const h = kind.h[0] + t.r * (kind.h[1] - kind.h[0]);
         const k = h / REF[name];
@@ -244,6 +293,7 @@ export function buildTrees(world) {
         color.offsetHSL((r2 - 0.5) * 0.04, (r3 - 0.5) * 0.12, (r2 - 0.5) * 0.08);
         crown.setColorAt(i, color);
         world.addObstacleCircle(t.x, t.z, kind.trunkR * k + 0.25);
+        world.trees.push({ x: t.x, z: t.z, r: kind.trunkR * k, h, kind: name });
       });
       for (const mesh of [trunk, crown]) {
         mesh.castShadow = true;

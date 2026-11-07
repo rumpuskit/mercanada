@@ -221,8 +221,9 @@ function gondolaGeometry(len, halfW, halfH, n = 3.4) {
   for (let i = 0; i <= NS; i++) {
     const t = i / NS;
     let k = 1;
-    if (t < 0.16) k = Math.sqrt(1 - ((0.16 - t) / 0.16) ** 2);
-    else if (t > 0.82) k = Math.sqrt(1 - ((t - 0.82) / 0.18) ** 2) * (1 - 0.25 * (t - 0.82) / 0.18);
+    // max(0, …): uç halkada (t = 1) kayan nokta 1'i az aşınca kök NaN veriyordu (gondolun kıç ucu bozuk çiziliyordu).
+    if (t < 0.16) k = Math.sqrt(Math.max(0, 1 - ((0.16 - t) / 0.16) ** 2));
+    else if (t > 0.82) k = Math.sqrt(Math.max(0, 1 - ((t - 0.82) / 0.18) ** 2)) * (1 - 0.25 * (t - 0.82) / 0.18);
     k = Math.max(k, 0.001);
     const w = halfW * k * (1 - 0.12 * t), h = halfH * (0.35 + 0.65 * k) * (1 - 0.18 * t);
     const x = len / 2 - t * len;

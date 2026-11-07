@@ -1135,7 +1135,8 @@ export class World {
       huts: [0, 1, 2].map((i) => [bx - 14 + i * 12, bz - 9]),
       boardwalk: [[bx - 20, bz - 3.8], [bx, bz - 3.8]],
       stall: [jx + 4.5, jz - 0.8],
-      beached: [[bx + 9, bz - 0.5, 0.35, "#d8433d"], [bx + 12.5, bz + 0.2, -0.25, "#2f7fb5"]],
+      // Kıyıya çekilmiş sandallar doğudaki ağ sereninin ötesinde (eskiden serenin altına ve balık tezgâhına giriyordu).
+      beached: [[bx + 19.5, coast(bx + 19.5)[1] - 1.2, 0.35, "#d8433d"], [bx + 23, coast(bx + 23)[1] - 0.6, -0.25, "#2f7fb5"]],
       traps: [[bx - 19.6, bz - 5.0], [bx - 8.6, bz - 5.0], [bx + 3.0, bz - 5.0]],
       ropes: [[jx - 0.7, jz + 4], [jx + 0.7, jz + 12], [jx - 0.7, jz + 20]],
       rocks: [jx + 9, jz + 14],
@@ -1250,7 +1251,6 @@ export class World {
     this._tag("plaj:0", () => {
       this._layoutBeach(kx, px, pz);
       this._addWorkplace("plaj", 0, { door: [px, pz], path: beachPath, anchor: [px, pz + 2], spread: 3 });
-      this.features.push({ type: "cankurtaran", x: px, z: pz - 2 });
     });
     this.labels.push({ text: "Plaj", x: px, z: pz, h: 18 });
   }
@@ -1264,14 +1264,26 @@ export class World {
    */
   _layoutBeach(kx, px, pz) {
     const n = Math.hypot(0.2, 1), dx = -0.2 / n, dz = 1 / n; // denize doğru
+    // at(x, geri): (x, 10)'dan denize doğru (−0,2, 1) yönünde yürüyüp kıyıyı bulur. Buradaki x bir *başlangıç*
+    // x'idir: kumsal ~145 m güneyde olduğundan dünya x'i ~29 m batıya kayar. Bütün yerleşim bu başlangıç
+    // x'leriyle yapılır; plajın ortası c0 = kx − 30 (px, pz onun dünya karşılığı). Eskiden orta yol, kule
+    // boşluğu ve kabinler dünya x'i px ile kurulmuştu: orta yol batı yolunun 7 m yanına, kabinler yolun
+    // üstüne, kule bir şemsiye kümesinin içine düşüyordu.
     const at = (x, back) => this.coastPoint(x, 10, -0.2, 1, back);
     const face = Math.atan2(dx, dz); // şezlonglar denize bakar
-    const walks = [kx - 66, px, kx + 6];
-    const B = { face, clusters: [], walks: [], showers: [], cabins: [], buoys: [], volley: null, bins: [] };
+    const c0 = kx - 30;
+    const walks = [kx - 66, c0, kx + 6];
+    // Cankurtaran kulesi orta yolun batısında (yol ve kule önü boş kalır); kulenin rampası kara tarafında.
+    const tower = at(c0 - 4.8, 15);
+    // Açık hava sineması (cumartesi akşamı, etkinlik.js buildCinema) batı yolu ile orta yolun arasında, şemsiyesiz
+    // bir alanda kurulur: perde su tarafında, 4 × 7 sandalye kara tarafında (~8 m genişlik). Önceden yer kumsalda
+    // "yürünebilir" diye aranıyordu; şezlong ve şemsiyeler engel sayılmadığından perde kümelerin içine kuruluyordu.
+    const cin = kx - 48;
+    const B = { face, clusters: [], walks: [], showers: [], cabins: [], buoys: [], volley: null, bins: [], cinema: at(cin, 8) };
     for (let x = kx - 96; x <= kx + 34; x += 6.2) {
       for (const [back, off] of [[9, 0], [15, 3.1]]) {
         const xx = x + off;
-        if (walks.some((w) => Math.abs(w - xx) < 4.2) || Math.abs(xx - px) < 7) continue;
+        if (walks.some((w) => Math.abs(w - xx) < 4.2) || Math.abs(xx - c0) < 8.2 || Math.abs(xx - cin) < 6.2) continue;
         const [cx, cz] = at(xx, back);
         const c = { x: cx, z: cz, c: Math.round((xx - kx) / 6.2 + back) };
         B.clusters.push(c);
@@ -1289,7 +1301,7 @@ export class World {
       B.bins.push(at(wx - 2.4, 21));
     }
     // Soyunma kabinleri: orta yolun iki yanında ikişer.
-    for (const o of [-6.5, -4.5, 4.5, 6.5]) B.cabins.push(at(px + o, 25));
+    for (const o of [-6.5, -4.5, 4.5, 6.5]) B.cabins.push(at(c0 + o, 25));
     // Büfe: batı yolunun başında, gerçek bina (içi açılır); önünde üç masa ve şemsiyesi.
     const [bx, bz] = at(walks[0] - 9, 27);
     this.addBuilding({ kind: "bufe", x: bx, z: bz, rot: face, w: 6, d: 4.5, floors: 1, roofType: "flat", wall: "#f6e3d8", roof: "#c9c4bb", style: { shop: true, awning: "#2f7fb5" }, address: "Plaj Büfesi, Mercan Plajı" });
@@ -1309,8 +1321,12 @@ export class World {
     B.volley = { x: vx, z: vz, rot: face };
     // Yüzme alanı: 30 m açıkta, kıyıya paralel şamandıralı ip.
     for (let x = kx - 100; x <= kx + 38; x += 3.5) B.buoys.push(at(x, -30));
+    this.features.push({ type: "cankurtaran", x: tower[0], z: tower[1] });
     this.beach = B;
-    this.block(kx - 100, Math.min(...B.clusters.map((c) => c.z)) - 4, kx + 52, Math.max(...B.clusters.map((c) => c.z)) + 4, 0);
+    // Ağaç yasağı: plajdaki her şeyin (dünya koordinatında) kapsadığı alan; büfe, kabinler ve yol başları dahil.
+    const pts = [...B.clusters.map((c) => [c.x, c.z]), ...B.walks.flatMap((wk) => [wk.a, wk.b]), ...B.showers, ...B.cabins, ...B.bins, [bx, bz], tower, [vx - 9, vz], [vx + 9, vz]];
+    const xs = pts.map((q) => q[0]), zs = pts.map((q) => q[1]);
+    this.block(Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs), 5);
   }
 
   // --- mahalleler ---
@@ -1504,7 +1520,8 @@ export class World {
             const cw = 14, cd = 14;
             this.addBuilding({ kind: "cami", x: bxm, z: bzm, rot, w: cw, d: cd, floors: 2, icKat: 1, roofType: "dome", wall: "#ece4d6", roof: "#7d8e9c", workplace: true, style: { dome: true }, address: `${mahalleName(m).replace(" Mahallesi", "")} Camii, ${mahalleName(m)}` });
             const toWorld = (lx, lz) => [bxm + lx * Math.cos(rot) + lz * Math.sin(rot), bzm - lx * Math.sin(rot) + lz * Math.cos(rot)];
-            const [mx, mz] = toWorld(-cw / 2 - 1.15, cd / 2 - 1.2);
+            // Kaide (2,6 m küp) yan duvara ve son cemaat yerinin döşemesine değer ama içine girmez.
+            const [mx, mz] = toWorld(-cw / 2 - 1.5, cd / 2 - 1.5);
             this.features.push({ type: "minare", x: mx, z: mz });
             const [sx2, sz2] = toWorld(cw / 2 + 4.5, cd / 2 + 1.5); // avluda, son cemaat yerinin yanında
             this.features.push({ type: "sadirvan", x: sx2, z: sz2 });
