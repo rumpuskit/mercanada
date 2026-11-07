@@ -82,7 +82,7 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
 KOD = re.compile(r"\bkod\w*\s*:?\s*(\d{4})\b")
 TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
 # "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım / olabilir miyim / olurum" (yorumlarda sık).
-OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olurum|olur ?mu ?yum|olayim|oliyim|olim)\b)")
+OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olablir\w*|olurum|olur ?mu ?yum|olayim ?mi|olayim|oliyim|olim)\b)")
 # "ben olurum fırıncı" (videonun sorusuna cevap) ve yorumun tamamı "ben garson" / "ben de futbolcu".
 BEN_OLURUM = re.compile(r"\bben (?:de )?olurum ((?:\w+ ){0,2}\w+)")
 BEN = re.compile(r"^(?:(?:abla|abi|hocam|kanka) )?(?:ben de|bende|ben) ")

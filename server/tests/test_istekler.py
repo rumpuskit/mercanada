@@ -58,6 +58,8 @@ class CozumleTest(unittest.TestCase):
             "polis oliyim": {"meslek": "polis"},
             "ben öğrenciyim": {"meslek": "ogrenci"},
             "Ben doktorum": {"meslek": "doktor"},
+            "polis olayımmı": {"meslek": "polis"},
+            "doktor olablir miyim": {"meslek": "doktor"},
             "hemşire olabilr miyim": {"meslek": "hemsire"},
         }
         for text, want in cases.items():
