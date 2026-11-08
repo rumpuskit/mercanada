@@ -69,8 +69,59 @@ OY_DUZ = re.compile(r"^\s*oy\w*\s*:\s*([A-Za-z0-9._]{2,24})\s*$", re.I)
 # "Kendime oy veriyorum": yazanın kendisine oy (yorumlar() yazanın adıyla değiştirir).
 KENDIME = re.compile(r"\bkendi(?:me|mize)\b(?: \w+){0,2} (?:oy|veri)")
 KENDI = "__kendi__"
-# Yorumun tamamı bir adayın kullanıcı adı ("exo45526", "@exo45526"): yalnız o ad gerçekten adaysa oy sayılır.
-YALIN = re.compile(r"^@?([A-Za-z0-9._]{2,24})$")
+# Biçime uymayan oylar (insanlar "oy: @ad" yazmıyor): yorumda bir adayın adı geçiyorsa ve ya yorum neredeyse
+# yalnız o addan ibaretse ya da oy niyeti sözcüğü varsa oy sayılır. Ad: kullanıcı adı (@'li/@'siz, en çok 2 harf
+# yanlış), ya da TikTok'taki görünen adı ("@Ömerr": TikTok etiketi metne görünen adı yazar). Görünen adlar adayların
+# kendi yorumlarından öğrenilir (yalnız adaylarınki, seçim boyunca durum tablosunda).
+NIYET = re.compile(r"\b(?:oy(?:um|umu|u|umuz|umla|la|lar\w*)?|sec\w*|destek\w*|baskan\w*|kazan\w*|yasasin|helal|taraftar\w*)\b")
+ETIKET_GENIS = re.compile(r"@([^\s@]{2,40})")
+SOZCUK = re.compile(r"[A-Za-z0-9._]{3,24}")
+
+
+def _yakin(a: str, b: str) -> int:
+    """Levenshtein uzaklığı (kısa adlar için)."""
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def oy_niyeti(text: str, yazan: str, adaylar: set, isimler: dict) -> str | None:
+    """Biçime uymayan yorumda kime oy verildiği (yoksa None)."""
+    t = katla(text[:300])
+    adaylar_tam = {}  # yorumda geçen ad parçası → aday
+    for m in ETIKET_GENIS.finditer(text):
+        ham = m.group(1).rstrip(".,!?:;")
+        h = sim.normalize_handle(ham)
+        if h in adaylar:
+            adaylar_tam[ham] = h
+        elif (a := isimler.get(katla(ham))) in adaylar:
+            adaylar_tam[ham] = a
+    if not adaylar_tam:
+        for w in SOZCUK.findall(text):
+            h = sim.normalize_handle(w)
+            if h in adaylar:
+                adaylar_tam[w] = h
+            elif len(h) >= 5:
+                # En yakın aday (en çok 2 harf fark), ikinciden açıkça daha yakınsa.
+                uz = sorted((_yakin(a, h), a) for a in adaylar if abs(len(a) - len(h)) <= 2)
+                if uz and uz[0][0] <= 2 and (len(uz) == 1 or uz[1][0] > uz[0][0]):
+                    adaylar_tam[w] = uz[0][1]
+    hedefler = set(adaylar_tam.values())
+    if len(hedefler) != 1:
+        return None
+    hedef = hedefler.pop()
+    # Yorumdan ad(lar) ve emoji/noktalama çıkınca geriye bir şey kalmıyorsa yalnız ad yazılmıştır.
+    kalan = text
+    for parca in adaylar_tam:
+        kalan = kalan.replace("@" + parca, " ").replace(parca, " ")
+    yalniz_ad = not katla(kalan).strip()
+    if hedef == yazan and not NIYET.search(t):
+        return None
+    return hedef if (yalniz_ad or NIYET.search(t)) else None
 
 
 # Makamı bırakan (dönemi biten, yenilen ya da adadan ayrılan) başkanın önceki mesleği geri gelir.
@@ -127,8 +178,22 @@ def yorumlar(items: list, hesap: str | None, db: str = DB) -> dict:
         return {}
     adaylar, oylar = [], []
     aday_adlari = set(psql(f"SELECT coalesce(string_agg(handle, ' '), '') FROM secim_adaylar WHERE secim_id = {s['id']}", db).split())
+    # Adayların görünen adları (5. alan, Mac'teki okuyucu gönderir): "@Ömerr" etiketini adaya bağlamak için.
+    kayit = json.loads(psql("SELECT coalesce(deger::text, '{}') FROM durum WHERE anahtar = 'secim_isimler'", db) or "{}")
+    isimler = kayit.get("isim", {}) if kayit.get("id") == s["id"] else {}
+    yeni_isim = False
     for it in items:
-        if not (isinstance(it, list) and len(it) == 4 and isinstance(it[2], int) and isinstance(it[3], str)):
+        if isinstance(it, list) and len(it) == 5 and isinstance(it[4], str) and it[4].strip():
+            h, ad = sim.normalize_handle(str(it[1])), katla(it[4])
+            if h in aday_adlari and ad and isimler.get(ad) != h:
+                isimler[ad] = h if ad not in isimler else None  # iki aday aynı görünen adı taşıyorsa belirsiz
+                yeni_isim = True
+    if yeni_isim:
+        psql("""INSERT INTO durum (anahtar, deger) VALUES ('secim_isimler', :'v'::jsonb)
+                ON CONFLICT (anahtar) DO UPDATE SET deger = EXCLUDED.deger, updated_at = now();""", db,
+             ["-v", "v=" + json.dumps({"id": s["id"], "isim": isimler})])
+    for it in items:
+        if not (isinstance(it, list) and len(it) in (4, 5) and isinstance(it[2], int) and isinstance(it[3], str)):
             continue
         handle = sim.normalize_handle(str(it[1]))
         if not handle or handle == hesap or not (s["bas"] <= it[2] <= s["son"]):
@@ -136,8 +201,8 @@ def yorumlar(items: list, hesap: str | None, db: str = DB) -> dict:
         c = cozumle(it[3])
         if c.get("oy") == KENDI:
             c["oy"] = handle
-        elif not c and (b := YALIN.match(it[3].strip())) and sim.normalize_handle(b.group(1).rstrip(".")) in aday_adlari:
-            c = {"oy": sim.normalize_handle(b.group(1).rstrip("."))}
+        elif not c and (hedef := oy_niyeti(it[3], handle, aday_adlari, isimler)):
+            c = {"oy": hedef}
         if c.get("aday"):
             adaylar.append([handle, it[2]])
         if c.get("oy"):

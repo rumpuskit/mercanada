@@ -225,7 +225,7 @@ def yorumlar(items: list, hesap: str | None = None, db: str = DB) -> dict:
     atılır; kendi hesabımızın yorumları ve bozuk satırlar geçilir."""
     satirlar, kodlar = [], []
     for it in items:
-        if not (isinstance(it, list) and len(it) == 4 and isinstance(it[3], str) and isinstance(it[2], int)):
+        if not (isinstance(it, list) and len(it) in (4, 5) and isinstance(it[3], str) and isinstance(it[2], int)):
             continue
         cid, handle = str(it[0])[:40], sim.normalize_handle(str(it[1]))
         if not cid or not handle or handle == hesap:

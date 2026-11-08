@@ -175,6 +175,21 @@ class TasinmaTest(unittest.TestCase):
             ["m8", "k06", t, "meslek: fener bekçisi"], ["m9", "k08", t + 5, "fener bekçisi"]]})
         self.assertEqual((out["uygulanan"], out["dolu"]), ([["k06", "meslek", "fener_bekcisi"]], [["k08", "fener_bekcisi"]]))
 
+    def test_secim_bicimsiz_oy(self):
+        # İnsanlar "oy: @ad" yazmıyor: görünen adla etiket, yazım hatası, yalnız ad, niyet sözcüğü.
+        liste = [[f"k{i:03d}", 300 + i, 0] for i in range(100)]
+        self.send({"tur": "liste", "takipci": 100, "liste": liste})
+        t = int(time.time()) + 60
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [
+            ["b1", "k011", t - 50, "adayım", "Ömerr"], ["b2", "k012", t - 40, "ben de adayım", "Deniz"]]})
+        self.assertEqual(out["secim"], {"aday": 2, "oy": 0}, out)
+        code, out = self.send({"tur": "yorumlar", "yorumlar": [
+            ["b3", "k020", t, "@Ömerr", "x"], ["b4", "k021", t, "Taraftar çıldırdı @Ömerr başkan olucak", "y"],
+            ["b5", "k022", t, "@k0012", "z"], ["b6", "k023", t, "k012 başkan olsun", "w"],
+            ["b7", "k024", t, "oyun güzel @Ömerr"], ["b8", "k011", t, "@Ömerr", "Ömerr"]]})
+        self.assertEqual(out["secim"]["oy"], 4, out)  # b7 (oyun) ve b8 (kendini etiketleme) sayılmaz
+        self.assertEqual(dict(self.published()["secim"]["adaylar"]), {"k011": 2, "k012": 2})
+
     def test_belediye_secimi(self):
         # Belediye 100. sakinde açılır: ilk taşınmada seçim başlar.
         liste = [[f"k{i:03d}", 300 + i, 0] for i in range(100)]

@@ -31,5 +31,30 @@ class SecimCozumleTest(unittest.TestCase):
         self.assertEqual(cozumle("oyum @kurox120, başkan benim değil"), {"oy": "kurox120"})
 
 
+class OyNiyetiTest(unittest.TestCase):
+    """Biçime uymayan oylar: etiket, görünen ad, yazım hatası, niyet sözcüğü."""
+    adaylar = {"shinomerwo1", "exo45526", "seviobl"}
+    isimler = {"omerr": "shinomerwo1"}
+
+    def oy(self, metin, yazan="secmen1"):
+        from secim import oy_niyeti
+        return oy_niyeti(metin, yazan, self.adaylar, self.isimler)
+
+    def test_oy(self):
+        self.assertEqual(self.oy("@Ömerr"), "shinomerwo1")
+        self.assertEqual(self.oy("Taraftar çıldırdı @Ömerr başkan olucakk"), "shinomerwo1")
+        self.assertEqual(self.oy("@sahinomerwo1"), "shinomerwo1")  # yazım hatası
+        self.assertEqual(self.oy("taraftar cıldırdı @ shinomerwo1 yaz"), "shinomerwo1")
+        self.assertEqual(self.oy("exo45526"), "exo45526")
+        self.assertEqual(self.oy("exo45526 başkan olsun 👑"), "exo45526")
+        self.assertEqual(self.oy("seviobl oyumu veriyorumm"), "seviobl")
+
+    def test_oy_degil(self):
+        self.assertIsNone(self.oy("exo45526 polis mi?"))
+        self.assertIsNone(self.oy("@Ömerr", yazan="shinomerwo1"))  # kendini etiketlemek oy değil
+        self.assertIsNone(self.oy("exo45526 ve seviobl başkan olsun"))  # iki aday: belirsiz
+        self.assertIsNone(self.oy("@birisi başkan olsun"))  # aday değil
+
+
 if __name__ == "__main__":
     unittest.main()
