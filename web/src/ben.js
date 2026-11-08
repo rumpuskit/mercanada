@@ -8,7 +8,7 @@ import { CICEK_AD, SECENEK, dateKey, setPrefs } from "./tercih.js";
 import * as sim from "./sim.js";
 
 export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim, prefsData }) {
-  let state = null, poll = null, busy = false, prefill = "";
+  let state = null, poll = null, busy = false, prefill = "", degistir = false;
   const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
   const button = (text, cls, onClick) => { const b = el("button", text, cls); b.addEventListener("click", onClick); return b; };
   const idxOf = (h) => residents.findIndex((r) => r.handle === h);
@@ -24,7 +24,7 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
     if (!state) return sayfa.set(el("p", "Yükleniyor…", "muted"));
     if (state.hata) return sayfa.set([el("p", `Şu an bağlanılamadı (${state.hata}). Biraz sonra yeniden dene.`, "muted"), button("Yeniden dene", "ana", refresh)]);
     if (state.handle) return sayfa.set(verified());
-    if (state.bekleyen) {
+    if (state.bekleyen && !degistir) {
       poll = setInterval(refresh, 60000); // yorumlar saatte bir okunur; açık kaldıkça dakikada bir bakılır
       return sayfa.set(pending());
     }
@@ -33,6 +33,12 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
 
   function start() {
     const out = [];
+    // Süresi dolan kod (7 gün içinde yorumu göremedik): kişi neden başa döndüğünü bilsin, aynı adla tek dokunuşla yeniden alsın.
+    const eski = state?.suresi_doldu;
+    if (eski && !degistir) {
+      out.push(el("p", `@${eski} için aldığın kodun süresi doldu; yorumunu göremedik. Aynı adla yeni kod alıp tekrar yazman yeterli.`));
+      if (!prefill) prefill = eski;
+    }
     out.push(el("p", "Adadaki evin senin mi? Kendini doğrula: evinin duvar ve koltuk rengini, pencerendeki çiçekleri, evcilinin adını seç; bugün ne yapacağına ve kiminle buluşacağına sen karar ver."));
     out.push(el("p", `Nasıl: kullanıcı adını yaz, sana 4 haneli bir kod verelim; kodu @${TIKTOK} videolarımızdan birine yorum olarak yaz. Şifre ya da giriş yok.`, "muted"));
     const input = el("input");
@@ -45,23 +51,26 @@ export function createBen({ sayfa, residents, people, ui, today, onPrefs, secim,
       if (!/^[a-z0-9._]{2,24}$/.test(h)) { msg.textContent = "Kullanıcı adını TikTok'taki gibi yaz (harf, rakam, nokta, alt çizgi)."; return; }
       if (busy) return;
       busy = true;
-      try { await api.baslat(h); await refresh(); } catch (e) { msg.textContent = e.message; } finally { busy = false; }
+      try { await api.baslat(h); degistir = false; prefill = ""; await refresh(); } catch (e) { msg.textContent = e.message; } finally { busy = false; }
     });
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") go.click(); });
     out.push(input, go, msg);
+    if (degistir && state?.bekleyen) out.push(button("Koduma geri dön", "secim", () => { degistir = false; render(); }));
     return out;
   }
 
   function pending() {
-    const { kod, handle } = state.bekleyen;
+    const { kod, handle, gorulen, kalan_gun } = state.bekleyen;
     const out = [];
     out.push(el("p", `@${handle} için kodun:`));
     out.push(el("p", kod, "kod"));
-    out.push(el("p", `@${TIKTOK} videolarımızdan herhangi birine yorum olarak şunu yaz:`));
-    out.push(el("p", `kod ${kod}`, "kod"));
-    out.push(el("p", "Yorumlar saatte bir okunur; kodun eşleşince bu ekran kendiliğinden açılır (sayfayı kapatsan da bu cihaz hatırlar). Kod 48 saat geçerli.", "muted"));
+    out.push(el("p", `@${TIKTOK} videolarımızdan herhangi birine, @${handle} hesabından yorum olarak yaz. Yorumunda kodun geçmesi yeter: "kod ${kod}" ya da yalnız "${kod}".`));
+    // Kod başka bir hesaptan yazılmış görüldüyse kişi neden eşleşmediğini bilsin.
+    if (gorulen) out.push(el("p", `Kodunu @${gorulen} hesabından yazılmış gördük, ama kod @${handle} için alındı. Kodu @${handle} hesabından yaz ya da kullanıcı adını düzelt.`));
+    out.push(el("p", `Yorumları saat başı okuyoruz, ama TikTok'tan gelmeleri gecikebiliyor: çoğu zaman birkaç saat içinde eşleşir. Eşleşince bu ekran kendiliğinden açılır (sayfayı kapatsan da bu cihaz hatırlar). Kod ${kalan_gun ?? 7} gün daha geçerli; yeni kod almana gerek yok.`, "muted"));
+    out.push(el("p", "Bir yorumun altına cevap olarak değil, videoya yeni yorum olarak yazarsan daha çabuk görürüz.", "muted"));
     if (idxOf(handle) < 0) out.push(el("p", "Bu ad şu an adada görünmüyor: önce TikTok'ta takip et, sıradaki taşınmada evin hazırlanır.", "muted"));
-    out.push(button("Şimdi bak", "secim", refresh), button("Vazgeç", "secim", async () => { await api.cikis(); state = null; refresh(); }));
+    out.push(button("Şimdi bak", "secim", refresh), button("Kullanıcı adını değiştir", "secim", () => { degistir = true; prefill = handle; render(); }));
     return out;
   }
 

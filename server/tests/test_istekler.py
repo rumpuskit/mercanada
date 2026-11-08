@@ -123,7 +123,7 @@ class DogrulamaKoduTest(unittest.TestCase):
             out = istekler.yorumlar([["c1", "Ali", 1, "kod 4821"], ["c2", "veli", 2, "meslek: balıkçı"], ["c3", "biz", 3, "kod 1111"]], hesap="biz")
         finally:
             ortak.kayit, istekler.kaydet, istekler.psql, istekler.uygula = eski_kayit, eski_kaydet, eski_psql, eski_uygula
-        self.assertEqual(gelen, [("POST", "/api/onayla", {"ciftler": [["4821", "ali"]]})])
+        self.assertEqual(gelen, [("POST", "/api/onayla", {"ciftler": [["4821", "ali", True]]})])
         self.assertEqual(out["dogrulanan"], ["ali"])
 
 
@@ -134,8 +134,8 @@ class KodTest(unittest.TestCase):
         self.assertEqual(KOD_TEK.match(katla(" 8538 ")).group(1), "8538")
         self.assertIsNone(KOD_TEK.match(katla("2026 yılı")))
         from istekler import kodlar_bul
-        for metin, beklenen in [("kod 1234", ["1234"]), ("kodum: 3674", ["3674"]), ("8538", ["8538"]),
-                                ("4521 evimi onayla lütfen", ["4521"]), ("1234 kodum 🏠", ["1234"]),
-                                ("Kodu yazdım abla: 9087 ✨", ["9087"]), ("tel 05321234567", []),
-                                ("polis olmak istiyorum", [])]:
+        for metin, beklenen in [("kod 1234", [("1234", True)]), ("kodum: 3674", [("3674", True)]),
+                                ("8538", [("8538", True)]), ("4521 evimi onayla lütfen", [("4521", False)]),
+                                ("1234 kodum 🏠", [("1234", True)]), ("Kodu yazdım abla: 9087 ✨", [("9087", True)]),
+                                ("tel 05321234567", []), ("polis olmak istiyorum", [])]:
             self.assertEqual(kodlar_bul(metin), beklenen, metin)

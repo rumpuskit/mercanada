@@ -45,9 +45,10 @@ export const api = {
   },
   get available() { return !!available; },
   hasToken: () => !!token(),
-  /** Doğrulamayı başlatır: kod ve cihaz anahtarı (anahtar saklanır). */
+  /** Doğrulamayı başlatır: kod ve cihaz anahtarı (anahtar saklanır). Cihazın anahtarı varsa gönderilir: Worker aynı
+   *  anahtarı korur, böylece eski kodlar da geçerli kalır; aynı ad için aynı kod döner. */
   async baslat(handle) {
-    const r = await call("POST", "/api/dogrula", { handle });
+    const r = await call("POST", "/api/dogrula", { handle }, true);
     store.set("mercanada_anahtar", r.token);
     return r;
   },

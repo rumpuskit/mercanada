@@ -92,9 +92,13 @@ KOD_TEK = re.compile(r"^(\d{4})$")
 KOD_HER = re.compile(r"(?<!\d)(\d{4})(?!\d)")
 
 
-def kodlar_bul(text: str) -> list[str]:
+def kodlar_bul(text: str) -> list[tuple[str, bool]]:
+    """[(kod, kesin)]: kesin = yorum açıkça kod yazıyor ("kod" sözcüğü geçiyor ya da yorumun tamamı "1234"). Kesin olmayan
+    sayılar Worker'da yalnız kod tam o kullanıcı adına verilmişse bağlanır (yazım hatası toleransı ve "başka hesaptan
+    görüldü" notu yalnız kesinlerde)."""
     t = katla(text[:200])
-    return list(dict.fromkeys(KOD_HER.findall(t)))[:3]
+    kesin = bool(re.search(r"\bkod", t) or KOD_TEK.match(t))
+    return [(k, kesin) for k in dict.fromkeys(KOD_HER.findall(t))][:3]
 TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
 # "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım / olabilir miyim / olurum" (yorumlarda sık).
 OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olablir\w*|olurum|olur ?mu ?yum|olayim ?mi|olayim|oliyim|olim)\b)")
@@ -238,8 +242,8 @@ def yorumlar(items: list, hesap: str | None = None, db: str = DB) -> dict:
         cid, handle = str(it[0])[:40], sim.normalize_handle(str(it[1]))
         if not cid or not handle or handle == hesap:
             continue
-        for kod in kodlar_bul(it[3]):
-            kodlar.append([kod, handle])
+        for kod, kesin in kodlar_bul(it[3]):
+            kodlar.append([kod, handle, kesin])
         for tur, deger in cozumle(it[3]).items():
             # Aynı yorumda birden çok istek: kaynak kimliği türle ayrılır.
             satirlar.append([handle, tur, deger, f"{cid}:{tur}", it[2]])
