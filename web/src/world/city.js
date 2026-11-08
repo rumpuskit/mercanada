@@ -795,9 +795,8 @@ function buildFeatures(world) {
         };
         wall(x0, z0, x0, z1); wall(x1, z0, x1, z1); wall(x0, z1, gateX - 2, z1); wall(gateX + 2, z1, x1, z1);
         for (const gx of [gateX - 2, gateX + 2]) add(new THREE.BoxGeometry(0.5, 2.0, 0.5), std("#b5563f"), gx, y0 + 1.0, z1);
-        // Bayrak.
+        // Bayrak direği; bayrağın kendisi bayram.js'te (ay yıldızlı, dalgalanan; 10 Kasım'da yarıya iner).
         add(new THREE.CylinderGeometry(0.06, 0.08, 9, 8), rail, x0 + 2, y0 + 4.5, z0 + 1.5);
-        add(new THREE.BoxGeometry(0.03, 1.2, 1.8), std("#d8233a"), x0 + 2, y0 + 8.3, z0 + 1.5 + 0.95, 0, false);
         // Saha çizgileri ve mini kaleler (doğu-batı), seksek.
         const line = std("#f4f1ea", { roughness: 0.9 });
         const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, W = x1 - x0 - 3, D = z1 - z0 - 6;

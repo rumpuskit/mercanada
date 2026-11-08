@@ -4,6 +4,7 @@
 import { api } from "./api.js";
 import { FILM_AD, FILM_SECENEK, TEMA_AD, TEMA_SECENEK, dateKey, setVotes, weekKey } from "./tercih.js";
 import * as sim from "./sim.js";
+import { anmaOf } from "./world/anma.js";
 
 const DAYS = ["pazartesi", "salı", "çarşamba", "perşembe", "cuma", "cumartesi", "pazar"];
 
@@ -13,6 +14,7 @@ export function createAnket({ sayfa, today, world, toast, onVote }) {
   /** Yarın sabit bir gün mü (oylama yok)? etkinlik.js dayTheme ile aynı kural. */
   function fixedTomorrow() {
     const wd = sim.weekday(today() + 1);
+    if (anmaOf(today() + 1)) return "Yarın 10 Kasım: Atatürk'ü anıyoruz, 09.05'te saygı duruşu";
     if (wd === 4 && world.workplaces.cami?.some(Boolean)) return "Yarın cuma namazı var";
     if (wd === 5) return "Yarın cumartesi: plajda açık hava sineması";
     if (wd === 6) return "Yarın pazar keyfi: piknik ve yürüyüş";

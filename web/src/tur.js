@@ -26,7 +26,7 @@ export function createTour({ world, people, residents, flyTo, cinema, vec }) {
     const plaj = world.places.plaj?.anchors;
     if (plaj?.length) out.push({ at: cinema?.spot ?? plaj[plaj.length >> 1], d: 90, t: "Plaj", s: "Kumsal yürüyüşleri, taş sektirenler; cumartesi akşamı açık hava sineması." });
     const th = people.theme;
-    if (th) out.push({ at: th.yer === "plaj" && cinema ? cinema.spot : world.placeOf(th.yer).anchors[0], d: 100, t: "Bugün", s: th.ad });
+    if (th) out.push({ at: th.at ?? (th.yer === "plaj" && cinema ? cinema.spot : world.placeOf(th.yer).anchors[0]), d: 100, t: "Bugün", s: th.ad });
     const ns = world.nextStage;
     if (ns?.at) out.push({ at: ns.at, d: 110, t: `Sırada: ${ns.name}`, s: `${fmt.format(Math.max(1, ns.nufus - N))} kişi daha gelince açılıyor. Takip et, adaya taşın.` });
     return out;

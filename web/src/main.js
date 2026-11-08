@@ -21,7 +21,8 @@ import { buildHarbor } from "./world/harbor.js";
 import { buildBeach } from "./world/beach.js";
 import { buildFields } from "./world/fields.js";
 import { svg } from "./icons.js";
-import { buildBayram } from "./world/bayram.js";
+import { buildBayram, flagTexture } from "./world/bayram.js";
+import { anmaOf, anmaPhase, buildAnma } from "./world/anma.js";
 import { Stories } from "./world/story.js";
 import { Ambience } from "./sound.js";
 import { startOnline } from "./online.js";
@@ -222,6 +223,9 @@ const hidden = buildHidden(world);
 scene.add(hidden.group);
 const bayram = buildBayram(world);
 scene.add(bayram.group, bayram.mast);
+// 10 Kasım: anma köşesi, pankartlar, posterler (anma.js; yalnız o gün görünür).
+const anma = buildAnma(world, { flagTexture: flagTexture() });
+scene.add(anma.group);
 const clouds = buildClouds(world);
 const labels = buildLabels(world);
 scene.add(clouds, labels);
@@ -231,6 +235,7 @@ progress(0.86, residents.length ? "Sakinler evlerine yerleşiyor…" : "Ada ilk 
 await paint();
 const people = new People(world, residents, traffic);
 people.waiting = waiting;
+people.secim = secim; // 10 Kasım töreninde çelengi başkan taşır (seçim bittiyse)
 const stories = new Stories(people);
 people.stories = stories;
 const T8 = performance.now();
@@ -341,8 +346,8 @@ let realBase = performance.now() / 1000;
 // ?tarih=2026-10-29 (test): o günün aynı saatine (ya da ?saat'e) gider.
 const dateDay = dev && /^\d{4}-\d{2}-\d{2}$/.test(params.get("tarih") ?? "") ? Date.parse(params.get("tarih") + "T00:00:00Z") / 86400000 : null;
 if (dateDay != null) simBase += (dateDay - today) * 86400;
-const fixed = dev && params.get("saat")?.match(/^(\d{1,2}):(\d{2})$/);
-if (fixed) simBase = (dateDay ?? today) * 86400 - sim.TZ_OFFSET + Number(fixed[1]) * 3600 + Number(fixed[2]) * 60;
+const fixed = dev && params.get("saat")?.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+if (fixed) simBase = (dateDay ?? today) * 86400 - sim.TZ_OFFSET + Number(fixed[1]) * 3600 + Number(fixed[2]) * 60 + Number(fixed[3] ?? 0);
 // Fotoğraf modunda saat kaydırıcısı yalnız bakılan anı kaydırır (viewShift, saniye); çıkınca sıfırlanır.
 let viewShift = 0;
 const simNow = () => simBase + (performance.now() / 1000 - realBase) * speed + viewShift;
@@ -366,7 +371,7 @@ function flyTo(x, y, z, distance = 120, direction = null, sure = 1.3) {
 }
 
 const nameTags = new NameTags(scene);
-if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents, scene, zeplin, camera, controls, playgroundItems };
+if (params.has("denetle")) globalThis.__ada = { world, people, traffic, residents, scene, zeplin, camera, controls, playgroundItems, anma };
 const busColors = traffic.lines.map((l) => new THREE.Color(l.color));
 const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic, zeplin });
@@ -423,7 +428,7 @@ const anket = createAnket({ sayfa: menu.sayfa, today: () => sim.dayOf(simNow()),
 const flyToTheme = () => {
   const th = people.theme;
   if (!th) return;
-  const at = th.yer === "cami" ? world.workplaces.cami?.find(Boolean)?.door : th.id === "sinema" && people.cinema ? people.cinema.spot : world.placeOf(th.yer).anchors[0];
+  const at = th.at ?? (th.yer === "cami" ? world.workplaces.cami?.find(Boolean)?.door : th.id === "sinema" && people.cinema ? people.cinema.spot : world.placeOf(th.yer).anchors[0]);
   if (at) { menu.sayfa.close(); ui.close(); flyTo(at[0], Math.max(0, world.height(at[0], at[1])), at[1], 90); }
 };
 // Sekmeler: "yeni" noktası bu cihazda yapılmamış şeyler için (bugünün gazetesi, açık anket, saklı nesne...).
@@ -431,13 +436,13 @@ const seen = { get: (k) => { try { return localStorage.getItem(k); } catch { ret
 const todayKey = () => dateKey(sim.dayOf(simNow()));
 const anketAcik = () => {
   const t = sim.dayOf(simNow()), wd = sim.weekday(t + 1);
-  const temaAcik = !(wd === 5 || wd === 6 || (wd === 4 && world.workplaces.cami?.some(Boolean)));
+  const temaAcik = !(wd === 5 || wd === 6 || (wd === 4 && world.workplaces.cami?.some(Boolean)) || anmaOf(t + 1));
   return (temaAcik && !oylarim[`tema:${dateKey(t + 1)}`]?.benim) || !oylarim[`film:${weekKey(t)}`]?.benim;
 };
 menu.add({ icon: "kitap", label: "Gazete", badge: () => seen.get("gazete") !== todayKey(), run: () => {
   seen.set("gazete", todayKey());
   menu.sayfa.open("Mercanada Gazetesi", gazete({
-    residents, people, world, zeplin, today: () => sim.dayOf(simNow()), at: (r) => (r?.hidden ? "Gizli komşu" : "@" + (r?.handle ?? "?")),
+    residents, people, world, zeplin, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()), at: (r) => (r?.hidden ? "Gizli komşu" : "@" + (r?.handle ?? "?")),
     select: (i) => { menu.sayfa.close(); ui.select(i); }, flyToTheme,
     sakli: () => ({ ...hidden.info(), bulundu: hidden.found() }), tur: () => { menu.sayfa.close(); ui.close(); tour.start(); },
   }));
@@ -675,6 +680,7 @@ function adaptQuality(real) {
 }
 let lastSim = null;
 let zeplinNight = 0;
+let anmaGunu = false;
 const bounds = world.bounds;
 function tick() {
   const real = performance.now() / 1000;
@@ -695,7 +701,10 @@ function tick() {
   if (people.ball) ball.position.set(people.ball[0], world.groundY(people.ball[0], people.ball[1]) + people.ball[2], people.ball[1]);
   // Araçlar: sürülenler, park halindekiler ve otobüsler.
   // Trafik benzetimi (sakinlerin araç yolculukları people.update içinde istenir).
-  traffic.step(simDtSec, minute, day);
+  // 10 Kasım 09:05: saygı duruşunda araçlar durur (bir dakika).
+  const anmaEvre = anmaPhase(day, minute);
+  traffic.step(anmaEvre === "sukut" ? 0 : simDtSec, minute, day);
+  if (anmaOf(day) !== anmaGunu) { anmaGunu = anmaOf(day); zeplin?.setAnma?.(anmaGunu); }
   signals.userData.update(minute * 60);
   // Araçlar: yoldakiler, park halindekiler (farlar sönük) ve bekleyen taksiler.
   vehicles.begin();
@@ -755,7 +764,7 @@ function tick() {
   dollhouse.update(1 - light, real);
   vehicles.end();
   if (frame % 15 === 0) ui.tick(unix, minute, day, skyState.times);
-  if (frame % 8 === 0 && ambience.enabled) ambience.update(soundEnv(dist, light, minute));
+  if (frame % 8 === 0 && ambience.enabled) ambience.update({ ...soundEnv(dist, light, minute), anma: anmaEvre });
   driftClouds(clouds, dt);
   water.userData.tick(real);
   city.tick(real);
@@ -763,6 +772,7 @@ function tick() {
   beach.userData.tick?.(real);
   harbor.userData.setMinute(minute);
   bayram.update(day, minute, real, renderer.domElement.height / 900);
+  anma.update(day, minute, real, { karanfil: people.anmaKaranfil, celenk: people.anmaCelenkYeri, gece: 1 - light });
   fadeTrees(trees, dist);
   // Telefonda kart ekranın altını kapatır; görüntüyü yukarı kaydır.
   const cardOpen = !document.getElementById("card").hidden;

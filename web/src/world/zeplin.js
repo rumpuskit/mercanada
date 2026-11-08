@@ -8,6 +8,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { TZ_OFFSET } from "../sim.js";
+import { portre, zeplinAnmaTuvali } from "./anma.js";
 
 const L = 62, R = 8.1;
 const NAVY = "#1d3156", BELLY = "#28477a", CORAL = "#e9667f", CORAL_D = "#c84c66", PEARL = "#f6f4ef", TEAL = "#2f9c9a";
@@ -371,11 +372,20 @@ export class Zeplin {
     this.hullMat = new THREE.MeshStandardMaterial({ map: hullTex, roughness: 0.42, metalness: 0.04, emissive: "#ffffff", emissiveMap: glowTex, emissiveIntensity: 0 });
     const drawDefault = () => this._paint(defaultAd(3000, 1000));
     drawDefault();
-    document.fonts?.ready.then(() => { if (!this._custom) drawDefault(); });
+    document.fonts?.ready.then(() => { if (!this._custom && !this._anma) drawDefault(); });
+    // 10 Kasım (anma.js): yan yüzlerde "10 Kasım 1938 · 09.05 · Saygıyla anıyoruz"; ertesi gün reklam geri gelir.
+    this._anma = false;
+    this.setAnma = (on) => {
+      if (on === this._anma) return;
+      this._anma = on;
+      if (on) portre((img) => { if (this._anma) this._paint(zeplinAnmaTuvali(img)); });
+      else if (this._custom && this._img) this._paint(this._img);
+      else drawDefault();
+    };
     if (reklam) {
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.onload = () => { this._custom = true; try { this._paint(img); } catch (e) { console.warn("zeplin reklamı basılamadı", e); this._custom = false; drawDefault(); } };
+      img.onload = () => { this._custom = true; this._img = img; if (this._anma) return; try { this._paint(img); } catch (e) { console.warn("zeplin reklamı basılamadı", e); this._custom = false; drawDefault(); } };
       img.onerror = () => console.warn("zeplin reklamı yüklenemedi:", reklam);
       img.src = reklam;
     }

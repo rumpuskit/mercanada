@@ -132,6 +132,12 @@ const PROPS = {
     tint(new THREE.BoxGeometry(0.142, 0.205, 0.016).rotateY(0.12).translate(0.072, 0, 0.012), "#f4efe2"),
     tint(new THREE.BoxGeometry(0.008, 0.2, 0.02).translate(0, 0, 0.006), "#d9d0bc"),
   ]),
+  // Karanfil (10 Kasım): yeşil sap, kırmızı çiçek; elde dik tutulur.
+  karanfil: () => merge([
+    tint(new THREE.CylinderGeometry(0.005, 0.005, 0.32, 4).translate(0, 0.1, 0), "#3f7a35"),
+    tint(new THREE.IcosahedronGeometry(0.035, 0).scale(1, 0.8, 1).translate(0, 0.27, 0), "#c8101e"),
+    tint(new THREE.ConeGeometry(0.014, 0.04, 5).rotateX(Math.PI).translate(0, 0.24, 0), "#4b8a3f"),
+  ]),
   // Telefon: koyu gövde, bir yüzünde açık ekran (+z), kenarında kamera (−z yüzde).
   telefon: () => merge([
     tint(new THREE.BoxGeometry(0.072, 0.145, 0.012), "#1c1c22"),
@@ -395,6 +401,7 @@ export class Crowd {
         case "kitap": this._prop("kitap", this._joint(propM, handR, -0.12, -0.06, 0.06, -0.7)); break;
         // Ekran (+z) yüze dönük, telefon 45°'ye yakın eğik (−1,3'te dimdik, +1,6'da ekran karşıya bakıyordu).
         case "telefon": this._prop("telefon", this._joint(propM, handR, 0, -0.07, 0.03, -0.6)); break;
+        case "karanfil": this._prop("karanfil", this._joint(propM, handR, 0, -0.05, 0.02, -1.2)); break;
         case "fotograf": this._prop("fotograf", this._joint(propM, handR, -0.08, -0.06, 0.04, -1.57)); break;
         case "durbun": this._prop("durbun", this._joint(propM, handR, -0.09, -0.07, 0.05, -1.57)); break;
         case "gitar": this._prop("gitar", this._joint(propM, torso, 0.02, 1.12, 0.17, 0, 0, 1.15)); break;

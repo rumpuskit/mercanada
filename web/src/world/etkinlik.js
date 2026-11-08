@@ -9,6 +9,7 @@ import * as THREE from "three";
 import { roll, weekday } from "../sim.js";
 import { moonPhase, sunTimes } from "./sky.js";
 import { votedFilm, votedTheme } from "../tercih.js";
+import { anmaOf, anmaYeri } from "./anma.js";
 
 const frac = (n) => (n >>> 0) / 4294967296;
 
@@ -46,6 +47,8 @@ export const ETKINLIK = {
   kopek: { ad: "Köpeğini gezdiriyor", mode: "stroll", yer: "plaj", w: 0, kopek: 9, saat: (s, c) => s.bas >= c.sun.rise - 30 && s.bas < 1380 },
   sinema: { ad: "Plajda açık hava sinemasında", mode: "seat:sinema", yer: "plaj", w: 0, gerek: (c) => c.pools["seat:sinema"]?.length, saat: (s, c) => c.theme?.id === "sinema" && s.bas < c.theme.son - 30 && s.son > c.theme.bas + 20 },
   temizlik: { ad: "Sahil temizliğinde", mode: "cleanup", yer: "plaj", w: 0, saat: (s, c) => c.theme?.id === "temizlik" && s.bas < c.theme.son && s.son > c.theme.bas },
+  // 10 Kasım (anma.js): törenden sonra gün boyu anma köşesine karanfil bırakılır; ardından meydanda kalınır.
+  karanfil: { ad: "Anma köşesine karanfil bıraktı, meydanda", mode: "karanfil", yer: "meydan", w: 0, saat: (s, c) => c.theme?.id === "anma" && s.bas >= 562 && s.bas < 1410 },
 };
 const IDS = Object.keys(ETKINLIK);
 // Herkesin sevdiği üç etkinlik (yeri adada açıldıkça devreye girer): seçimde üç kat ağırlık.
@@ -67,6 +70,8 @@ export function favorites(seed) {
 export function dayTheme(day, world) {
   const wd = weekday(day);
   const sun = sunTimes(day);
+  // 10 Kasım: anma günü her şeyin önünde (oylama da yok; anket.js).
+  if (anmaOf(day)) return { id: "anma", ad: "10 Kasım: Atatürk'ü anıyoruz · saygı duruşu", yer: "meydan", at: anmaYeri(world).odak, bas: 545, son: 560, boost: { karanfil: 1 } };
   const has = (kind) => world.workplaces[kind]?.some(Boolean);
   if (wd === 4 && has("cami")) return { id: "cuma", ad: "Cuma namazı", yer: "cami", bas: 750, son: 830, boost: { cami: 45 } };
   if (wd === 5) return { id: "sinema", ad: "Plajda açık hava sineması", yer: "plaj", bas: 1230, son: 1365, boost: { sinema: 1 } };
@@ -106,6 +111,7 @@ export function chooseActivity(seed, day, k, seg, c, fav) {
     if (fav.includes(id)) w *= 3;
     w *= c.theme?.boost?.[id] ?? 1;
     if (id === "sinema" || id === "temizlik") w = c.theme?.boost?.[id] ? 40 : 0; // olay saatindeki herkesin çoğu katılır
+    if (id === "karanfil") w = c.theme?.id === "anma" ? 70 : 0; // anma günü çıkanların çoğu önce anma köşesine uğrar
     if (w <= 0) continue;
     opts.push([id, w]);
     total += w;

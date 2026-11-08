@@ -5,6 +5,7 @@
 import * as THREE from "three";
 import { FLAT_Y, FLOOR_H, unitLayout } from "./layout.js";
 import { binaBayragi } from "./city.js";
+import { mastFactor } from "./anma.js";
 
 const DAYS = [[4, 23], [5, 19], [8, 30], [10, 29]]; // [ay, gün]
 const FIREWORKS = { month: 10, day: 29, from: 20 * 60 + 30, to: 21 * 60 + 5 };
@@ -23,7 +24,7 @@ export function bayramOf(day) {
   return false;
 }
 
-function flagTexture() {
+export function flagTexture() {
   // Ölçüler TS 1 (Türk Bayrağı Kanunu) oranlarıyla: 1200×800 düzlemde ay ve yıldız.
   const c = document.createElement("canvas");
   c.width = 480; c.height = 320;
@@ -141,23 +142,43 @@ export function buildBayram(world) {
   const mast = new THREE.Group();
   const mastU = { uTime: { value: 0 } };
   const masts = world.features.filter((f) => f.type === "gonder").map((f) => ({ x: f.x, y: world.groundY(f.x, f.z), z: f.z, h: 12, r: 0.1 }));
+  // Yarıya indirilebilen bayraklar (10 Kasım, anma.js mastFactor): direğin dibi y0, tam çekilmişken tepe y1.
+  const inebilir = [];
+  const yariya = (mesh, list) => inebilir.push({ mesh, list });
   if (masts.length) {
     // Bayrak doğuya uzanır: geniş yüzü güneye, iskeleden gelenlere bakar.
-    const mflags = masts.map((o) => new THREE.Matrix4().compose(p.set(o.x, o.y + o.h - 0.15, o.z), q.identity(), sc.setScalar(3)));
-    mast.add(inst(flagGeo, waveMaterial(tex, 0.13, mastU), mflags));
+    const ml = masts.map((o) => ({ x: o.x, z: o.z, y0: o.y, y1: o.y + o.h - 0.15, rot: 0, w: 3 }));
+    const mflags = ml.map((o) => new THREE.Matrix4().compose(p.set(o.x, o.y1, o.z), q.identity(), sc.setScalar(o.w)));
+    const mm = inst(flagGeo, waveMaterial(tex, 0.13, mastU), mflags);
+    mast.add(mm);
+    yariya(mm, ml);
     mast.add(inst(poleGeo, poleMat, masts.map((o) => new THREE.Matrix4().compose(p.set(o.x, o.y, o.z), q.identity(), sc.set(o.r * 2, o.h, o.r * 2)))));
     mast.add(inst(knobGeo, new THREE.MeshStandardMaterial({ color: "#e8c35a", roughness: 0.3, metalness: 0.7 }), masts.map((o) => new THREE.Matrix4().compose(p.set(o.x, o.y + o.h + o.r * 1.6, o.z), q.identity(), sc.setScalar(o.r * 1.9)))));
   }
   // Resmî binaların direklerinde (belediye, karakol, adliye, muhtarlık; direk city.js'te) her gün dalgalanan bayrak,
   // binanın cephesi boyunca uzanır.
-  const binaFlags = [];
+  const binaFlags = [], bl = [];
   for (const b of world.buildings) {
     const f = binaBayragi(b);
     if (!f) continue;
     const lx = f.lx(b), lz = f.lz(b), c = Math.cos(b.rot), sn = Math.sin(b.rot);
-    put(binaFlags, b.x + lx * c + lz * sn, FLAT_Y + f.h - 0.1, b.z - lx * sn + lz * c, b.rot, f.w);
+    const o = { x: b.x + lx * c + lz * sn, z: b.z - lx * sn + lz * c, y0: FLAT_Y, y1: FLAT_Y + f.h - 0.1, rot: b.rot, w: f.w };
+    bl.push(o);
+    put(binaFlags, o.x, o.y1, o.z, o.rot, o.w);
   }
-  if (binaFlags.length) mast.add(inst(flagGeo, waveMaterial(tex, 0.1, mastU), binaFlags));
+  // Okul bahçesinin direği (city.js okul_bahce; bayrak artık burada, dalgalanan ve indirilebilen).
+  for (const f of world.features) {
+    if (f.type !== "okul_bahce") continue;
+    const y0 = FLAT_Y + 0.12, o = { x: f.x0 + 2, z: f.z0 + 1.5, y0, y1: y0 + 8.85, rot: -Math.PI / 2, w: 1.9 };
+    bl.push(o);
+    put(binaFlags, o.x, o.y1, o.z, o.rot, o.w);
+  }
+  if (binaFlags.length) {
+    const m = inst(flagGeo, waveMaterial(tex, 0.1, mastU), binaFlags);
+    mast.add(m);
+    yariya(m, bl);
+  }
+  let indirme = 1;
 
   let active = null;
   return {
@@ -167,6 +188,18 @@ export function buildBayram(world) {
     /** px: çizim tamponu yüksekliği / 900 (parçacıklar her çözünürlükte aynı büyüklükte görünsün). */
     update(day, minute, real, px = 1) {
       mastU.uTime.value = real;
+      // Yarıya indirme (10 Kasım): yarıda bayrağın tepesi direğin %55'inde.
+      const f = mastFactor(day, minute);
+      if (f !== indirme) {
+        indirme = f;
+        for (const { mesh, list } of inebilir) {
+          list.forEach((o, k) => {
+            q.setFromAxisAngle(UP, o.rot);
+            mesh.setMatrixAt(k, m4.compose(p.set(o.x, o.y0 + (o.y1 - o.y0) * (0.55 + 0.45 * f), o.z), q, sc.setScalar(o.w)));
+          });
+          mesh.instanceMatrix.needsUpdate = true;
+        }
+      }
       const on = bayramOf(day);
       if (on !== active) { group.visible = on; active = on; }
       if (!on) return;

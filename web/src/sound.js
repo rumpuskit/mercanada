@@ -1,6 +1,8 @@
 // Ortam sesleri: tamamı tarayıcıda Web Audio ile üretilir (kayıt dosyası yok, telif sorunu yok).
 // Dalga, rüzgâr, kalabalık uğultusu, çeşme, kuşlar, cırcır böcekleri, martılar, vapur düdüğü, trafik,
 // tribün. Her biri kameranın yakın olduğu yere göre açılıp kısılır; genel seviye bilerek kısıktır.
+// 10 Kasım 09:05 (anma.js): bir dakika siren (adanın her yerinde), vapur düdüğü uzun çalar, kalabalık susar,
+// kuşlar ve martılar susturulur; tören boyunca uğultu kısık.
 
 function noiseBuffer(ctx, seconds, color = "white") {
   const n = Math.floor(ctx.sampleRate * seconds);
@@ -83,6 +85,54 @@ export class Ambience {
     if (g) g.gain.setTargetAtTime(Math.max(0, v), this.ctx.currentTime, t);
   }
 
+  /**
+   * Hava ikaz sireni (10 Kasım 09:05, bir dakika düz ton): iki rotorlu sirenin kalın ve ince tonu, hafif dalgalanma,
+   * uzaktan geldiği için tepesi yumuşatılmış ve kısa yankılı. Açılışta devir alır, sonunda devir düşer.
+   */
+  _sirenAc(kalan = 60) {
+    if (this.siren) return;
+    const ctx = this.ctx, now = ctx.currentTime, end = now + Math.max(4, kalan);
+    const g = ctx.createGain(), lpf = ctx.createBiquadFilter(), yank = ctx.createDelay(0.5), yg = ctx.createGain();
+    lpf.type = "lowpass"; lpf.frequency.value = 2400;
+    yank.delayTime.value = 0.23; yg.gain.value = 0.28;
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.11, now + 3.5);
+    g.gain.setValueAtTime(0.11, end - 4);
+    g.gain.linearRampToValueAtTime(0, end);
+    const lfo = ctx.createOscillator(), lg = ctx.createGain();
+    lfo.frequency.value = 0.22; lg.gain.value = 6;
+    lfo.connect(lg);
+    const oscs = [];
+    for (const [f, tip, v] of [[415, "sawtooth", 0.5], [622, "sawtooth", 0.42], [830, "triangle", 0.25]]) {
+      const o = ctx.createOscillator(), og = ctx.createGain();
+      o.type = tip;
+      o.frequency.setValueAtTime(f * 0.45, now);
+      o.frequency.exponentialRampToValueAtTime(f, now + 3.2);
+      o.frequency.setValueAtTime(f, end - 4);
+      o.frequency.exponentialRampToValueAtTime(f * 0.5, end);
+      lg.connect(o.frequency);
+      og.gain.value = v;
+      o.connect(og); og.connect(lpf);
+      o.start(now); o.stop(end + 0.1);
+      oscs.push(o);
+    }
+    lfo.start(now); lfo.stop(end + 0.1);
+    lpf.connect(g); g.connect(this.out);
+    g.connect(yank); yank.connect(yg); yg.connect(this.out);
+    this.siren = { oscs, g, end };
+  }
+
+  _sirenKapat() {
+    if (!this.siren) return;
+    const now = this.ctx.currentTime;
+    if (this.siren.end > now + 4) {
+      this.siren.g.gain.cancelScheduledValues(now);
+      this.siren.g.gain.setTargetAtTime(0, now, 0.8);
+      for (const o of this.siren.oscs) o.stop(now + 4);
+    }
+    this.siren = null;
+  }
+
   /** Kısa sentez sesleri. */
   _bird(vol) {
     const ctx = this.ctx, now = ctx.currentTime;
@@ -131,9 +181,9 @@ export class Ambience {
     }
   }
 
-  _horn(vol) {
+  _horn(vol, d0 = 2.4) {
     const ctx = this.ctx, now = ctx.currentTime;
-    for (const [f, d] of [[110, 2.4], [165, 2.4]]) {
+    for (const [f, d] of [[110, d0], [165, d0]]) {
       const o = ctx.createOscillator(), g = ctx.createGain(), lpf = ctx.createBiquadFilter();
       o.type = "sawtooth"; o.frequency.value = f;
       lpf.type = "lowpass"; lpf.frequency.value = 600;
@@ -168,11 +218,25 @@ export class Ambience {
     if (!this.enabled || !this.ctx) return;
     const t = this.ctx.currentTime;
     const m = mixLevels(env, t);
+    // 10 Kasım töreni: toplanırken uğultu kısık, 09:04'ten sonra kimse konuşmaz.
+    const sus = { toplan: 0.45, sessiz: 0.05, sukut: 0, indir: 0.05, celenk: 0.12, sonra: 0.35 }[env.anma] ?? 1;
+    m.ch.crowd *= sus; m.ch.crowd2 *= sus;
+    if (env.anma === "sukut") { m.ch.traffic = 0; this._sirenAc(60 - ((env.minute % 1) * 60)); }
+    else this._sirenKapat();
+    if (env.anma === "sukut" && !this.vapurAnma && env.harbor < 900) {
+      // Vapur iskelede (09:05, dakika 0-7): uzun düdük, ardından ikinci uzun düdük.
+      this.vapurAnma = true;
+      const v = Math.max(0.35, 1 - env.harbor / 900);
+      this._horn(v, 6);
+      setTimeout(() => this.enabled && this._horn(v, 6), 7000);
+    }
+    if (env.anma !== "sukut") this.vapurAnma = false;
     for (const [name, v] of Object.entries(m.ch)) this._set(name, v, name === "seaWash" ? 0.6 : 0.35);
     const { prox, ear } = m;
     const near = (d, r) => Math.max(0, 1 - d / r);
     const now = this.ctx.currentTime;
-    if (now > this.next.bird && env.day > 0.5) {
+    const sukut = env.anma === "sukut";
+    if (now > this.next.bird && env.day > 0.5 && !sukut) {
       if (env.nature > 0 && Math.random() < 0.7) this._bird(env.nature * env.day * att(ear, 30));
       this.next.bird = now + 1.2 + Math.random() * 3.5;
     }
@@ -180,13 +244,13 @@ export class Ambience {
       if (env.nature > 0) this._cricket(env.nature * (1 - env.day) * att(ear, 30));
       this.next.cricket = now + 0.5 + Math.random() * 0.8;
     }
-    if (now > this.next.gull && env.harbor < 220 && env.day > 0.3) {
+    if (now > this.next.gull && env.harbor < 220 && env.day > 0.3 && !sukut) {
       this._gull(att(Math.hypot(env.harbor, ear), 60));
       this.next.gull = now + 6 + Math.random() * 14;
     }
     // Vapur düdüğü: her yarım saatte bir, limana yakınsan.
     const slot = Math.floor(env.minute / 30);
-    if (slot !== this.next.horn && env.minute % 30 < 0.6 && env.harbor < 600) {
+    if (slot !== this.next.horn && env.minute % 30 < 0.6 && env.harbor < 600 && !env.anma) {
       this.next.horn = slot;
       this._horn(near(env.harbor, 600) * (0.4 + 0.6 * prox));
     }

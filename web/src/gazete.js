@@ -2,6 +2,7 @@
 // Uydurma yok: her satır sitede doğrulanabilir; satıra dokununca kamera oraya/o sakine gider.
 import * as sim from "./sim.js";
 import { FERRY } from "./world/ferry.js";
+import { anmaOf } from "./world/anma.js";
 
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
 const DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
@@ -42,6 +43,18 @@ export function gazete(d) {
     b.addEventListener("click", () => d.flyToTheme());
     p.append(b, th.bas != null ? ` · ${sim.formatMinute(th.bas)}–${sim.formatMinute(th.son)}` : "");
     out.push(p);
+  }
+
+  // 10 Kasım: anma (yalnız gerçek veri: törendeki sakin sayısı, bırakılan karanfiller).
+  if (anmaOf(day)) {
+    const m = d.minute?.() ?? 0, yil = new Date(day * 86400000).getUTCFullYear() - 1938;
+    out.push(el("h3", "10 Kasım"));
+    out.push(el("p", `Mustafa Kemal Atatürk'ü aramızdan ayrılışının ${fmt.format(yil)}. yılında saygıyla anıyoruz.`));
+    out.push(el("p", m < 545
+      ? `Saat 09.05'te sirenler çalacak, ada bir dakika saygı duruşunda bulunacak; ardından bayraklar yarıya inecek ve anma köşesine çelenk konacak. Adada yaşayan ${fmt.format(residents.length)} kişinin hepsi meydandaki törende olacak.`
+      : `Saat 09.05'te sirenler çaldı, ada bir dakika saygı duruşunda bulundu. Adada yaşayan ${fmt.format(residents.length)} kişinin hepsi meydandaki törendeydi; bayraklar yarıya indi, anma köşesine çelenk kondu.`));
+    const k = people.anmaKaranfil ?? 0;
+    if (m >= 560) out.push(el("p", k ? `Törenden bu yana anma köşesine ${fmt.format(k)} karanfil bırakıldı.` : "Gün boyu anma köşesine karanfil bırakılacak."));
   }
 
   // Günün saklı nesnesi (ipucu bölge, bulunduysa söyler).

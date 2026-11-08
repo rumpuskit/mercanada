@@ -151,6 +151,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         const kim = pl.startsWith("mahalle:") ? "komşularıyla" : "arkadaşlarıyla";
         return `${yer}, ${near.length === 0 ? "tek başına" : near.length === 1 ? `${at(residents[near[0]])} ile` : kim}`;
       }
+      case "anma": return people.anmaTasiyan?.includes(i) ? "Atatürk'ü anma töreninde, çelengi taşıyor · Meydan" : "Atatürk'ü anma töreninde · Meydan";
       default: return seg.ne;
     }
   }
@@ -424,8 +425,8 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
   $("gunun").addEventListener("click", () => {
     const th = people.theme;
     if (!th) return;
-    const at = th.yer === "cami" ? world.workplaces.cami?.find(Boolean)?.door
-      : th.id === "sinema" && people.cinema ? people.cinema.spot : world.placeOf(th.yer).anchors[0];
+    const at = th.at ?? (th.yer === "cami" ? world.workplaces.cami?.find(Boolean)?.door
+      : th.id === "sinema" && people.cinema ? people.cinema.spot : world.placeOf(th.yer).anchors[0]);
     if (at) { close(); flyTo(at[0], Math.max(0, world.height(at[0], at[1])), at[1], th.id === "sinema" ? 45 : 90); }
   });
 
@@ -627,7 +628,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
         const key = `${th.id}|${th.ad}`;
         if (gun.dataset.key !== key) {
           gun.dataset.key = key;
-          const ic = { cuma: "cami", sinema: "kamera", pazar: "sepet", ucurtma: "dag", gunbatimi: "gunes", balik: "balik", temizlik: "dalga", yildiz: "ampul", tavla: "fincan", komsuluk: "mahalle" }[th.id] ?? "gunes";
+          const ic = { anma: "bayrak", cuma: "cami", sinema: "kamera", pazar: "sepet", ucurtma: "dag", gunbatimi: "gunes", balik: "balik", temizlik: "dalga", yildiz: "ampul", tavla: "fincan", komsuluk: "mahalle" }[th.id] ?? "gunes";
           gun.innerHTML = svg(ic);
           gun.append(`Bugün: ${th.ad}${th.bas != null ? ` · ${sim.formatMinute(th.bas)}` : ""}`);
           gun.title = gun.textContent;

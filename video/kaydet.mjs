@@ -21,6 +21,9 @@
 //            vapur iskelesinden (önü açık) zeplini izleyen sabit kamera. "isyeri:firin:0": o iş yerinin kapısı.
 //   serbest: true ise kamerayı site yönetir (ör. adres "bul=kullanici": sakini bulup izler, evdeyse içini açar)
 //   sakinYorunge: { yon: 1 | -1 } serbest + bul= ile: sakin dışarıdaysa kamera onun çevresinde döner ve yaklaşır
+//   etiketsiz: true ise sakinlerin ad etiketleri çizilmez (ör. 10 Kasım tören çekimleri)
+// efektler (senaryo): [{ dosya, bas (genel zaman, sn), ses?: dB }] konuşmanın altına karışan ses efektleri (efekt.mjs);
+//   varsayılan düzey konuşmanın ~9 dB altı, sınırlayıcıdan geçer.
 // Senaryo dosyası .mjs (default export) ya da .json olabilir (gunluk.mjs JSON yazar). olcek: 2 ise sayfa
 // yarı boyutta, iki kat piksel yoğunluğuyla çizilir: arayüz (kart, üst bilgi) videoda okunur boyutta görünür.
 import { chromium } from "playwright-core";
@@ -71,6 +74,9 @@ body.kart #card { display: block !important; }
 #kayit .alt-yazi { display: inline-block; margin-top: 18px; background: #e0607a; color: #fff; border-radius: 20px; padding: 12px 26px 15px;
   font-weight: 800; font-size: 46px; line-height: 1.2; }
 #kayit .alt-yazi small { font-size: 36px; font-weight: 700; opacity: 0.95; }
+/* "yas" (10 Kasım): siyah kutu, altın çizgili sade alt yazı. */
+#kayit .yazi.yas .kutu { background: rgba(8, 8, 10, 0.84); color: #f4f1ea; font-weight: 800; letter-spacing: 0; box-shadow: none; }
+#kayit .yazi.yas .alt-yazi { background: #111113; color: #efe8d8; border: 3px solid #b99a55; font-weight: 700; }
 #kayit .altyazi { position: absolute; left: 50%; top: 1215px; transform: translateX(-50%); width: 900px; text-align: center;
   color: #fff; font-weight: 900; font-size: 64px; line-height: 1.18; letter-spacing: -0.3px; white-space: pre-line; text-wrap: balance;
   -webkit-text-stroke: 12px #000; paint-order: stroke fill; text-shadow: 0 4px 14px rgba(0,0,0,.35); }
@@ -104,8 +110,9 @@ for (const [ci, shot] of S.cekimler.entries()) {
   await page.goto(`${base}?denetle&${shot.adres}`);
   await page.waitForFunction(() => globalThis.__ada?.ui, null, { timeout: 120000 });
   await page.addStyleTag({ content: CSS + (S.css ?? "") });
-  await page.evaluate(async ({ yazilar, arayuz, kart, olcek }) => {
+  await page.evaluate(async ({ yazilar, arayuz, kart, olcek, etiketsiz }) => {
     await document.fonts.ready;
+    if (etiketsiz) globalThis.__etiketsiz = true;
     document.documentElement.style.setProperty("--k", String(1 / olcek));
     if (arayuz) document.body.classList.add("arayuz");
     if (kart) document.body.classList.add("kart");
@@ -113,7 +120,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
     box.id = "kayit";
     for (const y of yazilar ?? []) {
       const d = document.createElement("div");
-      d.className = `yazi ${y.yer ?? "ust"}`;
+      d.className = `yazi ${y.yer ?? "ust"} ${y.stil ?? ""}`;
       d.innerHTML = `<div class="kutu">${y.metin}</div>${y.alt ? `<br><div class="alt-yazi">${y.alt}</div>` : ""}`;
       d.style.opacity = 0;
       box.append(d);
@@ -124,7 +131,7 @@ for (const [ci, shot] of S.cekimler.entries()) {
     // Altyazı bandı (top 1215 px, en çok iki satır): sitenin ad etiketleri bu banda konmaz (nametags.js).
     globalThis.__altyaziBandi = [1195 / 1920, 1400 / 1920];
     document.body.append(box);
-  }, { yazilar: shot.yazilar, arayuz: shot.arayuz, kart: shot.kart, olcek });
+  }, { yazilar: shot.yazilar, arayuz: shot.arayuz, kart: shot.kart, olcek, etiketsiz: !!shot.etiketsiz });
   // Dokular ve ilk kareler otursun, sonra sanal saate geç.
   await page.waitForTimeout(2500);
   await page.evaluate(() => window.__manual());
@@ -443,8 +450,10 @@ if (only == null || joinOnly) {
     const sik = `volume=${(-14 - (await olc(""))).toFixed(2)}dB,acompressor=threshold=-18dB:ratio=3:attack=5:release=80`;
     const kazanc = (-14 - (await olc(sik + ",")) + 0.3).toFixed(2);
     const input = ["-i", raw];
+    const ef = S.efektler ?? [];
+    const son = ef.length ? "[on]" : "[a]";
     if (!S.muzik) {
-      af += `;[ham]${sik},volume=${kazanc}dB,alimiter=limit=0.84:level=false:attack=2:release=60,aresample=48000[a]`;
+      af += `;[ham]${sik},volume=${kazanc}dB,alimiter=limit=0.84:level=false:attack=2:release=60,aresample=48000,aformat=channel_layouts=stereo${son}`;
     } else {
       // Müzik konuşmanın 14 dB altında (−28 LUFS; standart 12–15 dB), yumuşak giriş ve çıkışla; sonra ortak sınırlayıcı.
       const total = starts.at(-1) + S.cekimler.at(-1).sure;
@@ -458,7 +467,17 @@ if (only == null || joinOnly) {
       af += `;[ham]${sik},volume=${kazanc}dB,aresample=48000,aformat=channel_layouts=stereo[ko]`
         + `;[${parts.length + 1}:a]aresample=48000,aformat=channel_layouts=stereo,volume=${(-28 - mI).toFixed(2)}dB,apad,atrim=0:${total.toFixed(3)},`
         + `afade=t=in:d=0.6,afade=t=out:st=${(total - 1.8).toFixed(3)}:d=1.8[mz]`
-        + `;[ko][mz]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.84:level=false:attack=2:release=60[a]`;
+        + `;[ko][mz]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.84:level=false:attack=2:release=60${son}`;
+    }
+    if (ef.length) {
+      // Efektler (10 Kasım: siren, vapur düdüğü): genel zamandaki yerine gecikmeyle, konuşmanın altında; son sınırlayıcı.
+      const ilk = parts.length + 1 + (S.muzik ? 1 : 0);
+      ef.forEach((e, k) => {
+        input.push("-i", resolve(e.dosya));
+        const ms = Math.round(e.bas * 1000);
+        af += `;[${ilk + k}:a]aresample=48000,aformat=channel_layouts=stereo,volume=${e.ses ?? -11}dB,adelay=${ms}|${ms},apad[ef${k}]`;
+      });
+      af += `;[on]${ef.map((_, k) => `[ef${k}]`).join("")}amix=inputs=${ef.length + 1}:normalize=0:duration=first,alimiter=limit=0.84:level=false:attack=2:release=60[a]`;
     }
     audio = { input, filter: ";" + af, map: ["-map", "[a]", "-c:a", "aac", "-b:a", "192k", "-shortest"] };
   }

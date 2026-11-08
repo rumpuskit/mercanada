@@ -61,7 +61,8 @@ export class NameTags {
   update(camera, target, people, residents, selected, hide = null) {
     const camDist = camera.position.distanceTo(target);
     for (const s of this.sprites) s.visible = false;
-    if (camDist > SHOW_WITHIN) return;
+    // Video kaydı (__etiketsiz, ör. 10 Kasım tören çekimleri): ad etiketi yok.
+    if (camDist > SHOW_WITHIN || globalThis.__etiketsiz) return;
     const cx = camera.position.x, cy = camera.position.y, cz = camera.position.z;
     const near = [];
     const P = people.positions;

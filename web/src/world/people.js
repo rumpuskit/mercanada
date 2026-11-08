@@ -21,6 +21,7 @@ import { craneSeat, forkliftSeat, portMotion, shipWalkY, stackerSeat } from "./p
 import { pointAt } from "./traffic.js";
 import { playgroundItems } from "./layout.js";
 import * as P from "./palette.js";
+import { ANMA, KARANFIL_SURE, anmaFormation, anmaOf, anmaPlan, anmaYeri, karanfilYerleri } from "./anma.js";
 
 // Meslek kıyafetleri: işte ve işe gidip gelirken giyilir. top/bottom yoksa kişinin kendi giysisi; hat: başlık
 // (human.js EXTRAS). Ofis çalışanı, öğretmen, kütüphaneci, ressam gibi işlerde kıyafet serbest.
@@ -60,6 +61,7 @@ const uniformOf = (u) => u && {
 };
 const TEAM_COLORS = ["#c8312f", "#2f5fb5", "#1d1d22"].map((c) => new Color(c));
 const WHITE = new Color("#f4f4f2");
+const ANMA_KOYU = new Color("#24262c");
 // Sakin olmayan figürler (öğrenciler, parktaki çocuklar, pazarcılar...) adanın nüfusuyla orantılıdır:
 // 3.200 sakinde tam kalabalık, boş adada hiç. Her figür kendi tohumuyla seçilir; nüfus arttıkça yenileri eklenir,
 // var olanlar kaybolmaz.
@@ -436,6 +438,8 @@ export class People {
     for (const [bx, bz] of beach.filter((_, j) => j % 4 === 1)) picnic(bx, bz - 8, 8, 1, 53 + Math.round(bx));
     if (park) picnic((park.x0 + park.x1) / 2, (park.z0 + park.z1) / 2, 35, 6, 57);
     this.groupPools = groups;
+    // 10 Kasım: anma köşesinin önünde karanfil bırakma yerleri (anma.js).
+    for (const q of karanfilYerleri(w)) add("karanfil", q);
     this.pools = pools;
   }
 
@@ -466,6 +470,7 @@ export class People {
   /** Bir sakinin bir yerdeki modu: ne yapacak? */
   _mode(i, seg, k) {
     const s = this.residents[i].seed;
+    if (seg.ne === "anma") return "anma";
     if (seg.ne === "is") return `work:${this.works[i].wp.kind}:${this.works[i].wp.index}`;
     if (seg.ne === "hobi") {
       const mode = {
@@ -607,11 +612,26 @@ export class People {
       (this.override[q.i] ??= new Map()).set(q.k, yer);
       (this.acts[q.i] ??= new Map()).set(q.k, id);
     }
+    this.anmaZiyaret = [];
     for (const q of requests) {
       const { i, k, seg } = q;
       const s = this.residents[i].seed;
       let mode = q.mode;
       let role = { mode };
+      if (mode === "anma") { this.roles[i][k] = { mode, item: this.anmaSlot?.[i] ?? null }; continue; }
+      if (mode === "karanfil") {
+        // Anma köşesine karanfil: ilk dakikalar kürsünün önünde (yer sırayla paylaşılır), sonra meydanda sohbet.
+        const pool = this.pools.karanfil ?? [];
+        const st = roll(s, "karanfilYer", this.day) % Math.max(1, pool.length);
+        let item = null;
+        for (let n = 0; n < pool.length && !item; n++) {
+          const c = pool[(st + n) % pool.length];
+          if (free(c.busy, seg.bas - 0.5, seg.bas + KARANFIL_SURE + 0.5)) item = c;
+        }
+        if (item) { item.busy.push([seg.bas - 0.5, seg.bas + KARANFIL_SURE + 0.5]); this.anmaZiyaret.push(seg.bas + 1.6); }
+        role = { mode: "group:meydan", karanfil: item };
+        mode = "group:meydan";
+      }
       const pool = this.pools[mode] ?? (mode.startsWith("seat:") ? this.pools[mode] : null);
       if (pool?.length) {
         const start = roll(s, "yer" + mode, this.day) % pool.length;
@@ -669,6 +689,115 @@ export class People {
       if (q.act) role.act = q.act;
       this.roles[i][k] = role;
     }
+    this.anmaZiyaret.sort((a, b) => a - b);
+  }
+
+  /**
+   * 10 Kasım tören düzeni: herkesin sıradaki yeri (önde başkan ve muhtar çelenkle, ardından üniformalılar, öğretmenler,
+   * sağlıkçılar; gerisi kişiye göre karışık). Çelengi iki kişi taşır: başkan (seçim bittiyse) ve muhtar; yoksa
+   * sıradaki ilk iki kişi.
+   */
+  _anmaDuzen() {
+    const R = this.residents;
+    const baskan = this.secim && this.secim.durum !== "acik" ? this.secim.kazanan : null;
+    const oncelik = (i) => {
+      const r = R[i], j = this.works[i].job;
+      if (baskan && r.handle === baskan) return 0;
+      return { muhtar: 1, okul_muduru: 2, polis: 3, hakim: 4, savci: 4, ogretmen: 5, doktor: 6, hemsire: 6, fener_bekcisi: 7, zeplin_pilotu: 7, memur: 8 }[j] ?? 9;
+    };
+    const sira = R.map((_, i) => i).sort((a, b) => oncelik(a) - oncelik(b) || roll(R[a].seed, "anmaSira") - roll(R[b].seed, "anmaSira"));
+    const tasiyan = sira.filter((i) => oncelik(i) <= 2).slice(0, 2);
+    for (const i of sira) { if (tasiyan.length >= 2) break; if (!tasiyan.includes(i)) tasiyan.push(i); }
+    const yer = anmaYeri(this.world);
+    const [fx, fz] = yer.odak;
+    this.anmaTasiyan = tasiyan.length === 2 ? tasiyan : [];
+    this.anmaSlot = new Array(this.n).fill(null);
+    // Taşıyanlar ön sıranın önünde, aralarında çelenk (1,4 m).
+    this.anmaTasiyan.forEach((i, k) => {
+      const x = fx + (k ? 0.7 : -0.7), z = fz + 5.4;
+      this.anmaSlot[i] = { x, z, heading: Math.atan2(fx - x, fz - z), tasiyan: k };
+    });
+    const dizi = anmaFormation(this.world, this.n);
+    let d = 0;
+    for (const i of sira) if (!this.anmaSlot[i]) this.anmaSlot[i] = dizi[d++] ?? dizi[dizi.length - 1] ?? null;
+    // Resmî giyim: polis, muhtar, okul müdürü, hâkim, savcı, pilot, fener bekçisi üniformalarıyla gelir.
+    const resmi = new Set(["polis", "muhtar", "okul_muduru", "hakim", "savci", "zeplin_pilotu", "fener_bekcisi", "memur", "avukat"]);
+    this.anmaResmi = R.map((r) => resmi.has(dreamJob(r).id));
+    this.anmaYer = yer;
+  }
+
+  /** Tören duruşu (sakinler ve okul bahçesindeki öğrenciler): evreye göre. look: gönderin başa göre açısı. */
+  _anmaDurus(p, minute, t, ph, talk, look) {
+    if (minute < ANMA.sessiz) {
+      idleGesture(p, t, ph, talk);
+      p.headYaw *= 0.5;
+    } else if (minute < ANMA.sukut) {
+      // Konuşmalar kesilir: dimdik, öne bakar.
+      p.shL = p.shR = 0.04; p.elL = p.elR = 0.1;
+    } else if (minute < ANMA.sukutSon) {
+      // Saygı duruşu: kıpırtı yok, baş hafif önde, kollar yanlarda.
+      p.headPitch = 0.26; p.shL = p.shR = 0; p.abL = p.abR = 0.02; p.elL = p.elR = 0.05; p.kneeL = p.kneeR = 0.03;
+    } else if (minute < ANMA.indirSon + 0.25) {
+      // Bayraklar yarıya inerken gözler gönderde.
+      p.headYaw = Math.max(-1.0, Math.min(1.0, look)); p.headPitch = -0.38; p.shL = p.shR = 0.02; p.elL = p.elR = 0.08;
+    } else {
+      idleGesture(p, t, ph, false);
+      p.headYaw *= 0.4;
+    }
+  }
+
+  /** Törendeki sakin: sıradaki yerinde; çelengi taşıyanlar 09:09'da portrenin önüne yürüyüp çelengi koyar. */
+  _anmaState(i, minute, t, p, it, ph, stand) {
+    if (!it) return false;
+    const [gx, gz] = this.anmaYer.gonder;
+    stand(it.x, it.z, it.heading);
+    let look = Math.atan2(gx - it.x, gz - it.z) - it.heading;
+    look = Math.atan2(Math.sin(look), Math.cos(look));
+    this._anmaDurus(p, minute, t, ph, roll(this.residents[i].seed, "anmaKonus") % 4 === 0, look);
+    p.dog = true;
+    if (it.tasiyan == null) return true;
+    const q = this._tasiyanYeri(it.tasiyan, minute), kk = p.height / 1.75;
+    if (q.durum !== "bekle") {
+      resetPose(p); p.height = kk * 1.75;
+      stand(q.x, q.z, q.heading);
+      if (q.durum === "yuru") walkPose(p, (q.d / (0.72 * kk)) * Math.PI);
+      else if (q.durum === "koy") { const e = Math.sin(Math.min(1, q.u * 1.4) * Math.PI); p.lean = 0.45 * e; p.kneeL = p.kneeR = 0.3 * e; }
+      else if (q.durum === "saygi") { p.headPitch = 0.3; p.elL = p.elR = 0.05; }
+    }
+    if (q.elde || q.durum === "koy") { p.shL = p.shR = q.durum === "koy" ? 0.95 : 0.6; p.elL = p.elR = 0.55; p.abL = p.abR = -0.05; }
+    return true;
+  }
+
+  /** Çelenk taşıyan k (0 sol, 1 sağ): dakikaya göre yeri ve durumu (09:09'dan saniye saniye). */
+  _tasiyanYeri(k, minute) {
+    const it = this.anmaSlot[this.anmaTasiyan[k]], side = k ? 1 : -1;
+    const [cx, cz] = this.anmaYer.celenk;
+    const hx = cx + side * 0.72, hz = cz + 0.85, v = 0.55;
+    const L = Math.hypot(hx - it.x, hz - it.z), yuru = L / v;
+    const sec = (minute - ANMA.celenk) * 60;
+    const ara = (u) => ({ x: it.x + (hx - it.x) * u, z: it.z + (hz - it.z) * u });
+    if (sec < 0) return { x: it.x, z: it.z, heading: it.heading, elde: true, durum: "bekle" };
+    if (sec < yuru) return { ...ara(sec / yuru), heading: Math.atan2(hx - it.x, hz - it.z), elde: true, durum: "yuru", d: sec * v };
+    if (sec < yuru + 6) return { x: hx, z: hz, heading: Math.PI, elde: sec < yuru + 3.5, durum: "koy", u: (sec - yuru) / 6 };
+    if (sec < yuru + 36) return { x: hx, z: hz, heading: Math.PI, elde: false, durum: "saygi" };
+    if (sec < 2 * yuru + 36) { const u = (sec - yuru - 36) / yuru; return { ...ara(1 - u), heading: Math.atan2(it.x - hx, it.z - hz), elde: false, durum: "yuru", d: (sec - yuru - 36) * v }; }
+    return { x: it.x, z: it.z, heading: it.heading, elde: false, durum: "bekle" };
+  }
+
+  /** Törende konan çelengin o anki yeri: false (henüz yok), null (sehpada) ya da {x, y, z, heading} (elde). */
+  _anmaCelenk(minute) {
+    if (!this.anma) return null;
+    if (this.anmaTasiyan?.length !== 2) return minute < ANMA.celenk + 0.2 ? false : null;
+    if (minute < ANMA.toplan) return false;
+    const a = this._tasiyanYeri(0, minute), b = this._tasiyanYeri(1, minute);
+    if (!a.elde && a.durum !== "koy") return null;
+    const h = (a.heading + b.heading) / 2;
+    const x = (a.x + b.x) / 2 + Math.sin(h) * 0.32, z = (a.z + b.z) / 2 + Math.cos(h) * 0.32;
+    const held = { x, y: this.world.groundY(x, z) + 1.0, z, heading: 0 };
+    if (a.durum !== "koy") return held;
+    const [cx, cz] = this.anmaYer.celenk, u = Math.min(1, a.u * 6 / 3.5), e = u * u * (3 - 2 * u);
+    const sy = this.world.groundY(cx, cz) + 1.05;
+    return { x: held.x + (cx - held.x) * e, y: held.y + (sy - held.y) * e, z: held.z + (cz - held.z) * e, heading: 0 };
   }
 
   /** Günün maç saatleri: her akşam 19:30, hafta sonu ayrıca 15:00. */
@@ -724,6 +853,12 @@ export class People {
     if (day === this.day) return;
     this.day = day;
     this.plans = this.residents.map((r) => dayPlan(r, day));
+    // 10 Kasım (anma.js): herkes 08:45–09:20 meydandaki törende; yalnız sitede (sunucu planı aynı kalır).
+    this.anma = anmaOf(day);
+    if (this.anma) {
+      this.plans = this.plans.map((plan, i) => anmaPlan(plan, 15 + (roll(this.residents[i].seed, "yol") % 20)));
+      this._anmaDuzen();
+    }
     // Evden çalışanlar bugün mesaide mi (ev etkinliği "çalışma" olur).
     this.homeWork = this.residents.map((r, i) => this.works[i].job === "uzaktan" && worksOn(r, day));
     this.dogs = this.residents.map((r) => pet(r, day) === "Köpek");
@@ -1085,6 +1220,25 @@ export class People {
     const sec = minute * 60;
     const at = this._at;
     const stand = (x, z, heading) => { p.x = x; p.z = z; p.heading = heading; p.y = w.groundY(x, z); };
+    if (role.mode === "anma") return this._anmaState(i, minute, t, p, role.item, ph, stand);
+    if (role.karanfil) {
+      // Karanfil: kürsünün önünde durur, eğilip bırakır, bir süre başı önde bekler; sonra meydandaki yerine yürür.
+      const it = role.karanfil, u = minute - seg.bas;
+      if (u < KARANFIL_SURE) {
+        stand(it.x, it.z, it.look);
+        if (u < 1.2) { p.props = ["karanfil"]; p.shR = 0.55; p.elR = 1.0; }
+        else if (u < 1.7) { const e = Math.sin(((u - 1.2) / 0.5) * Math.PI); p.lean = 0.75 * e; p.kneeL = p.kneeR = 0.5 * e; p.shR = 0.9 + 0.4 * e; p.elR = 0.2; if (u < 1.45) p.props = ["karanfil"]; }
+        else { p.headPitch = 0.3; p.shL = p.shR = 0; p.elL = p.elR = 0.08; }
+        return true;
+      }
+      const g = role.group;
+      if (g && u < KARANFIL_SURE + 0.6) {
+        const v = (u - KARANFIL_SURE) / 0.6, x = it.x + (g.x - it.x) * v, z = it.z + (g.z - it.z) * v;
+        stand(x, z, Math.atan2(g.x - it.x, g.z - it.z));
+        walkPose(p, (Math.hypot(x - it.x, z - it.z) / (0.72 * kk)) * Math.PI);
+        return true;
+      }
+    }
     const pingPong = (pts, speed, offset = 0) => {
       const lens = lengths(pts);
       const L = lens[lens.length - 1];
@@ -1915,6 +2069,16 @@ export class People {
   /** Sakinlerin konumlarını verilen dakikaya göre günceller ve çizim listesini kurar. */
   update(minute, time) {
     this.cinema?.update(this.theme, minute, time, this.day);
+    if (this.anma) {
+      // Anma köşesi (anma.js): törende konan çelengin yeri ve şu ana dek bırakılan karanfiller.
+      this.anmaCelenkYeri = this._anmaCelenk(minute);
+      const z = this.anmaZiyaret ?? [];
+      let n = this._kSay ?? 0;
+      if (n > z.length || (n > 0 && z[n - 1] > minute)) n = 0;
+      while (n < z.length && z[n] <= minute) n++;
+      this._kSay = n;
+      this.anmaKaranfil = n;
+    }
     const crowd = this.crowd, at = this._at;
     const w = this.world;
     this.openDoors.clear();
@@ -1970,7 +2134,7 @@ export class People {
           continue;
         }
         if (!this._placeState(i, k, minute, time, p)) { this.visible[i] = 0; continue; }
-        atWork = seg.ne === "is";
+        atWork = seg.ne === "is" || (seg.ne === "anma" && !!this.anmaResmi?.[i]);
         p.phase = time * 2;
       }
       p.atWork = atWork;
@@ -2045,7 +2209,8 @@ export class People {
       const u = p.atWork ? c.uniform : null;
       p.style = u?.hat ? HAT_HAIR[c.style] ?? c.style : c.style; p.skin = c.skin; p.hairColor = c.hairColor;
       p.beard = c.beard; p.glasses = c.glasses;
-      p.top = u ? u.top : c.top;
+      // 10 Kasım: sakinler koyu renk giyinmiş (yas günü), üniformalılar üniformalı.
+      p.top = u ? u.top : this.anma ? (c.anmaTop ??= c.top.clone().lerp(ANMA_KOYU, 0.55)) : c.top;
       p.bottom = u?.bottom ?? c.bottom;
       p.hat = u?.hat ?? null; p.hatColor = u?.hatColor ?? null;
       if (u?.sleeves != null) p.sleeves = u.sleeves;
@@ -2100,7 +2265,28 @@ export class People {
     // ve öğle arası) okul bahçesinde koşar, top oynar, sohbet eder; ders saatinde içeridedirler.
     // Okul günü: hafta içi ve resmî tatil değil (tatilde parklar hafta sonu gibi açık).
     const wd = (this.day + 3) % 7, schoolDay = wd < 5 && !isHoliday(this.day);
-    const recess = schoolDay && minute >= 520 && minute < 920 && (minute % 60 >= 50 || (minute >= 720 && minute < 760));
+    // 10 Kasım: 08:50–09:25 öğrenciler bahçede bayrağa dönük sıralarda; tören adayla aynı anda.
+    const okulAnma = schoolDay && this.anma && minute >= 530 && minute < 565;
+    const recess = !okulAnma && schoolDay && minute >= 520 && minute < 920 && (minute % 60 >= 50 || (minute >= 720 && minute < 760));
+    if (okulAnma) {
+      const v = (this._kidPose ??= {});
+      for (const [si, sch] of (this.world.schools ?? []).entries()) {
+        const fx = sch.x0 + 2, fz = sch.z0 + 1.5; // bahçenin bayrak direği
+        for (let k = 0; k < 28; k++) {
+          const seed = si * 97 + k, ph = seed * 1.37;
+          if (!keepExtra(this.lively, seed * 3 + 1)) continue;
+          resetPose(v);
+          v.height = 1.18 + (seed % 7) * 0.04; v.t = time;
+          // Yedişerli dört sıra, bahçenin ortasında; yüzleri direğe.
+          const row = Math.floor(k / 7), col = k % 7;
+          v.x = sch.x0 + 7 + col * 1.1; v.z = sch.z0 + 4.5 + row * 1.3; v.y = this.world.groundY(v.x, v.z);
+          v.heading = Math.atan2(fx - v.x, fz - v.z);
+          this._anmaDurus(v, minute, time, ph, seed % 5 === 0, 0);
+          Object.assign(v, { style: seed % 2, skin: P.SKIN[seed % P.SKIN.length], hairColor: P.HAIR[(seed * 3) % P.HAIR.length], top: SCHOOL_TOPS[seed % 3], bottom: P.BOTTOMS[1], sleeves: true, beard: false, glasses: seed % 9 === 0 });
+          crowd.add(-1, v);
+        }
+      }
+    }
     if (recess) {
       const v = (this._kidPose ??= {});
       for (const [si, sch] of (this.world.schools ?? []).entries()) {
