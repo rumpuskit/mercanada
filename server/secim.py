@@ -200,7 +200,11 @@ def yorumlar(items: list, hesap: str | None, db: str = DB) -> dict:
             continue
         c = cozumle(it[3])
         if c.get("oy") == KENDI:
-            c["oy"] = handle
+            # Kendine oy yalnız aday olan (ya da aynı yorumda aday olan) için anlamlı.
+            if handle in aday_adlari or c.get("aday"):
+                c["oy"] = handle
+            else:
+                c.pop("oy")
         elif not c and (hedef := oy_niyeti(it[3], handle, aday_adlari, isimler)):
             c = {"oy": hedef}
         if c.get("aday"):
