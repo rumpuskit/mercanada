@@ -67,7 +67,7 @@ ETIKET = re.compile(r"@([A-Za-z0-9._]{2,24})")
 # "@" unutulmuş oy: yorumun tamamı "oy:kullaniciadi" (iki nokta şart; "oyum yok" oy değil).
 OY_DUZ = re.compile(r"^\s*oy\w*\s*:\s*([A-Za-z0-9._]{2,24})\s*$", re.I)
 # "Kendime oy veriyorum": yazanın kendisine oy (yorumlar() yazanın adıyla değiştirir).
-KENDIME = re.compile(r"\bkendi(?:me|mize)\b(?: \w+){0,2} oy")
+KENDIME = re.compile(r"\bkendi(?:me|mize)\b(?: \w+){0,2} (?:oy|veri)")
 KENDI = "__kendi__"
 # Yorumun tamamı bir adayın kullanıcı adı ("exo45526", "@exo45526"): yalnız o ad gerçekten adaysa oy sayılır.
 YALIN = re.compile(r"^@?([A-Za-z0-9._]{2,24})$")
@@ -90,8 +90,10 @@ def cozumle(text: str) -> dict:
         out["oy"] = sim.normalize_handle(d.group(1).rstrip("."))
     elif KENDIME.search(t):
         out["oy"] = KENDI
-    elif ADAY.search(t) or TAM_ADAY.match(t):
-        out["aday"] = True
+    # Aynı yorum hem adaylık hem kendine oy olabilir ("adayım, kendime veriyorum").
+    if ADAY.search(t) or TAM_ADAY.match(t):
+        if out.get("oy") in (None, KENDI):
+            out["aday"] = True
     return out
 
 
@@ -138,7 +140,7 @@ def yorumlar(items: list, hesap: str | None, db: str = DB) -> dict:
             c = {"oy": sim.normalize_handle(b.group(1).rstrip("."))}
         if c.get("aday"):
             adaylar.append([handle, it[2]])
-        elif c.get("oy"):
+        if c.get("oy"):
             oylar.append([handle, c["oy"], it[2]])
     veri = json.dumps({"a": adaylar, "o": oylar})
     # Aday ve seçmen adada oturmalı. Aday kaydı ilk yazılanla kalır; oyda en son yazılan geçer.
