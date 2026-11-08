@@ -186,7 +186,7 @@ class TasinmaTest(unittest.TestCase):
         code, out = self.send({"tur": "yorumlar", "yorumlar": [
             ["b3", "k020", t, "@Ömerr", "x"], ["b4", "k021", t, "Taraftar çıldırdı @Ömerr başkan olucak", "y"],
             ["b5", "k022", t, "@k0012", "z"], ["b6", "k023", t, "k012 başkan olsun", "w"],
-            ["b7", "k024", t, "oyun güzel @Ömerr"], ["b8", "k011", t, "@Ömerr", "Ömerr"]]})
+            ["b7", "k024", t, "@Ömerr oyundaki karakterin bence çok güzel olmuş"], ["b8", "k011", t, "@Ömerr", "Ömerr"]]})
         self.assertEqual(out["secim"]["oy"], 4, out)  # b7 (oyun) ve b8 (kendini etiketleme) sayılmaz
         self.assertEqual(dict(self.published()["secim"]["adaylar"]), {"k011": 2, "k012": 2})
 
