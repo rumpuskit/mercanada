@@ -200,7 +200,7 @@ export function resetPose(p) {
   p.hipL = 0; p.hipR = 0; p.kneeL = 0.05; p.kneeR = 0.05;
   p.shL = 0; p.shR = 0; p.abL = 0; p.abR = 0; p.elL = 0.12; p.elR = 0.12;
   p.props = null; p.moving = false; p.radius = 0.32; p.dog = false; p.door = null;
-  p.inVehicle = false; p.vehicleKey = null; p.waiting = false;
+  p.inVehicle = false; p.vehicleKey = null; p.waiting = false; p.anma = false;
 }
 
 /** Yürüyüş: φ adım evresi; koşu için run = 1. Topuk vuruşu, kalça salınımı, kol sallama. */
@@ -754,7 +754,8 @@ export class People {
     let look = Math.atan2(gx - it.x, gz - it.z) - it.heading;
     look = Math.atan2(Math.sin(look), Math.cos(look));
     this._anmaDurus(p, minute, t, ph, roll(this.residents[i].seed, "anmaKonus") % 4 === 0, look);
-    p.dog = true;
+    // Sıralar sık (0,82 m): köpek ve robot yanındakinin içine giriyordu (8 Kasım denetimi); törende çizilmez.
+    p.dog = false; p.anma = true;
     if (it.tasiyan == null) return true;
     const q = this._tasiyanYeri(it.tasiyan, minute), kk = p.height / 1.75;
     if (q.durum !== "bekle") {
@@ -856,7 +857,7 @@ export class People {
     // 10 Kasım (anma.js): herkes 08:45–09:20 meydandaki törende; yalnız sitede (sunucu planı aynı kalır).
     this.anma = anmaOf(day);
     if (this.anma) {
-      this.plans = this.plans.map((plan, i) => anmaPlan(plan, 15 + (roll(this.residents[i].seed, "yol") % 20)));
+      this.plans = this.plans.map((plan, i) => anmaPlan(plan, 15 + (roll(this.residents[i].seed, "yol") % 20), roll(this.residents[i].seed, "anmaVaris") % 17));
       this._anmaDuzen();
     }
     // Evden çalışanlar bugün mesaide mi (ev etkinliği "çalışma" olur).
@@ -2232,7 +2233,7 @@ export class People {
         }
         if (w.isWalkable(x, z)) crowd.addDog(x, w.groundY(x, z), z, p.heading + (p.moving ? 0 : 0.6), (p.phase ?? 0) * 1.6, DOG_COLORS[this.residents[i].seed % DOG_COLORS.length], !!p.moving, time, this.residents[i].seed % 97, i);
       }
-      if (this.robots[i] && !p.indoor) {
+      if (this.robots[i] && !p.indoor && !p.anma) {
         // Robot sahibinin sol omzunun biraz gerisinde süzülür; orası yol ya da yürünmez yerse sağda, olmazsa arkada.
         const fx = Math.sin(p.heading), fz = Math.cos(p.heading), sx = Math.cos(p.heading), sz = -Math.sin(p.heading);
         let x = p.x - sx * 0.7 - fx * 0.25, z = p.z - sz * 0.7 - fz * 0.25;

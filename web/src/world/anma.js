@@ -99,11 +99,12 @@ export function anmaFormation(world, n) {
 
 /** Karanfil bırakma yerleri: kürsünün önünde, portreye dönük (aynı anda en çok 9 ziyaretçi). */
 export function karanfilYerleri(world) {
+  // Ön sıra çelenk sehpasının (orta) iki yanında, arka sıra aralarda; basamaktaki mumlardan ≥0,8 m, kürsü köşesindeki
+  // projektörlerden ≥1 m uzak (8 Kasım denetimi: eski yerlerin ikisi projektörün, arka sıra mumların üstündeydi).
   const out = [];
-  const z0 = KOSE.z + KURSU.d / 2 + 0.75;
-  for (let r = 0; r < 2; r++) for (let k = 0; k < (r ? 4 : 5); k++) {
-    const x = KOSE.x + (k - (r ? 1.5 : 2)) * 0.95 + (r ? 0 : 0), z = z0 + 0.35 + r * 0.9;
-    if (Math.abs(x - KOSE.x) < 0.6 && r === 0) continue; // ortası çelenk ayağının önü
+  const z0 = KOSE.z + KURSU.d / 2;
+  for (const [dx, dz] of [[-0.95, 1.3], [0.95, 1.3], [-1.9, 1.3], [1.9, 1.3], [-0.5, 2.2], [0.5, 2.2], [-1.45, 2.2], [1.45, 2.2]]) {
+    const x = KOSE.x + dx, z = z0 + dz;
     out.push({ x, z, heading: Math.PI, look: Math.atan2(KOSE.x - x, KOSE.z - z) });
   }
   return out;
@@ -113,8 +114,9 @@ export function karanfilYerleri(world) {
  * Tören planı (yalnız sitede): sakin 08:45'e kadar meydana gelir, 09:20'ye dek törende kalır, sonra kendi gününe
  * (o anda olacağı yere) döner. Yolculuktaysa yolculuğun başladığı yerden doğrudan meydana gider.
  */
-export function anmaPlan(plan, commute) {
-  const T0 = ANMA.toplan, T1 = ANMA.dagil;
+export function anmaPlan(plan, commute, erken = 0) {
+  // erken (dk): kişiye göre 0–16 dk erken varış (8 Kasım denetimi: herkes 08:43'te yola çıkıp meydan son iki dakikada doluyordu).
+  const T0 = ANMA.toplan - erken, T1 = ANMA.dagil;
   const leave = T0 - commute;
   const out = [];
   let i = 0;
@@ -327,7 +329,8 @@ export function buildAnma(world, { flagTexture } = {}) {
     }
     return c;
   };
-  for (const sx of [-1, 1]) ayakli(KOSE.x + sx * 2.05, KOSE.z + 0.15, top, 1.75);
+  // Kürsünün iki ön köşesinde, yerde (8 Kasım denetimi: kürsünün üstündeyken saçaklı bayrakların önüne biniyordu).
+  for (const sx of [-1, 1]) { const x = KOSE.x + sx * (KURSU.w / 2 + 0.6), z = KOSE.z + 0.7; ayakli(x, z, world.groundY(x, z), 1.5); }
   // Törende konan çelenk (kürsünün önündeki sehpaya; konana dek taşıyanların elinde, people.js anmaCelenk).
   const [cx, cz] = anmaYeri(world).celenk;
   const sehpaY = world.groundY(cx, cz);
@@ -379,8 +382,11 @@ export function buildAnma(world, { flagTexture } = {}) {
   // Mumlar (gün batımından gece yarısına): kürsünün önünde iki sıra, kırmızı camlı.
   const mum = new THREE.Group();
   const mumlar = [];
-  for (let k = 0; k < 36; k++) {
-    const row = k % 2, x = KOSE.x + ((Math.floor(k / 2) - 8.5) / 8.5) * (KURSU.w / 2 + 0.6), z = KOSE.z + KURSU.d / 2 + 1.6 + row * 0.45 + 0.25 * Math.cos(x * 0.7);
+  // Basamağın üstünde bir sıra, basamağın önündeki zeminde (çelenk sehpasının iki yanında) bir sıra.
+  const basamakY = gy + 0.15;
+  for (let k = 0; k <= 16; k++) { const x = KOSE.x - 2.4 + k * 0.3; mumlar.push([x, basamakY, KOSE.z + KURSU.d / 2 + 0.24]); }
+  for (let k = 0; k < 12; k++) {
+    const sx = k < 6 ? -1 : 1, x = KOSE.x + sx * (0.65 + (k % 6) * 0.33), z = KOSE.z + KURSU.d / 2 + 0.62;
     mumlar.push([x, world.groundY(x, z), z]);
   }
   const cam = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.045, 0.04, 0.1, 8), new THREE.MeshStandardMaterial({ color: "#b0141c", roughness: 0.25, transparent: true, opacity: 0.8, emissive: "#ff3a1a", emissiveIntensity: 0.6 }), mumlar.length);
@@ -398,7 +404,7 @@ export function buildAnma(world, { flagTexture } = {}) {
   // Projektörler: kürsünün önünde iki kutu, gece portreye ışık konisi.
   const isik = new THREE.Group();
   for (const sx of [-1, 1]) {
-    const x = KOSE.x + sx * 1.9, z = KOSE.z + KURSU.d / 2 + 0.9, y = world.groundY(x, z);
+    const x = KOSE.x + sx * (KURSU.w / 2 - 0.25), z = KOSE.z + KURSU.d / 2 + 0.35, y = world.groundY(x, z);
     add(new THREE.BoxGeometry(0.3, 0.22, 0.3), std("#222226", { metalness: 0.5, roughness: 0.4 }), x, y + 0.11, z);
     // Projektörün ışığı: önündeki küçük parlak cam (ışın konisi çizilmez; sissiz havada görünmez).
     const cam = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.14), new THREE.MeshBasicMaterial({ color: "#fff4d6", toneMapped: false }));
