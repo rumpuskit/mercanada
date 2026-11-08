@@ -40,7 +40,7 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              # Olmayan meslekler: en yakını (cevapta söylenir)
              "komiser": "polis", "komser": "polis", "asker": "polis", "subay": "polis", "veteriner": "doktor",
              "pilot": "zeplin_pilotu", "cerrah": "doktor",
-             "yargic": "hakim", "insaatci": "mimar"}
+             "yargic": "hakim", "insaatci": "mimar", "balik ci": "balikci"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",

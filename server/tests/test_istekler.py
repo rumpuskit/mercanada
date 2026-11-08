@@ -63,6 +63,7 @@ class CozumleTest(unittest.TestCase):
             "ben subay olabilir miyim": {"meslek": "polis"},
             "meslek asker": {"meslek": "polis"},
             "veteriner": {"meslek": "doktor"},
+            "abla balık çı olmak istiyorum": {"meslek": "balikci"},
             "Evcil hayvan =muhabbet kuşu": {"evcil": "Papağan"},
             "ben oliyim asker": {"meslek": "polis"},
             "Meslek:yargıç": {"meslek": "hakim"},
