@@ -66,6 +66,11 @@ OY = re.compile(r"\boy(?:um|umu|u|lar|larimi|umuz)?\b")
 ETIKET = re.compile(r"@([A-Za-z0-9._]{2,24})")
 # "@" unutulmuş oy: yorumun tamamı "oy:kullaniciadi" (iki nokta şart; "oyum yok" oy değil).
 OY_DUZ = re.compile(r"^\s*oy\w*\s*:\s*([A-Za-z0-9._]{2,24})\s*$", re.I)
+# "Kendime oy veriyorum": yazanın kendisine oy (yorumlar() yazanın adıyla değiştirir).
+KENDIME = re.compile(r"\bkendi(?:me|mize)\b(?: \w+){0,2} oy")
+KENDI = "__kendi__"
+# Yorumun tamamı bir adayın kullanıcı adı ("exo45526", "@exo45526"): yalnız o ad gerçekten adaysa oy sayılır.
+YALIN = re.compile(r"^@?([A-Za-z0-9._]{2,24})$")
 
 
 # Makamı bırakan (dönemi biten, yenilen ya da adadan ayrılan) başkanın önceki mesleği geri gelir.
@@ -83,6 +88,8 @@ def cozumle(text: str) -> dict:
         out["oy"] = sim.normalize_handle(m.group(1).rstrip("."))
     elif (d := OY_DUZ.match(text)):
         out["oy"] = sim.normalize_handle(d.group(1).rstrip("."))
+    elif KENDIME.search(t):
+        out["oy"] = KENDI
     elif ADAY.search(t) or TAM_ADAY.match(t):
         out["aday"] = True
     return out
@@ -117,6 +124,7 @@ def yorumlar(items: list, hesap: str | None, db: str = DB) -> dict:
     if not s:
         return {}
     adaylar, oylar = [], []
+    aday_adlari = set(psql(f"SELECT coalesce(string_agg(handle, ' '), '') FROM secim_adaylar WHERE secim_id = {s['id']}", db).split())
     for it in items:
         if not (isinstance(it, list) and len(it) == 4 and isinstance(it[2], int) and isinstance(it[3], str)):
             continue
@@ -124,6 +132,10 @@ def yorumlar(items: list, hesap: str | None, db: str = DB) -> dict:
         if not handle or handle == hesap or not (s["bas"] <= it[2] <= s["son"]):
             continue
         c = cozumle(it[3])
+        if c.get("oy") == KENDI:
+            c["oy"] = handle
+        elif not c and (b := YALIN.match(it[3].strip())) and sim.normalize_handle(b.group(1).rstrip(".")) in aday_adlari:
+            c = {"oy": sim.normalize_handle(b.group(1).rstrip("."))}
         if c.get("aday"):
             adaylar.append([handle, it[2]])
         elif c.get("oy"):
