@@ -133,3 +133,9 @@ class KodTest(unittest.TestCase):
         self.assertEqual(KOD.search(katla("kod: 1234")).group(1), "1234")
         self.assertEqual(KOD_TEK.match(katla(" 8538 ")).group(1), "8538")
         self.assertIsNone(KOD_TEK.match(katla("2026 yılı")))
+        from istekler import kodlar_bul
+        for metin, beklenen in [("kod 1234", ["1234"]), ("kodum: 3674", ["3674"]), ("8538", ["8538"]),
+                                ("4521 evimi onayla lütfen", ["4521"]), ("1234 kodum 🏠", ["1234"]),
+                                ("Kodu yazdım abla: 9087 ✨", ["9087"]), ("tel 05321234567", []),
+                                ("polis olmak istiyorum", [])]:
+            self.assertEqual(kodlar_bul(metin), beklenen, metin)
