@@ -93,6 +93,7 @@ def oy_niyeti(text: str, yazan: str, adaylar: set, isimler: dict) -> str | None:
     """Biçime uymayan yorumda kime oy verildiği (yoksa None)."""
     t = katla(text[:300])
     adaylar_tam = {}  # yorumda geçen ad parçası → aday
+    etiketli = False  # aday @ ile etiketlendi mi (kısa yorumda etiket tek başına oy sayılır: "takip ettim @aday")
     for m in ETIKET_GENIS.finditer(text):
         ham = m.group(1).rstrip(".,!?:;")
         h = sim.normalize_handle(ham)
@@ -100,6 +101,7 @@ def oy_niyeti(text: str, yazan: str, adaylar: set, isimler: dict) -> str | None:
             adaylar_tam[ham] = h
         elif (a := isimler.get(katla(ham))) in adaylar:
             adaylar_tam[ham] = a
+    etiketli = bool(adaylar_tam)
     if not adaylar_tam:
         for w in SOZCUK.findall(text):
             h = sim.normalize_handle(w)
@@ -121,7 +123,8 @@ def oy_niyeti(text: str, yazan: str, adaylar: set, isimler: dict) -> str | None:
     yalniz_ad = not katla(kalan).strip()
     if hedef == yazan and not NIYET.search(t):
         return None
-    return hedef if (yalniz_ad or NIYET.search(t)) else None
+    kisa = etiketli and len(katla(kalan).split()) <= 4
+    return hedef if (yalniz_ad or kisa or NIYET.search(t)) else None
 
 
 # Makamı bırakan (dönemi biten, yenilen ya da adadan ayrılan) başkanın önceki mesleği geri gelir.

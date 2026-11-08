@@ -48,9 +48,12 @@ class OyNiyetiTest(unittest.TestCase):
         self.assertEqual(self.oy("exo45526"), "exo45526")
         self.assertEqual(self.oy("exo45526 başkan olsun 👑"), "exo45526")
         self.assertEqual(self.oy("seviobl oyumu veriyorumm"), "seviobl")
+        self.assertEqual(self.oy("takip ettim @shinomerwo1"), "shinomerwo1")
+        self.assertEqual(self.oy('sieunun_suhosu" oyum'.replace("sieunun_suhosu", "seviobl")), "seviobl")
 
     def test_oy_degil(self):
         self.assertIsNone(self.oy("exo45526 polis mi?"))
+        self.assertIsNone(self.oy("@exo45526 sen neden hep polis oluyorsun ki bunu anlamadım"))
         self.assertIsNone(self.oy("@Ömerr", yazan="shinomerwo1"))  # kendini etiketlemek oy değil
         self.assertIsNone(self.oy("exo45526 ve seviobl başkan olsun"))  # iki aday: belirsiz
         self.assertIsNone(self.oy("@birisi başkan olsun"))  # aday değil
