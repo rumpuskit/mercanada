@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS secim_oylar (
 
 ADAY = re.compile(r"\b(?:aday(?:im|iyim|ligimi|ligimizi)?|baskan adayi\w*|belediye baskani ol\w*|baskan olmak isti\w*"
                   r"|mesle[kg]\w* (?:belediye )?baskan\w*"
+                  # "belediye başkanı lütfen", "beni belediye başkanı yap" (9 Kasım, @hackerrr_09)
+                  r"|belediye\w* baskan\w* (?:yap\w*|lutfe?n\w*)"
                   r"|baskan\w* (?:ben )?ol(?:acagim|acam|cagim|cam|ucam|urum|ayim|abilirim|abilir ?miyim|abilr\w*)|baskan\w* benim)\b")
 # Yorumun tamamı "belediye başkanı" / "başkan ben" ise de adaylık (seçim videolarına kısa cevaplar).
 TAM_ADAY = re.compile(r"^(?:ben )?(?:belediye |ada )?baskan(?:i|lik|ligi)?(?: ben\w*)?$")
@@ -113,6 +115,14 @@ def oy_niyeti(text: str, yazan: str, adaylar: set, isimler: dict) -> str | None:
                 uz = sorted((_yakin(a, h), a) for a in adaylar if abs(len(a) - len(h)) <= 2)
                 if uz and uz[0][0] <= 2 and (len(uz) == 1 or uz[1][0] > uz[0][0]):
                     adaylar_tam[w] = uz[0][1]
+                    continue
+            # Adın baştaki harf kısmı ("zero_amongus49" → "zero"), uzatılmış yazımla: "ZEROO BAŞKANIM" (9 Kasım).
+            # Tek adaya denk gelmeli ve en az 4 harf; oy için yine niyet sözcüğü ya da yalnız ad şartı geçerli.
+            kisa = re.sub(r"(.)\1+", r"\1", h)
+            if len(kisa) >= 4:
+                es = [a for a in adaylar if (m2 := re.match(r"[a-z]+", a)) and re.sub(r"(.)\1+", r"\1", m2.group()) == kisa]
+                if len(es) == 1:
+                    adaylar_tam[w] = es[0]
     hedefler = set(adaylar_tam.values())
     if len(hedefler) != 1:
         return None

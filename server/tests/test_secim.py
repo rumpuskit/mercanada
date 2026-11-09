@@ -25,6 +25,13 @@ class SecimCozumleTest(unittest.TestCase):
         from secim import KENDI
         self.assertEqual(cozumle("Kendime oy veriyorum… Ayrıca bana oy vermeyenlere sürpriz"), {"oy": KENDI})
         self.assertEqual(cozumle("kendime oy verebiliyor muyum"), {"oy": KENDI})
+        for t in ("belediye baskanii Lütfen", "abla beni belediyee baskanii yapp lutfen"):
+            self.assertEqual(cozumle(t), {"aday": True}, t)
+        self.assertEqual(cozumle("belediye başkanı kim olacak"), {})
+        from secim import oy_niyeti
+        A = {"zero_amongus49", "exo45526", "shinomerwo1"}
+        self.assertEqual(oy_niyeti("ZEROO BAŞKANIM", "eren_dits", A, {}), "zero_amongus49")
+        self.assertIsNone(oy_niyeti("exo başkanım", "eren_dits", A, {}))  # 4 harften kısa ön ek eşlenmez
         for t in ("Oyun kendime", "oyum kendime", "oy kendime"):
             self.assertEqual(cozumle(t), {"oy": KENDI}, t)
         self.assertEqual(cozumle("kendime iyi bak"), {})
