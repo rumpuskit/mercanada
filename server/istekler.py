@@ -110,6 +110,8 @@ BENI_YAP = re.compile(r"\bbeni? ((?:\w+ ){0,2}\w+) (?:yap|yapar|yapabilir|yapin|
 # "futbolcu yap beni"
 YAP_BENI = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:yap|yapin|yapsana)\w* beni\b")
 # "polis yapar mısın" ("beni" yazmadan)
+# "avukat olarak çalışmak istiyorum" (9 Kasım)
+OLARAK = re.compile(r"\b((?:\w+ ){0,2}\w+) olarak (?:calis|is\b|gorev)")
 YAPAR_MISIN = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:yapar|yapabilir) ?mi\w*")
 GIZLE = re.compile(r"\b(?:adimi|ismimi|adim|ismim|beni)\b(?: \w+){0,2} (?P<ne>gizle|goster)\w*"
                    r"|\b(?P<ne2>gizle|goster)\w*(?: \w+){0,2} (?:adimi|ismimi)\b")
@@ -137,7 +139,7 @@ def cozumle(text: str) -> dict[str, str]:
         if deger and tur not in out:
             out[tur] = deger
     if "meslek" not in out:
-        for m in [*OLMAK.finditer(t), *BEN_OLURUM.finditer(t), *BENI_YAP.finditer(t), *YAP_BENI.finditer(t), *YAPAR_MISIN.finditer(t)]:
+        for m in [*OLMAK.finditer(t), *BEN_OLURUM.finditer(t), *BENI_YAP.finditer(t), *YAP_BENI.finditer(t), *YAPAR_MISIN.finditer(t), *OLARAK.finditer(t)]:
             deger = _bul("meslek", m.group(1))
             if deger:
                 out["meslek"] = deger

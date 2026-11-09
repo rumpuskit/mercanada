@@ -74,6 +74,7 @@ class CozumleTest(unittest.TestCase):
             "Ben tamirci": {"meslek": "gemi_ustasi"},
             "abla taşındım Futbolcuyum @Ezman Atak": {"meslek": "futbolcu"},
             "polis olsun": {"meslek": "polis"},
+            "Avukat olarak Adalet Bakanlığında Çalışmak istiyorum": {"meslek": "avukat"},
             "kim başkan olsun": {},
             "ben olsam ne yapardım": {},
             "meslek pilot": {"meslek": "zeplin_pilotu"},
