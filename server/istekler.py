@@ -111,7 +111,7 @@ BENI_YAP = re.compile(r"\bbeni? ((?:\w+ ){0,2}\w+) (?:yap|yapar|yapabilir|yapin|
 YAP_BENI = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:yap|yapin|yapsana)\w* beni\b")
 # "polis yapar mısın" ("beni" yazmadan)
 # "avukat olarak çalışmak istiyorum" (9 Kasım)
-OLARAK = re.compile(r"\b((?:\w+ ){0,2}\w+) olarak (?:calis|is\b|gorev)")
+OLARAK = re.compile(r"\b((?:\w+ ){0,2}\w+) olarak (?:\w+ ){0,2}(?:calis|is\b|gorev)")
 YAPAR_MISIN = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:yapar|yapabilir) ?mi\w*")
 GIZLE = re.compile(r"\b(?:adimi|ismimi|adim|ismim|beni)\b(?: \w+){0,2} (?P<ne>gizle|goster)\w*"
                    r"|\b(?P<ne2>gizle|goster)\w*(?: \w+){0,2} (?:adimi|ismimi)\b")
