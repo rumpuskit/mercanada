@@ -25,6 +25,9 @@ class SecimCozumleTest(unittest.TestCase):
         from secim import KENDI
         self.assertEqual(cozumle("Kendime oy veriyorum… Ayrıca bana oy vermeyenlere sürpriz"), {"oy": KENDI})
         self.assertEqual(cozumle("kendime oy verebiliyor muyum"), {"oy": KENDI})
+        for t in ("Oyun kendime", "oyum kendime", "oy kendime"):
+            self.assertEqual(cozumle(t), {"oy": KENDI}, t)
+        self.assertEqual(cozumle("kendime iyi bak"), {})
         self.assertEqual(cozumle("exo45526"), {})
         self.assertEqual(cozumle("adayım kendime veriyorum"), {"oy": KENDI, "aday": True})
         self.assertEqual(cozumle("oy: @exo45526 adayım"), {"oy": "exo45526"})  # yalın ad: yalnız adaysa, yorumlar() içinde

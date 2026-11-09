@@ -67,7 +67,8 @@ ETIKET = re.compile(r"@([A-Za-z0-9._]{2,24})")
 # "@" unutulmuş oy: yorumun tamamı "oy:kullaniciadi" (iki nokta şart; "oyum yok" oy değil).
 OY_DUZ = re.compile(r"^\s*oy\w*\s*:\s*([A-Za-z0-9._]{2,24})\s*$", re.I)
 # "Kendime oy veriyorum": yazanın kendisine oy (yorumlar() yazanın adıyla değiştirir).
-KENDIME = re.compile(r"\bkendi(?:me|mize)\b(?: \w+){0,2} (?:oy|veri)")
+# "kendime oy veriyorum", ve sözcük sırası ters: "oyum kendime", "oy kendime", "oyun kendime" (yazım hatası, 9 Kasım).
+KENDIME = re.compile(r"\bkendi(?:me|mize)\b(?: \w+){0,2} (?:oy|veri)|\boy(?:um|umu|un|u)?\b(?: \w+)? kendi(?:me|mize)\b")
 KENDI = "__kendi__"
 # Biçime uymayan oylar (insanlar "oy: @ad" yazmıyor): yorumda bir adayın adı geçiyorsa ve ya yorum neredeyse
 # yalnız o addan ibaretse ya da oy niyeti sözcüğü varsa oy sayılır. Ad: kullanıcı adı (@'li/@'siz, en çok 2 harf
