@@ -70,6 +70,8 @@ class CozumleTest(unittest.TestCase):
             "Meslek:yargıç": {"meslek": "hakim"},
             "insaatciyim": {"meslek": "mimar"},
             "ben meslek olarak inşatçı olcam": {"meslek": "mimar"},
+            "ben pilot olsam olur mu": {"meslek": "zeplin_pilotu"},
+            "ben olsam ne yapardım": {},
             "meslek pilot": {"meslek": "zeplin_pilotu"},
             "zeplin pilotu olmak istiyorum": {"meslek": "zeplin_pilotu"},
             "doktor olablir miyim": {"meslek": "doktor"},
