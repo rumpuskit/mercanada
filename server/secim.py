@@ -25,6 +25,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from istekler import katla  # noqa: E402
+import unicodedata  # noqa: E402
+
+
+def ad_katla(ad: str) -> str:
+    """Görünen ad: süslü Unicode harfler sadeleşir ("𝙵𝚁𝙴𝙴" → "free", 9 Kasım), sonra katla."""
+    return katla(unicodedata.normalize("NFKC", ad))
 from mercanada_sim import sim  # noqa: E402
 from ortak import DB, psql  # noqa: E402
 
@@ -102,8 +108,15 @@ def oy_niyeti(text: str, yazan: str, adaylar: set, isimler: dict) -> str | None:
         h = sim.normalize_handle(ham)
         if h in adaylar:
             adaylar_tam[ham] = h
-        elif (a := isimler.get(katla(ham))) in adaylar:
+        elif (a := isimler.get(ad_katla(ham))) in adaylar:
             adaylar_tam[ham] = a
+    if not adaylar_tam:
+        # Boşluklu/süslü görünen adla etiket: "@〽️ ꧁𝙵𝚁𝙴𝙴꧂〽️ buna verecem oy" (@'den sonrası adla başlıyor mu).
+        for m in re.finditer("@", text):
+            parca = ad_katla(text[m.end():m.end() + 60])
+            for k, a in isimler.items():
+                if a in adaylar and len(k) >= 3 and (parca == k or parca.startswith(k + " ")):
+                    adaylar_tam[k] = a
     etiketli = bool(adaylar_tam)
     if not adaylar_tam:
         for w in SOZCUK.findall(text):
@@ -198,7 +211,7 @@ def yorumlar(items: list, hesap: str | None, db: str = DB) -> dict:
     yeni_isim = False
     for it in items:
         if isinstance(it, list) and len(it) == 5 and isinstance(it[4], str) and it[4].strip():
-            h, ad = sim.normalize_handle(str(it[1])), katla(it[4])
+            h, ad = sim.normalize_handle(str(it[1])), ad_katla(it[4])
             if h in aday_adlari and ad and isimler.get(ad) != h:
                 isimler[ad] = h if ad not in isimler else None  # iki aday aynı görünen adı taşıyorsa belirsiz
                 yeni_isim = True

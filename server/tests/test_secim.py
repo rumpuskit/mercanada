@@ -32,6 +32,9 @@ class SecimCozumleTest(unittest.TestCase):
         A = {"zero_amongus49", "exo45526", "shinomerwo1"}
         self.assertEqual(oy_niyeti("ZEROO BAŞKANIM", "eren_dits", A, {}), "zero_amongus49")
         self.assertIsNone(oy_niyeti("exo başkanım", "eren_dits", A, {}))  # 4 harften kısa ön ek eşlenmez
+        from secim import ad_katla
+        isim = {ad_katla("〽️ ꧁𝙵𝚁𝙴𝙴꧂〽️"): "zero_amongus49"}  # süslü, boşluklu görünen ad
+        self.assertEqual(oy_niyeti("@〽️ ꧁𝙵𝚁𝙴𝙴꧂〽️ buna verecem oy", "nuran08383", A, isim), "zero_amongus49")
         for t in ("Oyun kendime", "oyum kendime", "oy kendime"):
             self.assertEqual(cozumle(t), {"oy": KENDI}, t)
         self.assertEqual(cozumle("kendime iyi bak"), {})
