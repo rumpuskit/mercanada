@@ -41,7 +41,9 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              # Olmayan meslekler: en yakını (cevapta söylenir)
              "komiser": "polis", "komser": "polis", "asker": "polis", "subay": "polis", "veteriner": "doktor",
              "pilot": "zeplin_pilotu", "cerrah": "doktor",
-             "yargic": "hakim", "insaatci": "mimar", "insatci": "mimar", "tamirci": "gemi_ustasi", "balik ci": "balikci"}
+             "yargic": "hakim", "insaatci": "mimar", "insatci": "mimar", "tamirci": "gemi_ustasi",
+             "sanayici": "gemi_ustasi", "lastikci": "gemi_ustasi", "basketbolcu": "futbolcu", "voleybolcu": "futbolcu",
+             "general": "polis", "tumgeneral": "polis", "komutan": "polis", "balik ci": "balikci"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
@@ -102,7 +104,7 @@ def kodlar_bul(text: str) -> list[tuple[str, bool]]:
     return [(k, kesin) for k in dict.fromkeys(KOD_HER.findall(t))][:3]
 TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
 # "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım / olabilir miyim / olurum" (yorumlarda sık).
-OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olablir\w*|olurum|olur ?mu ?yum|olayim ?mi|olayim|oliyim|olim|olsam|olsun)\b)")
+OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olablir\w*|olurum|olur ?mu ?yum|olayim ?mi|olayim|oliyim|olim|olum|olsam|olsun)\b)")
 # "ben olurum fırıncı" (videonun sorusuna cevap) ve yorumun tamamı "ben garson" / "ben de futbolcu".
 BEN_OLURUM = re.compile(r"\bben (?:de )?(?:olurum|oliyim|olayim) ((?:\w+ ){0,2}\w+)")
 BEN = re.compile(r"^(?:(?:abla|abi|hocam|kanka) )?(?:ben de|bende|ben) ")
