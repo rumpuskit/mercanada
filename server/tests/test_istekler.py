@@ -57,6 +57,8 @@ class CozumleTest(unittest.TestCase):
             "bakkal": {"meslek": "kasiyer"},
             "Bilgisayar mühendisi olmak istiyorum": {"meslek": "yazilimci"},
             "pilot pls": {"meslek": "zeplin_pilotu"},
+            "abi adaya beni al bakal olcam": {"meslek": "kasiyer"},
+            "ben duktur olim": {"meslek": "doktor"},
             "polis oliyim": {"meslek": "polis"},
             "ben öğrenciyim": {"meslek": "ogrenci"},
             "Ben doktorum": {"meslek": "doktor"},

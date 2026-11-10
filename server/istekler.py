@@ -37,7 +37,7 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis",
              "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu", "footballcu": "futbolcu", "topcu": "futbolcu",
              "yazilim muhendisi": "yazilimci", "bilgisayar muhendisi": "yazilimci", "bilgisayarci": "yazilimci",
-             "elektronik muhendisi": "yazilimci", "bakkal": "kasiyer",
+             "elektronik muhendisi": "yazilimci", "bakkal": "kasiyer", "bakal": "kasiyer", "duktur": "doktor",
              # Olmayan meslekler: en yakını (cevapta söylenir)
              "komiser": "polis", "komser": "polis", "asker": "polis", "subay": "polis", "veteriner": "doktor",
              "pilot": "zeplin_pilotu", "cerrah": "doktor",
