@@ -36,7 +36,8 @@ MAX_METIN = 300
 EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilimci", "hekim": "doktor",
              "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis",
              "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu", "footballcu": "futbolcu", "topcu": "futbolcu",
-             "yazilim muhendisi": "yazilimci", "bakkal": "kasiyer",
+             "yazilim muhendisi": "yazilimci", "bilgisayar muhendisi": "yazilimci", "bilgisayarci": "yazilimci",
+             "elektronik muhendisi": "yazilimci", "bakkal": "kasiyer",
              # Olmayan meslekler: en yakını (cevapta söylenir)
              "komiser": "polis", "komser": "polis", "asker": "polis", "subay": "polis", "veteriner": "doktor",
              "pilot": "zeplin_pilotu", "cerrah": "doktor",
@@ -147,8 +148,8 @@ def cozumle(text: str) -> dict[str, str]:
     if not out:
         # Yorumun tamamı bir meslek adıysa ("okul müdürü", "polis 👮") o da istektir; cümle içinde geçen
         # ad ("balıkçı amca çok iyi") istek sayılmaz.
-        # "abla futbolcu", "futbolcu bennn": hitap ve sondaki "ben" de atılır.
-        govde = re.sub(r" ben+$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
+        # "abla futbolcu", "futbolcu bennn", "pilot pls": hitap, sondaki "ben" ve rica sözcüğü de atılır.
+        govde = re.sub(r" (?:ben+|pl[sz]|lutfe?n|nolur|ne olur)$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
         ad = BEN.sub("", govde)
         # "ben öğrenciyim", "ben doktorum": kişi ekiyle de (yalnız yorumun tamamıysa)
         tam = dict(secenekler()["meslek"]).get(ad) or dict(secenekler()["meslek"]).get(re.sub(r"y?[iu]m$", "", ad))
