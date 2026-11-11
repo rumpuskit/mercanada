@@ -109,7 +109,7 @@ OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|ol
 BEN_OLURUM = re.compile(r"\bben (?:de )?(?:olurum|oliyim|olayim) ((?:\w+ ){0,2}\w+)")
 BEN = re.compile(r"^(?:(?:abla|abi|hocam|kanka) )?(?:ben de|bende|ben) ")
 # "beni topçu yap", "beni zeplin pilotu yapar mısın"
-BENI_YAP = re.compile(r"\bbeni? ((?:\w+ ){0,2}\w+) (?:yap|yapar|yapabilir|yapin|yapsana)\w*")
+BENI_YAP = re.compile(r"\bbeni?(?:de)? ((?:\w+ ){0,2}\w+) (?:yap|yapar|yapabilir|yapin|yapsana)\w*")
 # "futbolcu yap beni"
 YAP_BENI = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:yap|yapin|yapsana)\w* beni\b")
 # "polis yapar mısın" ("beni" yazmadan)
@@ -150,8 +150,9 @@ def cozumle(text: str) -> dict[str, str]:
     if not out:
         # Yorumun tamamı bir meslek adıysa ("okul müdürü", "polis 👮") o da istektir; cümle içinde geçen
         # ad ("balıkçı amca çok iyi") istek sayılmaz.
-        # "abla futbolcu", "futbolcu bennn", "pilot pls": hitap, sondaki "ben" ve rica sözcüğü de atılır.
+        # "abla futbolcu", "futbolcu bennn", "pilot pls", "yazılımcııı": hitap, sondaki "ben" ve rica sözcüğü de atılır.
         govde = re.sub(r" (?:ben+|pl[sz]|lutfe?n|nolur|ne olur)$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
+        govde = re.sub(r"(\w)\1{2,}\b", r"\1", govde)  # uzatılmış son harf: "yazılımcııı"
         ad = BEN.sub("", govde)
         # "ben öğrenciyim", "ben doktorum": kişi ekiyle de (yalnız yorumun tamamıysa)
         tam = dict(secenekler()["meslek"]).get(ad) or dict(secenekler()["meslek"]).get(re.sub(r"y?[iu]m$", "", ad))
