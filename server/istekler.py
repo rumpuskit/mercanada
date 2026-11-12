@@ -51,7 +51,13 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "futbol kocu": "futbolcu", "antrenor": "futbolcu", "cifci": "zeytinci", "jandarma": "polis",
              "insaat ustasi": "mimar", "elektirikci": "gemi_ustasi", "muhendis": "yazilimci", "psikolog": "doktor",
              "pastaci": "firinci", "marketci": "kasiyer", "araba tamircisi": "gemi_ustasi", "hemsir": "hemsire",
-             "paramedik": "hemsire"}
+             "paramedik": "hemsire",
+             # Futbol mevkileri (12 Kasım "Mercanspor'un kaptanı" videosu)
+             "sag kanat": "futbolcu", "sol kanat": "futbolcu", "sag bek": "futbolcu", "sol bek": "futbolcu",
+             "stoper": "futbolcu", "defans": "futbolcu", "santrafor": "futbolcu", "santra": "futbolcu",
+             "orta saha": "futbolcu", "ortasaha": "futbolcu",
+             "mobilyaci": "marangoz", "ahsap": "marangoz", "sanayi": "gemi_ustasi", "fenomen": "uzaktan",
+             "youtuber": "uzaktan", "ormanci": "bahcivan"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
