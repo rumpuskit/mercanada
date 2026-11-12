@@ -57,9 +57,10 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "stoper": "futbolcu", "defans": "futbolcu", "santrafor": "futbolcu",
              "orta saha": "futbolcu", "ortasaha": "futbolcu",
              "mobilyaci": "marangoz", "ahsap": "marangoz", "sanayi": "gemi_ustasi", "fenomen": "uzaktan",
-             "youtuber": "uzaktan", "ormanci": "bahcivan"}
+             "youtuber": "uzaktan", "ormanci": "bahcivan",
+             "kale": "futbolcu", "kutupaneci": "kutuphaneci", "uzman cavus": "polis", "mobilya": "marangoz"}
 # Yalnız tam kelimeyken geçerli takma adlar ("yaz bakalım" kasiyer değil, 12 Kasım).
-TAM_KELIME = {"bakal"}
+TAM_KELIME = {"bakal", "kale"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
@@ -118,9 +119,9 @@ def kodlar_bul(text: str) -> list[tuple[str, bool]]:
     t = katla(text[:200])
     kesin = bool(re.search(r"\bkod", t) or KOD_TEK.match(t))
     return [(k, kesin) for k in dict.fromkeys(KOD_HER.findall(t))][:3]
-TETIK = re.compile(r"\b(?:(?P<meslek>mesle[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
+TETIK = re.compile(r"\b(?:(?P<meslek>mesle+[kg]\w*)|(?P<hobi>hobi\w*)|(?P<evcil>evcil\w*))\b")
 # "X olmak istiyorum" ve konuşma dilindeki "X olucam / olcam / olacağım / olabilir miyim / olurum" (yorumlarda sık).
-OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olablir\w*|olurum|olur ?mu ?yum|olayim ?mi|olayim|oliyim ?mi\w*|oliyim|oluyum|olyrum|olim|olum|olsam|olsun)\b)")
+OLMAK = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:olmak isti|(?:olucam|olcam|olcan|olacagim|olacam|olcagim|olabilir\w*|olabilr\w*|olablir\w*|olurum|olur ?mu ?yum|olayim ?mi|olayim|oliyim ?mi\w*|oliyim|oluyum|oluyim|olyrum|olim|olum|olsam|olsun)\b)")
 # "ben olurum fırıncı" (videonun sorusuna cevap) ve yorumun tamamı "ben garson" / "ben de futbolcu".
 BEN_OLURUM = re.compile(r"\bben (?:de )?(?:olurum|oliyim|olayim) ((?:\w+ ){0,2}\w+)")
 BEN = re.compile(r"^(?:(?:abla|abi|hocam|kanka) )?(?:ben de|bende|ben) ")
@@ -169,7 +170,7 @@ def cozumle(text: str) -> dict[str, str]:
         # Yorumun tamamı bir meslek adıysa ("okul müdürü", "polis 👮") o da istektir; cümle içinde geçen
         # ad ("balıkçı amca çok iyi") istek sayılmaz.
         # "abla futbolcu", "futbolcu bennn", "pilot pls", "yazılımcııı": hitap, sondaki "ben" ve rica sözcüğü de atılır.
-        govde = re.sub(r" (?:ben+|pl[sz]|lutfe?n|nolur|ne olur)$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
+        govde = re.sub(r" (?:ben+|pl[sz]|lu?t?fe?n|nolur|ne olur)$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
         ad = BEN.sub("", govde)
         # "ben öğrenciyim", "ben doktorum": kişi ekiyle de (yalnız yorumun tamamıysa)
         tam = dict(secenekler()["meslek"]).get(ad) or dict(secenekler()["meslek"]).get(re.sub(r"y?[iu]m$", "", ad))
