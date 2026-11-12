@@ -43,7 +43,8 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "pilot": "zeplin_pilotu", "cerrah": "doktor",
              "yargic": "hakim", "insaatci": "mimar", "insatci": "mimar", "tamirci": "gemi_ustasi",
              "sanayici": "gemi_ustasi", "lastikci": "gemi_ustasi", "basketbolcu": "futbolcu", "voleybolcu": "futbolcu",
-             "general": "polis", "tumgeneral": "polis", "komutan": "polis", "balik ci": "balikci"}
+             "general": "polis", "tumgeneral": "polis", "komutan": "polis", "balik ci": "balikci",
+             "kaleci": "futbolcu", "fublocu": "futbolcu", "emniyet muduru": "polis"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
@@ -132,7 +133,7 @@ def _bul(tur: str, parca: str) -> str | None:
 
 def cozumle(text: str) -> dict[str, str]:
     """Yorumdaki istekler: {tür: değer}. Değerler katalog kimliği (evcil: hayvanın adı; gizle: "1"/"0")."""
-    t = katla(text[:MAX_METIN])
+    t = re.sub(r"(\w)\1{2,}\b", r"\1", katla(text[:MAX_METIN]))  # uzatılmış son harf: "olurummm", "yazılımcııı"
     out: dict[str, str] = {}
     tetikler = list(TETIK.finditer(t))
     for n, m in enumerate(tetikler):
@@ -152,7 +153,6 @@ def cozumle(text: str) -> dict[str, str]:
         # ad ("balıkçı amca çok iyi") istek sayılmaz.
         # "abla futbolcu", "futbolcu bennn", "pilot pls", "yazılımcııı": hitap, sondaki "ben" ve rica sözcüğü de atılır.
         govde = re.sub(r" (?:ben+|pl[sz]|lutfe?n|nolur|ne olur)$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
-        govde = re.sub(r"(\w)\1{2,}\b", r"\1", govde)  # uzatılmış son harf: "yazılımcııı"
         ad = BEN.sub("", govde)
         # "ben öğrenciyim", "ben doktorum": kişi ekiyle de (yalnız yorumun tamamıysa)
         tam = dict(secenekler()["meslek"]).get(ad) or dict(secenekler()["meslek"]).get(re.sub(r"y?[iu]m$", "", ad))
