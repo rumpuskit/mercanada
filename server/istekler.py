@@ -34,7 +34,7 @@ TURLER = ("meslek", "hobi", "evcil", "gizle")
 MAX_METIN = 300
 # Katalogda adı geçmeyen ama sık yazılacak karşılıklar.
 EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilimci", "hekim": "doktor",
-             "kaptan": "balikci", "polislik": "polis", "polis memuru": "polis",
+             "gemi kaptan": "balikci", "polislik": "polis", "polis memuru": "polis",
              "futbol": "futbolcu", "football": "futbolcu", "footballer": "futbolcu", "footballcu": "futbolcu", "topcu": "futbolcu",
              "yazilim muhendisi": "yazilimci", "bilgisayar muhendisi": "yazilimci", "bilgisayarci": "yazilimci",
              "elektronik muhendisi": "yazilimci", "bakkal": "kasiyer", "bakal": "kasiyer", "duktur": "doktor",
