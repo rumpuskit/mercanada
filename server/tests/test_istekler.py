@@ -70,6 +70,8 @@ class CozumleTest(unittest.TestCase):
             "forvet": {"meslek": "futbolcu"},
             "abla ben stoper oluyum": {"meslek": "futbolcu"},
             "sağ kanat": {"meslek": "futbolcu"},
+            "tamam yaz bakalım": {},
+            "nükleer santraldeki operatör olmak istiyorum": {},
             "Mobilyacıyım": {"meslek": "marangoz"},
             "abla ben önceden futbolcu olmuştum takım kaptanımız kim yoksa olabilirim": {},
             "gemi kaptanı olmak istiyorum": {"meslek": "balikci"},

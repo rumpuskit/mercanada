@@ -54,10 +54,12 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "paramedik": "hemsire",
              # Futbol mevkileri (12 Kasım "Mercanspor'un kaptanı" videosu)
              "sag kanat": "futbolcu", "sol kanat": "futbolcu", "sag bek": "futbolcu", "sol bek": "futbolcu",
-             "stoper": "futbolcu", "defans": "futbolcu", "santrafor": "futbolcu", "santra": "futbolcu",
+             "stoper": "futbolcu", "defans": "futbolcu", "santrafor": "futbolcu",
              "orta saha": "futbolcu", "ortasaha": "futbolcu",
              "mobilyaci": "marangoz", "ahsap": "marangoz", "sanayi": "gemi_ustasi", "fenomen": "uzaktan",
              "youtuber": "uzaktan", "ormanci": "bahcivan"}
+# Yalnız tam kelimeyken geçerli takma adlar ("yaz bakalım" kasiyer değil, 12 Kasım).
+TAM_KELIME = {"bakal"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
@@ -140,7 +142,7 @@ def _bul(tur: str, parca: str) -> str | None:
     """Parçada ilk geçen seçenek (kelime başından eşleşir: "balikciyim" → balikci)."""
     best = None
     for alias, value in secenekler()[tur]:
-        m = re.search(r"\b" + re.escape(alias), parca)
+        m = re.search(r"\b" + re.escape(alias) + (r"\b" if alias in TAM_KELIME else ""), parca)
         if m and (best is None or m.start() < best[0]):
             best = (m.start(), value)
     return best[1] if best else None
@@ -179,7 +181,7 @@ def cozumle(text: str) -> dict[str, str]:
             meslekler = dict(secenekler()["meslek"])
             for kelime in re.findall(r"\w+", t):
                 kok = re.sub(r"y?[iu]m$", "", kelime)
-                if kok != kelime and len(kok) >= 4 and kok in meslekler:
+                if kok != kelime and len(kok) >= 4 and kok in meslekler and kok not in TAM_KELIME:
                     out["meslek"] = meslekler[kok]
                     break
     g = GIZLE.search(t)
