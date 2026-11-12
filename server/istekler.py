@@ -44,7 +44,9 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "yargic": "hakim", "insaatci": "mimar", "insatci": "mimar", "tamirci": "gemi_ustasi",
              "sanayici": "gemi_ustasi", "lastikci": "gemi_ustasi", "basketbolcu": "futbolcu", "voleybolcu": "futbolcu",
              "general": "polis", "tumgeneral": "polis", "komutan": "polis", "balik ci": "balikci",
-             "kaleci": "futbolcu", "fublocu": "futbolcu", "emniyet muduru": "polis", "donerci": "asci"}
+             "kaleci": "futbolcu", "fublocu": "futbolcu", "emniyet muduru": "polis", "donerci": "asci",
+             "fotbolcu": "futbolcu", "bilgisayar muhendisligi": "yazilimci", "ic mimar": "mimar", "cigkofteci": "asci",
+             "pideci": "firinci", "tesisatci": "gemi_ustasi", "elektrikci": "gemi_ustasi", "bankaci": "muhasebeci"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",
@@ -113,6 +115,8 @@ BEN = re.compile(r"^(?:(?:abla|abi|hocam|kanka) )?(?:ben de|bende|ben) ")
 BENI_YAP = re.compile(r"\bbeni?(?:de)? ((?:\w+ ){0,2}\w+) (?:yap|yapar|yapabilir|yapin|yapsana)\w*")
 # "futbolcu yap beni"
 YAP_BENI = re.compile(r"\b((?:\w+ ){0,2}\w+) (?:yap|yapin|yapsana)\w* beni\b")
+# yorumun tamamı "futbolcu yap" (12 Kasım)
+YAP_TEK = re.compile(r"^((?:\w+ ){0,2}\w+) (?:yap|yapin|yapsana|yaparmisin|yapar misin)\w*$")
 # "polis yapar mısın" ("beni" yazmadan)
 # "avukat olarak çalışmak istiyorum" (9 Kasım)
 OLARAK = re.compile(r"\b((?:\w+ ){0,2}\w+) olarak (?:\w+ ){0,2}(?:calis|is\b|gorev)")
@@ -143,7 +147,7 @@ def cozumle(text: str) -> dict[str, str]:
         if deger and tur not in out:
             out[tur] = deger
     if "meslek" not in out:
-        for m in [*OLMAK.finditer(t), *BEN_OLURUM.finditer(t), *BENI_YAP.finditer(t), *YAP_BENI.finditer(t), *YAPAR_MISIN.finditer(t), *OLARAK.finditer(t)]:
+        for m in [*OLMAK.finditer(t), *BEN_OLURUM.finditer(t), *BENI_YAP.finditer(t), *YAP_BENI.finditer(t), *YAP_TEK.finditer(t), *YAPAR_MISIN.finditer(t), *OLARAK.finditer(t)]:
             deger = _bul("meslek", m.group(1))
             if deger:
                 out["meslek"] = deger
