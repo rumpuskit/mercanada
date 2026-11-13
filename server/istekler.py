@@ -151,7 +151,7 @@ def _bul(tur: str, parca: str) -> str | None:
 
 def cozumle(text: str) -> dict[str, str]:
     """Yorumdaki istekler: {tür: değer}. Değerler katalog kimliği (evcil: hayvanın adı; gizle: "1"/"0")."""
-    t = re.sub(r"(\w)\1{2,}\b", r"\1", katla(text[:MAX_METIN]))  # uzatılmış son harf: "olurummm", "yazılımcııı"
+    t = re.sub(r"([^\W\d_])\1{2,}\b|([aeioumn])\2\b", lambda m: m.group(1) or m.group(2), katla(text[:MAX_METIN]))  # uzatılmış son harf: "olurummm", "yazılımcııı", "futbolcuyumm"
     out: dict[str, str] = {}
     tetikler = list(TETIK.finditer(t))
     for n, m in enumerate(tetikler):

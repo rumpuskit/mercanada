@@ -60,6 +60,7 @@ class CozumleTest(unittest.TestCase):
             "yazılımcııı": {"meslek": "yazilimci"},
             "abla benide futbolcu yap": {"meslek": "futbolcu"},
             "futbolcu olurummm": {"meslek": "futbolcu"},
+            "futbolcuyumm": {"meslek": "futbolcu"},
             "ben fublocu yap": {"meslek": "futbolcu"},
             "kaleci olurum": {"meslek": "futbolcu"},
             "Uçak pilotu oluyum lütfen": {"meslek": "zeplin_pilotu"},
