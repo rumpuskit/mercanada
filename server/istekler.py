@@ -58,7 +58,8 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "orta saha": "futbolcu", "ortasaha": "futbolcu",
              "mobilyaci": "marangoz", "ahsap": "marangoz", "sanayi": "gemi_ustasi", "fenomen": "uzaktan",
              "youtuber": "uzaktan", "ormanci": "bahcivan",
-             "kale": "futbolcu", "kutupaneci": "kutuphaneci", "uzman cavus": "polis", "mobilya": "marangoz"}
+             "kale": "futbolcu", "kutupaneci": "kutuphaneci", "uzman cavus": "polis", "mobilya": "marangoz",
+             "antranor": "futbolcu", "sagbek": "futbolcu", "solbek": "futbolcu", "orda saha": "futbolcu"}
 # Yalnız tam kelimeyken geçerli takma adlar ("yaz bakalım" kasiyer değil, 12 Kasım).
 TAM_KELIME = {"bakal", "kale"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
@@ -169,8 +170,8 @@ def cozumle(text: str) -> dict[str, str]:
     if not out:
         # Yorumun tamamı bir meslek adıysa ("okul müdürü", "polis 👮") o da istektir; cümle içinde geçen
         # ad ("balıkçı amca çok iyi") istek sayılmaz.
-        # "abla futbolcu", "futbolcu bennn", "pilot pls", "yazılımcııı": hitap, sondaki "ben" ve rica sözcüğü de atılır.
-        govde = re.sub(r" (?:ben+|pl[sz]|lu?t?fe?n|nolur|ne olur)$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
+        # "abla futbolcu", "futbolcu bennn", "sağ kanat benim", "kale benden", "pilot pls", "yazılımcııı": hitap, sondaki "ben" ve rica sözcüğü de atılır.
+        govde = re.sub(r" (?:ben+|benim|binim|benden|bende|pl[sz]|lu?t?fe?n|nolur|ne olur)$", "", re.sub(r"^(?:abla|abi|hocam|kanka) ", "", t))
         ad = BEN.sub("", govde)
         # "ben öğrenciyim", "ben doktorum": kişi ekiyle de (yalnız yorumun tamamıysa)
         tam = dict(secenekler()["meslek"]).get(ad) or dict(secenekler()["meslek"]).get(re.sub(r"y?[iu]m$", "", ad))
