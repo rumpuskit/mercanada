@@ -65,6 +65,7 @@ class CozumleTest(unittest.TestCase):
             "Kale benden": {"meslek": "futbolcu"},
             "teknik direktör binim": {"meslek": "futbolcu"},
             "ben antranor oliyim": {"meslek": "futbolcu"},
+            "abla ben olurum resam": {"meslek": "ressam"}, "resssam": {"meslek": "ressam"},
             "ben orda saha": {"meslek": "futbolcu"},
             "ben fublocu yap": {"meslek": "futbolcu"},
             "kaleci olurum": {"meslek": "futbolcu"},

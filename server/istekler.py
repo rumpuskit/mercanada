@@ -59,7 +59,8 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "mobilyaci": "marangoz", "ahsap": "marangoz", "sanayi": "gemi_ustasi", "fenomen": "uzaktan",
              "youtuber": "uzaktan", "ormanci": "bahcivan",
              "kale": "futbolcu", "kutupaneci": "kutuphaneci", "uzman cavus": "polis", "mobilya": "marangoz",
-             "antranor": "futbolcu", "sagbek": "futbolcu", "solbek": "futbolcu", "orda saha": "futbolcu"}
+             "antranor": "futbolcu", "sagbek": "futbolcu", "solbek": "futbolcu", "orda saha": "futbolcu",
+             "resam": "ressam", "resssam": "ressam"}
 # Yalnız tam kelimeyken geçerli takma adlar ("yaz bakalım" kasiyer değil, 12 Kasım).
 TAM_KELIME = {"bakal", "kale"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
