@@ -84,6 +84,12 @@ const DUKKANLAR = [
   ["berber", "Berberi"], ["terzi", "Terzisi"], ["kirtasiye", "Kırtasiyesi"], ["cicekci", "Çiçekçisi"],
   ["aktar", "Aktarı"], ["nalbur", "Nalburu"], ["kuyumcu", "Kuyumcusu"], ["kitapci", "Kitabevi"],
 ];
+// Çarşı dükkânından dönüşen iş yerleri (14 Kasım 2026, yorum istekleri): [iş yeri türü, dükkân sırası, iç konsept, tente].
+// Gelişim adımına kadar dükkân eski zanaatıyla kalır; adımda tabela ve iç düzen değişir. Yeni bina eklenmez:
+// çarşı cepheleri ve konutlar kaymaz (adresler değişmesin).
+// Eczane: hastaneye en yakın açık dükkân (Gündoğusu Caddesi, eski Mercan Terzisi); veteriner batıda (eski Yakamoz Kuyumcusu).
+const ECZANE_DUKKAN = 33, VETERINER_DUKKAN = 30;
+const DONUSUM = [["eczane", ECZANE_DUKKAN, "eczane", "#2f8a57"], ["veteriner", VETERINER_DUKKAN, "veteriner", "#3e8a7a"]];
 const CARSI_ON = ["Çarşı", "Liman", "Lodos", "Yakamoz", "Mercan", "Poyraz", "Dalga", "Kumsal", "Martı", "İskele", "Yokuş", "Meydan"];
 
 // Merkezdeki iş yerleri; sırayla meydana en yakın boş cepheye yerleşir.
@@ -99,7 +105,7 @@ const CENTER_ORDER = [
 const HOUSE_WALLS = ["#f4efe6", "#f3e3c8", "#e9d3c0", "#dfe7e4", "#f1d7cf", "#e8e0cf", "#f6f1e9", "#d9e2ea", "#efdcb8", "#e6d2d8"];
 const HOUSE_ROOFS = ["#b5563f", "#a85a44", "#c06a4c", "#8c4b3a", "#9e5a48"];
 
-const OUTDOOR_KINDS = new Set(["liman", "balikci_koyu", "tersane", "tarla", "plaj", "fener", "saha"]);
+const OUTDOOR_KINDS = new Set(["liman", "balikci_koyu", "tersane", "tarla", "plaj", "fener", "saha", "pazar"]);
 
 // Gelişim anahtarıyla etiketlenen listeler.
 const TAGGED = ["buildings", "roads", "plazas", "features", "labels", "seats", "lamps", "piers", "parks"];
@@ -319,6 +325,8 @@ export class World {
   _stageSpot(keys) {
     const b = this.sites[0];
     if (b) return [b.x, b.z];
+    const d = keys.map((k) => this._donusum?.[k]).find(Boolean);
+    if (d) return d;
     for (const n of ["plazas", "features", "roads", "seats"]) {
       const it = this._before[n].find((x) => keys.includes(x._k));
       if (!it) continue;
@@ -768,12 +776,14 @@ export class World {
           ? [front.sign * t, front.side * off, front.side < 0 ? 0 : Math.PI]
           : [front.side * off, front.sign * t, front.side < 0 ? Math.PI / 2 : -Math.PI / 2];
         const awning = ["#2f4a6d", "#b8423c", "#3e8a86", "#d9a441", "#6f7d4a", "#8a5a7a"][Math.floor(hash2(key, 2, 9) * 6)];
+        const fDoor = front.axis === "x" ? [x, front.side * (av / 2 + 1.5 + 0.35)] : [front.side * (av / 2 + 1.5 + 0.35), z];
+        const fStreet = front.axis === "x" ? [x, 0] : [0, z];
         fillers.push([t, this.addBuilding({
           kind: "carsi", x, z, rot, w, d, floors: 2 + Math.floor(hash2(key, 3, 9) * 3), roofType: hash2(key, 4, 9) < 0.6 ? "hip" : "flat",
           address: `${front.street} No ${(front.no += 2) - 2}, Çarşı`,
           wall: HOUSE_WALLS[Math.floor(hash2(key, 5, 9) * HOUSE_WALLS.length)], roof: HOUSE_ROOFS[Math.floor(hash2(key, 6, 9) * HOUSE_ROOFS.length)],
           style: { shop: true, awning }, workplace: true,
-        })]);
+        }), { door: fDoor, street: fStreet }]);
       }
     }
     // Çarşı dükkânları sırayla birer zanaat alır (berber, terzi, kırtasiye...); tabelada sokağın adıyla.
@@ -782,6 +792,19 @@ export class World {
       const [dukkan, ek] = DUKKANLAR[i % DUKKANLAR.length];
       b.dukkan = dukkan;
       b.isim = `${CARSI_ON[Math.floor(i / DUKKANLAR.length) % CARSI_ON.length]} ${ek}`;
+    });
+    // Çarşı dükkânlarındaki meslekler (14 Kasım): berber dükkânları berberlerin iş yeri olur; iki dükkân eczane ve
+    // veteriner kliniğine dönüşür. Adım açılmadan dükkân eskisi gibi kalır (tabela, iç düzen).
+    this._donusum = {};
+    fillers.forEach(([, b, g], i) => {
+      const wp = (kind, k) => {
+        const key = `${kind}:${k}`, open = this.has(key);
+        this._tag(key, () => this._addWorkplace(kind, k, { door: g.door, path: [g.street, HUB], anchor: g.door, spread: 2, ...(open ? { building: b } : {}) }));
+        this._donusum[key] = [b.x, b.z];
+        return open;
+      };
+      if (i % DUKKANLAR.length === 0 && i / DUKKANLAR.length < cat().isyerleri.berber.length) wp("berber", i / DUKKANLAR.length);
+      for (const [kind, idx, dukkan, awning] of DONUSUM) if (i === idx && wp(kind, 0)) { b.dukkan = dukkan; b.style = { ...b.style, awning }; }
     });
     this.carsiWalks = [
       [[-halfW + 15, -4.9], [-R - 4, -4.9]], [[R + 4, -4.9], [halfW - 15, -4.9]],
@@ -902,6 +925,9 @@ export class World {
     }
     const aisleAnchors = aisles.flatMap((az) => [-30, 0, 30].map((dx) => [(market.x0 + market.x1) / 2 + dx, az]));
     this._place("pazar", { anchors: aisleAnchors, spread: 6, path: [[market.x1, 0], HUB], aisles: aisles.map((az) => [market.x0 + 10, market.x1 - 10, az]) });
+    // Pazarcılar (14 Kasım): tezgâh sıralarının arkasında, koridorlara bakarak.
+    const stalls = this.features.filter((f) => f.type === "tezgah" && f.x >= market.x0 && f.x <= market.x1 && f.z >= market.z0 && f.z <= market.z1);
+    this._tag("pazar:0", () => this._addWorkplace("pazar", 0, { door: [market.x1, (market.z0 + market.z1) / 2], path: [[market.x1, 0], HUB], anchor: [(market.x0 + market.x1) / 2, (market.z0 + market.z1) / 2], spread: 30, stalls: stalls.map((f) => ({ x: f.x + 1.5, z: f.z - f.dir * 1.35, heading: f.dir > 0 ? 0 : Math.PI })) }));
   }
 
   /** Sahil bulvarının z'si: kıyıdan 36 m içeride; geniş pencerede iki kez yumuşatılmış, eğimi sınırlı. */
@@ -988,6 +1014,14 @@ export class World {
     // Ambar: rıhtımın kara tarafında, kapıları denize (güneye) bakar.
     const wh = P.warehouse;
     this.addBuilding({ kind: "ambar", x: wh.x, z: wh.z, rot: 0, w: wh.w, d: wh.d, floors: 2, roofType: "gable", wall: "#c9d2dc", roof: "#6f7f92", industrial: true, style: { door: "#d9822b", sign: "#1f3b5a" }, address: "Liman Ambarı, Yük Limanı" });
+    // Sahil Güvenlik Karakolu (14 Kasım, yorumlardaki "asker" istekleri): rıhtımın kuzeydoğu köşesinde, istif
+    // sahasının kuzeyinde (forklift batıda, istifleyici güneyde çalışır); resmî bina şeridi, levha ve bayrak.
+    this._tag("sahil_guvenlik:0", () => {
+      const sg = { x: 136, z: 186, w: 14, d: 9 }; // istifleyicinin park yeri (115, 190) batıda kalır
+      const b = this.addBuilding({ kind: "sahil_guvenlik", x: sg.x, z: sg.z, rot: Math.PI, w: sg.w, d: sg.d, floors: 2, roofType: "flat", wall: "#f4f6f8", roof: "#c9c4bb", workplace: true, style: { band: "#c8102e", plate: "#1d3156", plateW: 9, flag: true }, address: "Sahil Güvenlik Karakolu, Yük Limanı" });
+      const sdoor = [sg.x, sg.z - sg.d / 2 + 0.35]; // cephe kuzeye, liman kapısına ve bulvara bakar
+      this._addWorkplace("sahil_guvenlik", 0, { door: sdoor, path: [sdoor, [gateX, z0 + 3], [gateX, this.avenueZ(gateX)], ...toHub(gateX)], anchor: sdoor, spread: 2, building: b });
+    });
     // Kapı: bulvardan kısa bir giriş yolu; işçiler de buradan girer.
     this.addRoad([[gateX, this.avenueZ(gateX)], [gateX, z0 + 1]], "giris");
     const door = [gateX - 4.5, z0 + 1.5];
@@ -1211,13 +1245,17 @@ export class World {
     // İtfaiye istasyonu ve belediye garajı (çöp kamyonu): köy yolunun kuzeyinde, çevre yolunun hemen batısında.
     const sx = -halfW - 56, gx = -halfW - 26;
     this._tag("itfaiye", () => {
-      const fs = this.addBuilding({ kind: "itfaiye", x: sx, z: -20, rot: 0, w: 24, d: 14, floors: 2, roofType: "flat", wall: "#e9e2d6", roof: "#c9c4bb", style: { garage: "#b8231f", tower: false }, address: "İtfaiye Yolu No 1" });
+      const fs = this.addBuilding({ kind: "itfaiye", x: sx, z: -20, rot: 0, w: 24, d: 14, floors: 2, roofType: "flat", wall: "#e9e2d6", roof: "#c9c4bb", style: { garage: "#b8231f", tower: false }, address: "İtfaiye Yolu No 1", workplace: true });
+      // İtfaiyeciler (14 Kasım, yorum istekleri): üç vardiya, istasyonda nöbet. Kapı: garaj cephesinin yaya kapısı (w/2 − 1,4).
+      this._tag("itfaiye:0", () => { const door = [sx + 10.6, -13.35]; this._addWorkplace("itfaiye", 0, { door, path: [door, [sx, -9.5], [sx, 0], [-halfW, 0], HUB], anchor: door, spread: 2, building: fs }); });
       this.plazas.push({ x0: sx - 12, z0: -13, x1: sx + 12, z1: -3.5, kind: "avlu" });
       this.addRoad([[sx, -9.5], [sx, 0]], "giris");
       this.fireStation = { building: fs, bay: [sx, -8] };
     });
     this._tag("garaj", () => {
-      const dp = this.addBuilding({ kind: "garaj", x: gx, z: -20, rot: 0, w: 18, d: 14, floors: 1, roofType: "gable", wall: "#d9dde2", roof: "#6f7f92", style: { garage: "#4f8a3e" }, address: "Garaj Sokağı No 2" });
+      const dp = this.addBuilding({ kind: "garaj", x: gx, z: -20, rot: 0, w: 18, d: 14, floors: 1, roofType: "gable", wall: "#d9dde2", roof: "#6f7f92", style: { garage: "#4f8a3e" }, address: "Garaj Sokağı No 2", workplace: true });
+      // Otobüs şoförleri (14 Kasım): belediye garajında (araç bakımı, sefer hazırlığı); seferdeki şoförler sakin olmayan figürler.
+      this._tag("garaj:0", () => { const door = [gx + 7.6, -13.35]; this._addWorkplace("garaj", 0, { door, path: [door, [gx, -9.5], [gx, 0], [-halfW, 0], HUB], anchor: door, spread: 2, building: dp }); });
       this.plazas.push({ x0: gx - 9, z0: -13, x1: gx + 9, z1: -3.5, kind: "avlu" });
       this.addRoad([[gx, -9.5], [gx, 0]], "giris");
       this.depot = { building: dp, bay: [gx, -8] };
@@ -1518,8 +1556,11 @@ export class World {
             // Cami: arka tarafa çekilir; önde son cemaat yeri ve avlu (şadırvan). Minare ön köşeye bitişik.
             const rot = side < 0 ? Math.PI / 2 : -Math.PI / 2, bxm = x + side * 3, bzm = cz + 2;
             const cw = 14, cd = 14;
-            this.addBuilding({ kind: "cami", x: bxm, z: bzm, rot, w: cw, d: cd, floors: 2, icKat: 1, roofType: "dome", wall: "#ece4d6", roof: "#7d8e9c", workplace: true, style: { dome: true }, address: `${mahalleName(m).replace(" Mahallesi", "")} Camii, ${mahalleName(m)}` });
+            const cb = this.addBuilding({ kind: "cami", x: bxm, z: bzm, rot, w: cw, d: cd, floors: 2, icKat: 1, roofType: "dome", wall: "#ece4d6", roof: "#7d8e9c", workplace: true, style: { dome: true }, address: `${mahalleName(m).replace(" Mahallesi", "")} Camii, ${mahalleName(m)}` });
             const toWorld = (lx, lz) => [bxm + lx * Math.cos(rot) + lz * Math.sin(rot), bzm - lx * Math.sin(rot) + lz * Math.cos(rot)];
+            // İmam (14 Kasım, yorum istekleri): mahallenin camisinde, muhtar gibi mahalle başına bir koltuk.
+            const cdoor = toWorld(0, cd / 2 - 0.35);
+            this._addWorkplace("cami", m % cat().isyerleri.cami.length, { door: cdoor, path: [cdoor, [x, cz + g.h / 2 + 1], HUB], anchor: cdoor, spread: 1.5, building: cb });
             // Kaide (2,6 m küp) yan duvara ve son cemaat yerinin döşemesine değer ama içine girmez.
             const [mx, mz] = toWorld(-cw / 2 - 1.5, cd / 2 - 1.5);
             this.features.push({ type: "minare", x: mx, z: mz });

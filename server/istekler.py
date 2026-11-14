@@ -39,11 +39,11 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "yazilim muhendisi": "yazilimci", "bilgisayar muhendisi": "yazilimci", "bilgisayarci": "yazilimci",
              "elektronik muhendisi": "yazilimci", "bakkal": "kasiyer", "bakal": "kasiyer", "duktur": "doktor",
              # Olmayan meslekler: en yakını (cevapta söylenir)
-             "komiser": "polis", "komser": "polis", "asker": "polis", "subay": "polis", "veteriner": "doktor",
+             "komiser": "polis", "komser": "polis",
              "pilot": "zeplin_pilotu", "cerrah": "doktor",
              "yargic": "hakim", "insaatci": "mimar", "insatci": "mimar", "tamirci": "gemi_ustasi",
              "sanayici": "gemi_ustasi", "lastikci": "gemi_ustasi", "basketbolcu": "futbolcu", "voleybolcu": "futbolcu",
-             "general": "polis", "tumgeneral": "polis", "komutan": "polis", "balik ci": "balikci",
+             "balik ci": "balikci",
              "kaleci": "futbolcu", "fublocu": "futbolcu", "emniyet muduru": "polis", "donerci": "asci",
              "fotbolcu": "futbolcu", "bilgisayar muhendisligi": "yazilimci", "ic mimar": "mimar", "cigkofteci": "asci",
              "pideci": "firinci", "tesisatci": "gemi_ustasi", "elektrikci": "gemi_ustasi", "bankaci": "muhasebeci",
@@ -58,11 +58,32 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              "orta saha": "futbolcu", "ortasaha": "futbolcu",
              "mobilyaci": "marangoz", "ahsap": "marangoz", "sanayi": "gemi_ustasi", "fenomen": "uzaktan",
              "youtuber": "uzaktan", "ormanci": "bahcivan",
-             "kale": "futbolcu", "kutupaneci": "kutuphaneci", "uzman cavus": "polis", "mobilya": "marangoz",
+             "kale": "futbolcu", "kutupaneci": "kutuphaneci", "mobilya": "marangoz",
              "antranor": "futbolcu", "sagbek": "futbolcu", "solbek": "futbolcu", "orda saha": "futbolcu",
-             "resam": "ressam", "resssam": "ressam"}
+             "resam": "ressam", "resssam": "ressam",
+             # 14 Kasım: yorumlarda en çok istenen eksik meslekler eklendi (eczane, itfaiye, garaj, pazar, saha, cami,
+             # çarşı berberleri, sahil güvenlik, veteriner). Asker/komutan istekleri artık sahil güvenlik (önce polis).
+             "eczane": "eczaci", "eczaneci": "eczaci", "eczanaci": "eczaci", "ezcaci": "eczaci", "eczaci": "eczaci",
+             "farmasist": "eczaci", "ecza": "eczaci",
+             "itfaiye": "itfaiyeci", "itfayeci": "itfaiyeci", "itfaiyci": "itfaiyeci", "itfaiye eri": "itfaiyeci",
+             "itfaiye sefi": "itfaiyeci", "itfaiye seflik": "itfaiyeci", "itfaiyeci sef": "itfaiyeci",
+             "yangin sondurucu": "itfaiyeci", "itfaiyeci": "itfaiyeci",
+             "sofor": "sofor", "otobus soforu": "sofor", "otobus sofor": "sofor", "taksici": "sofor", "taksi soforu": "sofor",
+             "zeplin soforu": "zeplin_pilotu", "tirci": "sofor", "tir soforu": "sofor", "kamyoncu": "sofor", "surucu": "sofor", "kurye": "sofor",
+             "hakem": "hakem", "hakemlik": "hakem",
+             "pazarci": "pazarci", "manavci": "pazarci", "seyyar satici": "pazarci",
+             "berber": "berber", "kuafor": "berber", "barber": "berber",
+             "imam": "imam", "imamlik": "imam", "cami imami": "imam", "cami hocasi": "imam", "muezzin": "imam",
+             "muezin": "imam",
+             "veteriner": "veteriner", "veteriner hekim": "veteriner", "hayvan doktoru": "veteriner",
+             "veterinerlik": "veteriner",
+             "asker": "sahil_guvenlik", "askeriye": "sahil_guvenlik", "subay": "sahil_guvenlik",
+             "komutan": "sahil_guvenlik", "general": "sahil_guvenlik", "tumgeneral": "sahil_guvenlik",
+             "uzman cavus": "sahil_guvenlik", "astsubay": "sahil_guvenlik", "sahil guvenlik": "sahil_guvenlik",
+             "sahil guvenlikci": "sahil_guvenlik", "deniz kuvvetleri": "sahil_guvenlik",
+             "komando": "sahil_guvenlik", "ozel kuvvetler": "sahil_guvenlik"}
 # Yalnız tam kelimeyken geçerli takma adlar ("yaz bakalım" kasiyer değil, 12 Kasım).
-TAM_KELIME = {"bakal", "kale"}
+TAM_KELIME = {"bakal", "kale", "ecza"}
 # Birden çok mesleğin basamağı olabilecek genel unvanlar meslek adı sayılmaz.
 GENEL = {"mudur", "uzman", "stajyer", "cirak", "komi", "sef"}
 EK_HOBI = {"balik": "balik", "kitap": "kitap", "resim": "resim", "bisiklet": "bisiklet", "yuzme": "yuzme",

@@ -144,7 +144,7 @@ export function buildWorkInterior(b0, f, add0, spot0) {
       S(hw - 2, 2.3, Math.PI, "bench");
       break;
     }
-    case "plaza": case "belediye": case "karakol": case "muhtarlik": case "adliye": {
+    case "plaza": case "belediye": case "karakol": case "muhtarlik": case "adliye": case "sahil_guvenlik": {
       // Açık ofis: masa sıraları, toplantı masası.
       const rows = Math.max(1, Math.floor((b.d - 3) / 2.6)), cols = Math.max(1, Math.floor((b.w - 2) / 2.4));
       for (let r = 0; r < rows; r++) {
@@ -154,7 +154,7 @@ export function buildWorkInterior(b0, f, add0, spot0) {
           if ((r * cols + c) % 2 === 0) S(x, z + 0.55, Math.PI, "desk");
         }
       }
-      if (kind === "belediye" || kind === "karakol" || kind === "adliye") counter(0, hd - 2, Math.min(8, b.w - 4), kind === "karakol" ? "#c9d3df" : "#f4f1ea");
+      if (kind === "belediye" || kind === "karakol" || kind === "adliye" || kind === "sahil_guvenlik") counter(0, hd - 2, Math.min(8, b.w - 4), kind === "karakol" || kind === "sahil_guvenlik" ? "#c9d3df" : "#f4f1ea");
       break;
     }
     case "okul": {

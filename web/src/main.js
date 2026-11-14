@@ -377,7 +377,7 @@ const trafficRef = traffic;
 follower = new Follower({ camera, controls, world, people, traffic, zeplin });
 const claim = {}; // "Bu benim" (karttan Benim evim'e): ben oluşturulunca doldurulur
 const ui = createUI({ residents, people, world, dollhouse, stories, traffic, zeplin, capture, claim, follow: { get: () => follower.get(), set: (t, view, o) => { if (t) follower.start(t, view, o); else follower.stop(); flight = null; } }, setSpeed, flyTo, speed, waiting, listError, secim, today: () => sim.dayOf(simNow()), minute: () => sim.minuteOf(simNow()) });
-if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
+if (globalThis.__ada) Object.assign(globalThis.__ada, { ui, dollhouse, camera, controls, follower, followKey: () => follower.get()?.key ?? null });
 // Video kaydı: hedeften kameraya giden ışında ilk opak engelin uzaklığı (yoksa Infinity). kaydet.mjs sakin çekiminde
 // kamerayı engelin önüne alır (7 Kasım: terastaki sakinde kamera tentenin içine düştü, kare düz mavi kaldı).
 if (globalThis.__ada) {

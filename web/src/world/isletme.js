@@ -824,6 +824,7 @@ function carsiShop(T) {
       P.box(0.62, 0.14, 0.6, x, 0.42, z, "#8a2f3a"); P.box(0.62, 0.75, 0.12, x, 0.5, z + 0.3, "#8a2f3a");
       for (const dx of [-0.32, 0.32]) P.box(0.08, 0.08, 0.5, x + dx, 0.62, z, "#c9ced4");
       P.box(0.3, 0.08, 0.2, x, 0.16, z - 0.42, "#3a3f47");
+      T.S(x + 0.3, z + 0.8, Math.PI, "stand"); // berber (14 Kasım: berber dükkânları iş yeri oldu), müşterinin arkasında
     }
     // Lavabo ve havlu dolabı (sol duvar).
     P.box(0.6, 0.9, 1.4, -hw + 0.45, 0.06, 0.2, "#f4f1ea"); P.cyl(0.22, 0.18, 0.12, -hw + 0.45, 0.88, 0.2, "#d9dde2", 12);
@@ -837,6 +838,41 @@ function carsiShop(T) {
     // Berber direği: kapı yanında duvarda kırmızı-beyaz-mavi şeritli silindir.
     for (let i = 0; i < 6; i++) P.cyl(0.08, 0.08, 0.15, hw - 0.3, 1.2 + i * 0.15, -hd + 0.25, ["#d8433d", "#f4f1ea", "#2f6fb5"][i % 3], 10);
     till("#2a2f38", "#f4f1ea");
+  } else if (t === "eczane") {
+    // Eczane (14 Kasım, yorum istekleri): beyaz-yeşil; arka duvarda ilaç rafları ve yeşil haç, önünde uzun tezgâh
+    // (eczacılar arkasında), sol duvarda bakım ürünleri, kapı yanında tansiyon köşesi.
+    floor("#eef1ef");
+    const MED = ["#f4f6f8", "#3e8a5a", "#2f6fb5", "#f4f6f8", "#d8433d", "#e8f2f6", "#7fae45"];
+    shelfWall("x", -hw + 0.3, hw - 0.3, 5, (x, y, z, i, r) => P.box(0.16, 0.12 + ((i + r) % 3) * 0.04, 0.22, x, y, z, MED[(i * 3 + r) % MED.length]), "#f4f6f8");
+    shelfWall("z", -hd + 2.4, hd - 1.2, 4, (x, y, z, i, r) => P.box(0.22, 0.14 + ((i + r) % 2) * 0.06, 0.16, x, y, z, MED[(i + r * 2) % MED.length]), "#e6ebe8");
+    const cw = Math.min(2 * hw - 2.6, 5.2);
+    P.box(cw, 1.0, 0.6, -0.3, 0.06, -hd + 1.6, "#f4f6f8"); P.box(cw + 0.05, 0.05, 0.65, -0.3, 1.06, -hd + 1.6, "#3e8a5a");
+    P.box(0.3, 0.22, 0.25, -0.3 + cw / 2 - 0.5, 1.1, -hd + 1.55, "#2a2f38");
+    for (let i = 0; i < 4; i++) P.box(0.22, 0.12, 0.16, -0.3 - cw / 2 + 0.5 + i * 0.35, 1.11, -hd + 1.6, MED[i + 1]);
+    add(0.7, 0.2, 0.06, 0, 2.65, -hd + 0.2, null, 0, { material: glow("#3fd07a"), shadow: false });
+    add(0.2, 0.7, 0.06, 0, 2.4, -hd + 0.2, null, 0, { material: glow("#3fd07a"), shadow: false });
+    // Tansiyon köşesi: tabure ve ölçüm masası (müşteri oturur).
+    P.box(0.6, 0.75, 0.5, hw - 0.7, 0.06, hd - 2.2, "#f4f6f8"); P.box(0.2, 0.12, 0.14, hw - 0.7, 0.81, hd - 2.2, "#2a2f38");
+    P.cyl(0.2, 0.2, 0.45, hw - 1.35, 0.06, hd - 2.2, "#3e8a5a", 10);
+    T.guests.push(T.spot(hw - 1.35, hd - 2.2, Math.PI / 2, "guest"));
+    T.S(-0.3 - cw / 4, -hd + 1.0, 0, "counter"); T.S(-0.3 + cw / 4, -hd + 1.0, 0, "counter");
+  } else if (t === "veteriner") {
+    // Veteriner kliniği: ortada paslanmaz muayene masası (veteriner arkasında), sol duvarda kafesler, arka duvarda
+    // mama ve ilaç rafı, sağ önde kayıt tezgâhı, sağ arkada bekleme bankı.
+    floor("#e6efe9");
+    P.box(1.5, 0.85, 0.75, -0.3, 0.06, -hd + 2.0, "#c9ced4"); P.box(1.55, 0.04, 0.8, -0.3, 0.91, -hd + 2.0, "#e9edf0");
+    P.cyl(0.25, 0.25, 0.04, -0.3, 2.7, -hd + 2.0, "#f4f6f8", 14);
+    add(0.4, 0.02, 0.4, -0.3, 2.68, -hd + 2.0, null, 0, { material: glow("#fff6dc"), shadow: false });
+    for (let k = 0; k < 3; k++) for (let r = 0; r < 2; r++) {
+      const z = -hd + 1.0 + k * 0.85, y = 0.06 + r * 0.62;
+      P.box(0.75, 0.56, 0.75, -hw + 0.5, y, z, "#d9dde2");
+      for (let j = 0; j < 4; j++) P.box(0.02, 0.48, 0.02, -hw + 0.89, y + 0.04, z - 0.27 + j * 0.18, "#5a5f66");
+    }
+    shelfWall("x", 0.6, hw - 0.3, 3, (x, y, z, i, r) => P.box(0.2, 0.28, 0.18, x, y, z, ["#d9822b", "#3e8a7a", "#e8c27a", "#2f6fb5"][(i + r) % 4]), "#e6ebe8");
+    P.box(0.45, 0.45, 1.5, hw - 0.5, 0.06, -hd + 2.6, "#3e8a7a");
+    for (const dz of [-0.4, 0.4]) T.guests.push(T.spot(hw - 0.55, -hd + 2.6 + dz, -Math.PI / 2, "guest"));
+    till("#f4f6f8", "#3e8a7a");
+    T.S(-0.3, -hd + 1.25, 0, "stand"); T.S(hw - 1.45, hd - 2.4, Math.PI / 2, "counter");
   } else if (t === "terzi") {
     // Arka duvarda top top kumaş rafları, ortada iki kesim masası (makas, mezura), sol duvarda dikiş makineleri,
     // önde mankenler ve askılı elbise rayı, çekirdek önünde perdeli prova kabini.

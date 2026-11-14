@@ -53,6 +53,16 @@ const UNIFORMS = {
   futbolcu: { top: "#c8312f", bottom: "#f4f4f2", shorts: true, sleeves: false }, // Mercanspor forması
   zeplin_pilotu: { top: "#f4f4f2", bottom: "#1d3156", sleeves: true, hat: "kep", hatColor: "#1d3156" }, // pilot gömleği ve kepi
   hakim: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true }, // cübbe
+  // 14 Kasım: yorum istekleriyle gelen meslekler.
+  itfaiyeci: { top: "#3a3f4a", bottom: "#3a3f4a", sleeves: true, hat: "kask", hatColor: "#d8433d" },
+  sofor: { top: "#9fc3e0", bottom: "#2c3a52" },
+  hakem: { top: "#1d1d22", bottom: "#1d1d22", shorts: true, sleeves: false },
+  pazarci: { top: "#7a5a3e" },
+  imam: { top: "#ece6d8", bottom: "#2b2b30", sleeves: true, hat: "bere", hatColor: "#f4f1ea" }, // takke
+  eczaci: { top: "#f4f6f8", sleeves: true }, // önlük
+  berber: { top: "#f4f4f2", bottom: "#1d1d22" },
+  sahil_guvenlik: { top: "#1d3156", bottom: "#1d3156", sleeves: true, hat: "kep", hatColor: "#1d3156" },
+  veteriner: { top: "#3e8a7a", bottom: "#3e8a7a" },
   savci: { top: "#1d1d22", bottom: "#1d1d22", sleeves: true },
 };
 const uniformOf = (u) => u && {
@@ -413,6 +423,8 @@ export class People {
         if (kind === "liman" && w.port) { for (const q of w.port.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
         if (kind === "tersane" && w.tersane) { for (const q of w.tersane.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
         if (kind === "balikci_koyu" && w.koy) { for (const q of w.koy.posts) add(`work:${kind}:${idx}`, { ...q }); return; }
+        // Pazarcılar (sakin): tezgâhların yanında, sakin olmayan pazarcının (tezgâh ortası) yanında durur.
+        if (loc.stalls) { for (const q of loc.stalls) add(`work:${kind}:${idx}`, { x: q.x, z: q.z, heading: q.heading }); return; }
         const center = loc.anchor;
         // Nokta sayısı alanın büyüklüğüne göre: tarla geniş, kıyıdaki iş yerleri dar. Noktası olmayan
         // çalışan görünmez (atölyenin içinde, denizde, tarlanın uzak ucunda) — kimse bir noktaya yığılmaz.
