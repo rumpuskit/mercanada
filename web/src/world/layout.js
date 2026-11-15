@@ -1018,9 +1018,12 @@ export class World {
     // sahasının kuzeyinde (forklift batıda, istifleyici güneyde çalışır); resmî bina şeridi, levha ve bayrak.
     this._tag("sahil_guvenlik:0", () => {
       const sg = { x: 136, z: 186, w: 14, d: 9 }; // istifleyicinin park yeri (115, 190) batıda kalır
-      const b = this.addBuilding({ kind: "sahil_guvenlik", x: sg.x, z: sg.z, rot: Math.PI, w: sg.w, d: sg.d, floors: 2, roofType: "flat", wall: "#f4f6f8", roof: "#c9c4bb", workplace: true, style: { band: "#c8102e", plate: "#1d3156", plateW: 9, flag: true }, address: "Sahil Güvenlik Karakolu, Yük Limanı" });
+      const b = this.addBuilding({ kind: "sahil_guvenlik", x: sg.x, z: sg.z, rot: Math.PI, w: sg.w, d: sg.d, floors: 2, roofType: "flat", wall: "#f4f6f8", roof: "#c9c4bb", workplace: true, style: { band: "#c8102e", plate: "#1d3156", plateW: 9, flag: true, flagLx: -9 }, address: "Sahil Güvenlik Karakolu, Yük Limanı" });
       const sdoor = [sg.x, sg.z - sg.d / 2 + 0.35]; // cephe kuzeye, liman kapısına ve bulvara bakar
-      this._addWorkplace("sahil_guvenlik", 0, { door: sdoor, path: [sdoor, [gateX, z0 + 3], [gateX, this.avenueZ(gateX)], ...toHub(gateX)], anchor: sdoor, spread: 2, building: b });
+      // Yaya ağına düz bağlansa çitten geçerdi (15 Kasım): kapıdan rıhtım boyunca liman kapısına yürür, bekçi
+      // kulübesinin (101,5; 179,2) arkasından dolanır ve liman işçileri gibi bariyer kolunun batı ucundan çıkar.
+      const yaklasim = [sdoor, [sdoor[0] - 6, z0 + 6.5], [gateX + 4, z0 + 6.5], [gateX - 3, z0 + 3.2], [gateX - 4.6, z0 + 1.4], [gateX - 4.6, z0 - 2.5]];
+      this._addWorkplace("sahil_guvenlik", 0, { door: sdoor, yaklasim, path: [...yaklasim, [gateX, this.avenueZ(gateX)], ...toHub(gateX)], anchor: sdoor, spread: 2, building: b });
     });
     // Kapı: bulvardan kısa bir giriş yolu; işçiler de buradan girer.
     this.addRoad([[gateX, this.avenueZ(gateX)], [gateX, z0 + 1]], "giris");
@@ -1560,7 +1563,10 @@ export class World {
             const toWorld = (lx, lz) => [bxm + lx * Math.cos(rot) + lz * Math.sin(rot), bzm - lx * Math.sin(rot) + lz * Math.cos(rot)];
             // İmam (14 Kasım, yorum istekleri): mahallenin camisinde, muhtar gibi mahalle başına bir koltuk.
             const cdoor = toWorld(0, cd / 2 - 0.35);
-            this._addWorkplace("cami", m % cat().isyerleri.cami.length, { door: cdoor, path: [cdoor, [x, cz + g.h / 2 + 1], HUB], anchor: cdoor, spread: 1.5, building: cb });
+            // Kapıdan sokağa düz yürüyen minarenin kaidesinden geçiyordu (15 Kasım): önce son cemaat yerinden avluya
+            // çıkar, minarenin dışından sokağa yürür.
+            const yaklasim = [cdoor, toWorld(0, cd / 2 + 3.2), toWorld(-g.h / 2 + 2 + 2, cd / 2 + 3.2)];
+            this._addWorkplace("cami", m % cat().isyerleri.cami.length, { door: cdoor, yaklasim, path: [...yaklasim, [x, cz + g.h / 2 + 1], HUB], anchor: cdoor, spread: 1.5, building: cb });
             // Kaide (2,6 m küp) yan duvara ve son cemaat yerinin döşemesine değer ama içine girmez.
             const [mx, mz] = toWorld(-cw / 2 - 1.5, cd / 2 - 1.5);
             this.features.push({ type: "minare", x: mx, z: mz });

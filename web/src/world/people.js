@@ -539,14 +539,21 @@ export class People {
     // Maçlar: boş zamanı maç saatine denk gelenlerden 22 oyuncu ve bir hakem; bir kısmı tribüne gelir.
     this.override = this.residents.map(() => null);
     this.matches = this._matchWindows(this.day).map((w, mi) => ({ ...w, id: this.day * 4 + mi, players: [] }));
+    const bosMac = (q, m) => (q.seg.ne === "hobi" || q.seg.ne === "meydan") && q.seg.bas <= m.start + 10 && q.seg.son >= m.start + 30 && !this.override[q.i]?.has(q.k);
     for (const m of this.matches) {
+      // Hakem mesleğinden (15 Kasım) o saatte dışarıda olan (sahada mesaide ya da gezmede) biri varsa maçı o yönetir
+      // (23. kişi, siyah forma); yoksa eskisi gibi oyunculardan biri.
+      const ref = requests.find((q) => this.works[q.i]?.job === "hakem" && q.seg.bas <= m.start + 10 && q.seg.son >= m.start + 30 && !this.override[q.i]?.has(q.k));
+      if (ref) {
+        m.players.push(ref.i);
+        ref.mode = "football"; ref.match = m; ref.num = 22;
+        (this.override[ref.i] ??= new Map()).set(ref.k, "saha");
+      }
       for (const q of requests) {
-        if (q.seg.ne !== "hobi" && q.seg.ne !== "meydan") continue;
-        if (q.seg.bas > m.start + 10 || q.seg.son < m.start + 30) continue;
-        if (this.override[q.i]?.has(q.k)) continue;
+        if (!bosMac(q, m)) continue;
         const s = this.residents[q.i].seed;
         if (m.players.length < 23 && roll(s, "futbol", m.id) % 100 < 35) {
-          const num = m.players.length;
+          const num = ref ? m.players.length - 1 : m.players.length;
           m.players.push(q.i);
           q.mode = "football";
           q.match = m;

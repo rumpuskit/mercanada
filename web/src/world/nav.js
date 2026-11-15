@@ -39,6 +39,8 @@ function intersect(p, d, q, e) {
   return add(p, mul(d, t));
 }
 
+const leadKey = (p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`;
+
 export class PedNav {
   constructor(world) {
     this.world = world;
@@ -188,6 +190,10 @@ export class PedNav {
     this.prev = new Int32Array(n);
     this.via = new Int32Array(n);
     this.run = 0;
+    // Yaklaşım yolları (15 Kasım): kapısı ağa düz bağlanınca bir engelden (çit, minare) geçen iş yerlerinde kapıdan
+    // dışarıdaki bir noktaya giden kırık çizgi (layout.js iş yeri kaydında `yaklasim: [kapı, ..., dış nokta]`).
+    this.leads = new Map();
+    for (const list of Object.values(world.workplaces ?? {})) for (const loc of list) if (loc?.yaklasim && loc.door) this.leads.set(leadKey(loc.door), loc.yaklasim);
   }
 
   /** Noktaya en yakın yaya çizgisi (geçitler hariç); bulamazsa genişleyerek arar. */
@@ -234,6 +240,18 @@ export class PedNav {
    * group, signal}). A ve B ağa en yakın noktadan bağlanır.
    */
   route(A, B) {
+    const ya = this.leads.size ? this.leads.get(leadKey(A)) : null, yb = this.leads.size ? this.leads.get(leadKey(B)) : null;
+    if (ya || yb) {
+      // Kapıdan dış noktaya yaklaşım yolu, oradan ağ; geçitlerin uzaklığı baştaki yaklaşım kadar kayar.
+      const r = this._route(ya ? ya[ya.length - 1] : A, yb ? yb[yb.length - 1] : B);
+      const head = ya ? ya.slice(0, -1) : [], tail = yb ? yb.slice(0, -1).reverse() : [];
+      const shift = ya ? polyLen(ya).at(-1) : 0;
+      return { pts: [...head, ...r.pts, ...tail], crossings: r.crossings.map((c) => ({ ...c, d: c.d + shift })) };
+    }
+    return this._route(A, B);
+  }
+
+  _route(A, B) {
     const la = this.locate(A), lb = this.locate(B);
     if (!la || !lb) return { pts: [A, B], crossings: [] };
     const ea = this.edges[la.edge], eb = this.edges[lb.edge];

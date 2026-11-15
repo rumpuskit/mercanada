@@ -416,6 +416,8 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
     }
     b.door = { idx: B.doors.add(local(b, b.w / 2 - 1.4, 0.15, b.d / 2 + 0.02), b.rot, s.set(1.1, 2.3, 0.1)), x: b.w / 2 - 1.4, y: 0.15, z: b.d / 2 + 0.02, w: 1.1, h: 2.3 };
     B.signs.add(local(b, 0, 4.4, b.d / 2 + 0.1), b.rot, s.set(Math.min(b.w - 2, 9), 0.9, 0.12), st.garage);
+    // İş yeri olunca (itfaiyeci, şoför; 15 Kasım) bant boş kalmasın: adı yazılır.
+    if (b.isim) K.named.push({ owner: b, pos: local(b, 0, 4.4 + 0.45, b.d / 2 + 0.165).clone(), rot: b.rot, w: Math.min(b.w - 2, 9) - 0.3, h: 0.78, text: b.isim, bg: st.garage, fg: "#fbf6ec" });
   } else if (!st.glass) {
     const dw = b.w > 20 ? 2.6 : 1.6;
     b.door = { idx: B.doors.add(local(b, 0, 0.15, b.d / 2 + 0.02), b.rot, s.set(dw, 2.5, 0.1)), y: 0.15, z: b.d / 2 + 0.02, w: dw, h: 2.5 };
@@ -487,7 +489,8 @@ export function drawBuilding(K, b, maxFloors = Infinity) {
 
 /** Resmî binaların bayrak direği (bina yerel koordinatı; bayrak bayram.js'te direğin tepesinde). */
 export const BINA_BAYRAK = {
-  buyuk: { lx: (b) => b.w / 2 - 2, lz: (b) => b.d / 2 + 4, h: 10, w: 2.4 },
+  // flagLx: dar binada direk levhanın önüne düşmesin (Sahil Güvenlik, 15 Kasım: köşenin ötesinde).
+  buyuk: { lx: (b) => b.style?.flagLx ?? b.w / 2 - 2, lz: (b) => b.d / 2 + 4, h: 10, w: 2.4 },
   kucuk: { lx: (b) => b.w / 2 + 1, lz: (b) => b.d / 2 - 0.5, h: 5.5, w: 1.5 },
 };
 export function binaBayragi(b) {
@@ -528,6 +531,7 @@ export function buildCity(world) {
         if (touched) batch.mesh.instanceMatrix.needsUpdate = true;
       }
       for (const n of K.named) if (n.owner === b) n.mesh.visible = !on;
+      for (const e of features.userData.extras) if (e.owner === b) e.mesh.visible = !on;
     },
     /** Kapılar: içinden biri geçenler açılır (menteşesinden dışa doğru), diğerleri kapanır. */
     setOpenDoors(open) {
@@ -1226,6 +1230,72 @@ function buildFeatures(world) {
     fruit.forEach(([x, y, z, c], i) => { fm.setMatrixAt(i, m4.makeTranslation(x, y, z)); fm.setColorAt(i, col.set(c)); });
     group.add(fm);
   }
+  // Dükkân cephe işaretleri (15 Kasım, yorum isteklerinden gelen işletmeler): eczanenin kırmızı "E" levhası ve
+  // berberin dönen direği, veterinerin pati levhası. Levhalar duvardan dik çıkar (iki yüzü okunur), gece yanar.
+  const poleTex = (() => {
+    const cv = document.createElement("canvas");
+    cv.width = 64; cv.height = 128;
+    const g = cv.getContext("2d");
+    g.fillStyle = "#f6f4ef"; g.fillRect(0, 0, 64, 128);
+    const cols = ["#c8102e", "#f6f4ef", "#1d4f9c", "#f6f4ef"];
+    for (let k = -4; k < 12; k++) {
+      g.fillStyle = cols[((k % 4) + 4) % 4];
+      g.beginPath(); g.moveTo(0, k * 16); g.lineTo(64, k * 16 - 32); g.lineTo(64, k * 16 - 16); g.lineTo(0, k * 16 + 16); g.fill();
+    }
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 1.5);
+    return t;
+  })();
+  const bladeMat = (draw) => {
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 256;
+    draw(cv.getContext("2d"));
+    const t = new THREE.CanvasTexture(cv);
+    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.5, emissive: new THREE.Color("#ffffff"), emissiveMap: t, emissiveIntensity: 0 });
+    glowSigns.push(m);
+    return m;
+  };
+  const rounded = (g, x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  let eczaneMat = null, vetMat = null;
+  const signEdge = std("#e9e5dc", { roughness: 0.6 }), bracket = std("#3a3f47", { metalness: 0.5, roughness: 0.45 });
+  const poleMat = new THREE.MeshStandardMaterial({ map: poleTex, roughness: 0.3, emissive: new THREE.Color("#ffffff"), emissiveMap: poleTex, emissiveIntensity: 0 });
+  glowSigns.push(poleMat);
+  const capMat = std("#d9dde2", { metalness: 0.6, roughness: 0.3 });
+  const at = (b, lx, lz) => [b.x + lx * Math.cos(b.rot) + lz * Math.sin(b.rot), b.z - lx * Math.sin(b.rot) + lz * Math.cos(b.rot)];
+  const extras = []; // bina gizlenince (iç görünüm) onunla gizlenir: setHidden
+  for (const b of world.buildings) {
+    if (b.kind !== "carsi" || !b.style?.shop) continue;
+    const ekle = (...a) => { const m = add(...a); extras.push({ owner: b, mesh: m }); return m; };
+    if (b.dukkan === "eczane" || b.dukkan === "veteriner") {
+      if (b.dukkan === "eczane") eczaneMat ??= bladeMat((g) => {
+        g.fillStyle = "#c8102e"; rounded(g, 4, 4, 248, 248, 34); g.fill();
+        g.fillStyle = "#ffffff"; rounded(g, 20, 20, 216, 216, 24); g.fill();
+        g.fillStyle = "#c8102e"; g.font = "900 196px Nunito, Arial, sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+        g.fillText("E", 128, 140);
+      });
+      else vetMat ??= bladeMat((g) => {
+        g.fillStyle = "#3e8a7a"; rounded(g, 4, 4, 248, 248, 34); g.fill();
+        g.strokeStyle = "#ffffff"; g.lineWidth = 8; rounded(g, 18, 18, 220, 220, 26); g.stroke();
+        g.fillStyle = "#ffffff";
+        g.beginPath(); g.ellipse(128, 162, 46, 38, 0, 0, Math.PI * 2); g.fill();
+        for (const [x, y, r] of [[70, 112, 20], [104, 78, 21], [152, 78, 21], [186, 112, 20]]) { g.beginPath(); g.ellipse(x, y, r * 0.86, r, 0, 0, Math.PI * 2); g.fill(); }
+      });
+      const mat = b.dukkan === "eczane" ? eczaneMat : vetMat;
+      const lx = b.w / 2 - 0.35, lz = b.d / 2 + 0.75;
+      const [x, z] = at(b, lx, lz);
+      ekle(new THREE.BoxGeometry(0.1, 0.95, 0.95), [mat, mat, signEdge, signEdge, signEdge, signEdge], x, FLAT_Y + 3.95, z, b.rot, false);
+      const [rx, rz] = at(b, lx, b.d / 2 + 0.25);
+      ekle(new THREE.BoxGeometry(0.05, 0.05, 1.0), bracket, rx, FLAT_Y + 4.5, rz, b.rot, false);
+    } else if (b.dukkan === "berber") {
+      const lx = -(b.w / 2 - 0.5), [x, z] = at(b, lx, b.d / 2 + 0.24);
+      ekle(new THREE.CylinderGeometry(0.11, 0.11, 1.0, 16), poleMat, x, FLAT_Y + 2.1, z, b.rot, false);
+      ekle(new THREE.SphereGeometry(0.14, 12, 8), capMat, x, FLAT_Y + 2.66, z, 0, false);
+      ekle(new THREE.CylinderGeometry(0.14, 0.14, 0.1, 12), capMat, x, FLAT_Y + 1.57, z, 0, false);
+      const [rx, rz] = at(b, lx, b.d / 2 + 0.12);
+      for (const y of [1.75, 2.45]) ekle(new THREE.BoxGeometry(0.04, 0.04, 0.24), bracket, rx, FLAT_Y + y, rz, b.rot, false);
+    }
+  }
   // Tribün koltukları: her oturma yerinde kova koltuk (oturak + sırtlık), bölüm bölüm renkli.
   {
     const seats = world.seats.filter((s) => s.place === "tribun");
@@ -1250,7 +1320,9 @@ function buildFeatures(world) {
     for (const f of fenerLamps) { f.lensMat.emissiveIntensity = 0.15 + 3.5 * fener; f.beamMat.uniforms.uOpacity.value = 0.35 * fener; f.beam.visible = fener > 0; }
     for (const m of glowSigns) m.emissiveIntensity = 0.9 * fener;
   };
+  group.userData.extras = extras;
   group.userData.tick = (t) => {
+    poleTex.offset.y = (t * 0.35) % 1; // berber direği döner gibi
     for (const f of fenerLamps) f.beam.rotation.y = t * 0.6;
     for (const fo of fountains) {
       fo.curtains.forEach((c, i) => { c.scale.set(1 + Math.sin(t * 3 + i) * 0.015, 1, 1 + Math.cos(t * 3 + i) * 0.015); c.material.opacity = 0.45 + 0.1 * Math.sin(t * 5); });
