@@ -65,7 +65,7 @@ EK_MESLEK = {"ciftci": "zeytinci", "yazilim": "yazilimci", "programci": "yazilim
              # çarşı berberleri, sahil güvenlik, veteriner). Asker/komutan istekleri artık sahil güvenlik (önce polis).
              "eczane": "eczaci", "eczaneci": "eczaci", "eczanaci": "eczaci", "ezcaci": "eczaci", "eczaci": "eczaci",
              "farmasist": "eczaci", "ecza": "eczaci",
-             "itfaiye": "itfaiyeci", "itfayeci": "itfaiyeci", "itfaiyci": "itfaiyeci", "itfaiye eri": "itfaiyeci",
+             "itfaiye": "itfaiyeci", "itfayeci": "itfaiyeci", "itfaiyci": "itfaiyeci", "itfayici": "itfaiyeci", "itfayci": "itfaiyeci", "itfaiye eri": "itfaiyeci",
              "itfaiye sefi": "itfaiyeci", "itfaiye seflik": "itfaiyeci", "itfaiyeci sef": "itfaiyeci",
              "yangin sondurucu": "itfaiyeci", "itfaiyeci": "itfaiyeci",
              "sofor": "sofor", "otobus soforu": "sofor", "otobus sofor": "sofor", "taksici": "sofor", "taksi soforu": "sofor",
