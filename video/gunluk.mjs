@@ -147,7 +147,10 @@ const olay = olayGunu(olayGun, sim.isOpen, { zorla: olayZorla, saat: olaySaatZor
 const olayAdres = olayZorla ? `&olay=${olayZorla}${olaySaatZorla ? "&olaysaat=" + olaySaatZorla : ""}` : "";
 if (olay) console.log(`günün olayı: ${olay.ad} (${olay.tur}) ${saatYaz(olay.bas)}–${saatYaz(olay.son)}${olayZorla ? " [zorlandı]" : ""}`);
 const stages = catalog.gelisim;
-const next = stages.find((s) => s.nufus > level);
+// Sıradaki adım sitedeki kartla aynı (layout.js nextStage): ana adımlar + çarşının yeni dükkânları (carsi:n, gelisim_dukkan);
+// 16 Kasım provası: video "Kumsal Kahvecisi için 18 kişi" derken site "Çarşıda yeni dükkân · 8 sakin daha" diyordu.
+const dukkan = catalog.gelisim_dukkan ? Array.from({ length: 400 }, (_, n) => ({ nufus: catalog.gelisim_dukkan.ilk + n * catalog.gelisim_dukkan.aralik, ad: "Çarşıda yeni dükkân" })) : [];
+const next = [...stages, ...dukkan].filter((s) => s.nufus > level).sort((a, b) => a.nufus - b.nufus || (b.acar ? 1 : 0) - (a.acar ? 1 : 0))[0];
 // Kaç kişi daha: eşik gelişim düzeyine göre (sitedeki kartla aynı, ui.js): ayrılanların sırası yeniden verilmez.
 const need = next ? Math.max(1, next.nufus - level) : 0;
 
