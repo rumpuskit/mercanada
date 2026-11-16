@@ -34,7 +34,17 @@ export function gazete(d) {
   const first = residents.reduce((m, r) => Math.min(m, r.arrived_day), day);
   out.push(el("p", `${DAYS[sim.weekday(day)]}, ${dateText(day)} · Sayı ${fmt.format(day - first + 1)}`, "muted"));
 
-  // Manşet: günün olayı.
+  // Son dakika / manşet: günün olayı (olay.js; kaza, fırtına, yunuslar…).
+  const oy = d.olay?.yazi?.(d.minute?.() ?? 0);
+  if (oy) {
+    out.push(el("h3", d.olay.plan && (d.minute?.() ?? 0) < d.olay.plan.son ? "Son dakika" : "Günün olayı"));
+    const p = el("p");
+    const b = el("span", oy.kisa, "link");
+    b.addEventListener("click", () => d.flyToOlay?.());
+    p.append(b);
+    out.push(p, el("p", oy.uzun));
+  }
+  // Manşet: günün etkinliği.
   const th = people.theme;
   if (th) {
     out.push(el("h3", "Manşet"));

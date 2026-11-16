@@ -483,6 +483,7 @@ export class People {
   _mode(i, seg, k) {
     const s = this.residents[i].seed;
     if (seg.ne === "anma") return "anma";
+    if (seg.ne === "olay") return "olay";
     if (seg.ne === "is") return `work:${this.works[i].wp.kind}:${this.works[i].wp.index}`;
     if (seg.ne === "hobi") {
       const mode = {
@@ -638,6 +639,7 @@ export class People {
       let mode = q.mode;
       let role = { mode };
       if (mode === "anma") { this.roles[i][k] = { mode, item: this.anmaSlot?.[i] ?? null }; continue; }
+      if (mode === "olay") { this.roles[i][k] = { mode, item: seg.olay ?? null }; continue; }
       if (mode === "karanfil") {
         // Anma köşesine karanfil: ilk dakikalar kürsünün önünde (yer sırayla paylaşılır), sonra meydanda sohbet.
         const pool = this.pools.karanfil ?? [];
@@ -879,6 +881,8 @@ export class People {
       this.plans = this.plans.map((plan, i) => anmaPlan(plan, 15 + (roll(this.residents[i].seed, "yol") % 20), roll(this.residents[i].seed, "anmaVaris") % 17));
       this._anmaDuzen();
     }
+    // Günün olayı (olay.js, 16 Kasım): seyirciler olay yerine yürür, görevdeki polis/itfaiyeci/doktor olay yerinde.
+    if (this.olay) this.plans = this.olay.planla(this, day) ?? this.plans;
     // Evden çalışanlar bugün mesaide mi (ev etkinliği "çalışma" olur).
     this.homeWork = this.residents.map((r, i) => this.works[i].job === "uzaktan" && worksOn(r, day));
     this.dogs = this.residents.map((r) => pet(r, day) === "Köpek");
@@ -1241,6 +1245,7 @@ export class People {
     const at = this._at;
     const stand = (x, z, heading) => { p.x = x; p.z = z; p.heading = heading; p.y = w.groundY(x, z); };
     if (role.mode === "anma") return this._anmaState(i, minute, t, p, role.item, ph, stand);
+    if (role.mode === "olay") return this.olay?.durus(i, role.item, minute, t, p, ph, stand) ?? false;
     if (role.karanfil) {
       // Karanfil: kürsünün önünde durur, eğilip bırakır, bir süre başı önde bekler; sonra meydandaki yerine yürür.
       const it = role.karanfil, u = minute - seg.bas;
@@ -2154,7 +2159,7 @@ export class People {
           continue;
         }
         if (!this._placeState(i, k, minute, time, p)) { this.visible[i] = 0; continue; }
-        atWork = seg.ne === "is" || (seg.ne === "anma" && !!this.anmaResmi?.[i]);
+        atWork = seg.ne === "is" || (seg.ne === "anma" && !!this.anmaResmi?.[i]) || (seg.ne === "olay" && !!seg.olay?.gorevli);
         p.phase = time * 2;
       }
       p.atWork = atWork;
