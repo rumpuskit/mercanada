@@ -772,7 +772,7 @@ function tick() {
     sc.near = 1; sc.far = 2400;
     sc.updateProjectionMatrix();
   }
-  if (frame % 6 === 0) updateWindows(minute, light, skyState.sunDeg);
+  if (frame % 6 === 0) updateWindows(minute, light * (1 - 0.6 * (olay.api.hava?.karanlik ?? 0)), skyState.sunDeg); // fırtınada ışıklar yanar
   dollhouse.update(1 - light, real);
   vehicles.end();
   if (frame % 15 === 0) ui.tick(unix, minute, day, skyState.times);

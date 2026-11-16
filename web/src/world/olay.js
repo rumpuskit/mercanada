@@ -78,6 +78,12 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   const api = { plan: null, odak: null, odakY: 2, kalabalik: null, bina: null, kiyi: null, yon: 0, araclar: new Map(), hava: hava.durum, yerAdi: null, seyirci: 0 };
   api.evre = (m) => olayEvre(api.plan, m);
   api.arac = (ad) => api.araclar.get(ad) ?? null;
+  // Deniz olayında canlı hedef: şu an zıplayan/yüzeye çıkan hayvan [x, y, z] ve sürünün ortası (kopya döner).
+  api.canli = (m) => { const v = deniz.odak?.(m); return v ? [...v] : null; };
+  api.suru = (m) => { const v = deniz.merkez?.(m); return v ? [...v] : null; };
+  // Fırtına: şimşek dakikaları (video kesmeleri için) ve gökkuşağı/rüzgâr yönü.
+  api.simsekler = (a, b) => hava.simsekler?.(api.plan, a, b) ?? [];
+  api.havaBilgi = hava.bilgi;
   const ses = { siren: 0, carpisma: 0, korna: 0, kalabalik: 0 };
   let gun = null;
   let K = null; // kaza kurgusu
@@ -119,7 +125,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       api.zaman = { itfaiye: { yol: [V.gidis.t0, V.gidis.t1], park: [V.gidis.t1, V.donus?.t0 ?? Y.son], donus: V.donus ? [V.donus.t0, V.donus.t1] : null } };
       yanginG.kur(Y);
     } else if (o.tur === "firtina" || o.tur === "sis") {
-      api.odak = [0, -12]; api.odakY = 2; api.kalabalik = null;
+      api.odak = world.placeOf?.("meydan")?.anchors?.[0] ?? [0, -12]; api.odakY = 2; api.kalabalik = null;
     }
   }
 
@@ -253,7 +259,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
     }
     const T = { firtina: ["Fırtına! Sağanak ve şimşek", "Bugün fırtına vardı", "Adayı sağanak ve şimşekli bir fırtına vurdu; sokaklar boşaldı, vapur seferleri bekletildi."],
       sis: ["Ada sisin içinde", "Bu sabah ada sise gömüldü", "Yoğun sis adayı sardı; vapur düdüğünü çalarak yanaştı, fener gün ortasına dek yandı."],
-      yunus: ["Kıyıda yunuslar!", "Bugün kıyıya yunuslar geldi", "Bir yunus sürüsü kıyının açığında saatlerce zıpladı; sahile toplananlar telefonlarıyla çekti."],
+      yunus: ["Kıyıda yunuslar!", "Bugün kıyıya yunuslar geldi", `Bir yunus sürüsü kıyının açığında yarım saat zıpladı${api.seyirci ? `; ${api.seyirci} kişi sahile toplanıp izledi` : ""}.`],
       yangin: ["Yangın! İtfaiye yolda", "Bugün yangın çıktı", "Adada yangın çıktı; itfaiye dakikalar içinde geldi ve yangını söndürdü. Kimse yaralanmadı."] }[o.tur];
     if (!T) return null;
     return { kisa: bitti ? `${T[1]} · ${saatYaz(o.bas)}` : T[0], uzun: `Saat ${saatYaz(o.bas)}: ${T[2]}` };
