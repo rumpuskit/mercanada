@@ -217,7 +217,7 @@ export function buildElektrikOlay({ world, group: anaGrup, traffic, zeplin, sky 
     const kapi = disari ? ` ${disari} komşu kapı önüne çıkıp telefon fenerini yaktı${mumVar ? ", kimi pencerelerde mum yanıyor" : ""}.` : mumVar ? " Kimi pencerelerde mum yanıyor." : "";
     if (minute < K.kesikSon) return { kisa: "Adada elektrik kesildi!", uzun: `Saat ${saatte(o.bas)} bütün adada elektrik kesildi; sokak lambaları, pencereler, vitrinler ve liman karardı.${zep} Deniz feneri pille yanmaya devam ediyor.${kapi}` };
     if (minute < o.son) return { kisa: "Işıklar mahalle mahalle geliyor", uzun: `Saat ${saatte(o.bas)} kesilen elektrik ${dk} dakika sonra geri gelmeye başladı; ışıklar önce ${ilk?.[0] ?? "bir mahallede"} yandı, mahalle mahalle bütün adaya yayılıyor.${disari ? ` Kapı önüne çıkan ${disari} komşu evlerine dönüyor.` : ""}` };
-    return { kisa: `Bugün elektrik kesildi · ${saatYaz(o.bas)}`, uzun: `Saat ${saatte(o.bas)} bütün adada elektrik kesildi; ada ${dk} dakika karanlıkta kaldı, yalnız deniz feneri yandı.${disari ? ` ${disari} komşu kapı önlerinde telefon fenerleriyle bekledi, kimi pencerelerde mum yandı.` : ""} Işıklar önce ${ilk?.[0] ?? "bir mahallede"} geldi, ${Math.round(o.son - K.kesikSon)} dakikada bütün ada aydınlandı.` };
+    return { kisa: `Bugün elektrik kesildi · ${saatYaz(o.bas)}`, uzun: `Saat ${saatte(o.bas)} bütün adada elektrik kesildi; ada ${dk} dakika karanlıkta kaldı, yalnız deniz feneri yandı.${disari ? ` ${disari} komşu kapı önlerinde telefon fenerleriyle bekledi, kimi pencerelerde mum yandı.` : ""} Işıklar önce ${ilk?.[0] ?? "bir mahallede"} yandı, ${Math.round(o.son - K.kesikSon)} dakikada bütün ada aydınlandı.` };
   }
 
   return {

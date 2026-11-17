@@ -782,7 +782,8 @@ function CEKIM0(ad, v, sure, arayuz) {
 
 function olayCekimi(ad0, a, L, arayuz) {
   // Hava çekimi yalnız hava/deniz olayında anlamlı; kaza ve yangında geniş olay çekimi (yangında duman gökyüzünde).
-  const ad = ad0 === "olay-hava" && olay?.tur === "kaza" ? "olay" : ad0;
+  // Elektrik kesintisinde odak konut sokağı: alçak hava çekimi binalara çarpıyordu (17 Kasım denemesi) → geniş olay çekimi.
+  const ad = ad0 === "olay-hava" && (olay?.tur === "kaza" || olay?.tur === "elektrik") ? "olay" : ad0;
   const tur = ad.startsWith("olay-arac:") ? "olay-arac" : ad, b = OLAY_CEKIM[tur];
   if (!b) { console.log(`UYARI: bilinmeyen olay çekimi "${ad}" (${Object.keys(OLAY_CEKIM).join(", ")}): meydan`); return L.meydan(); }
   if (!olay) {

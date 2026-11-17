@@ -680,7 +680,7 @@ function updateWindows(minute, light, sunDeg) {
     // Kesintide lamba başları tek tek (örnek rengi), bitince örnek renkleri beyaza döner ve eski yol sürer.
     roads.userData.lampHeadMeshes.forEach(({ mesh }, k) => {
       // Sönük lamba başı gece koyu gri (gündüz rengi LAMP_OFF karanlıkta parlak görünüyordu).
-      const sonuk = tmpColor.copy(LAMP_OFF).multiplyScalar(1 - 0.72 * night);
+      const sonuk = tmpColor.copy(LAMP_OFF).multiplyScalar(1 - 0.8 * Math.min(1, night * 2));
       for (let j = 0; j < mesh.count; j++) mesh.setColorAt(j, !el ? tmpColor.setRGB(1, 1, 1) : on && el.acik(elHucre.lamba[k][j]) ? P.WINDOW_NIGHT : sonuk);
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     });
