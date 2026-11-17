@@ -43,7 +43,12 @@ export const ZEPLIN = {
 /** Tür listesi sürümleri (olay-plan.js): yeni türler yalnız sürümün gününden itibaren takvime girer; önceki günler değişmez. */
 export const TUR_SURUMLERI = [
   // 19 Kasım: zeplin acil inişi (olay-zeplin.js; 17 Kasım akşamı denendi).
-  { gun: "2026-11-19", sabah: [...ADA_TURLERI, "zeplin"], ikinci: [...IKINCI.turler, "zeplin"] },
+  // 19 Kasım: olay modülleri (17 Kasım akşamı, kullanıcı: "olay çeşitliliği ve dikkat çekicilik çok önemli"; 20 yeni tür).
+  // Kar yalnız 1 Aralık–28 Şubat (gerek), elektrik yalnız öğleden sonra ve gün batımından sonra sığan günlerde, dev gemi
+  // yalnız sabah (ayrılışı karanlığa düşmesin).
+  { gun: "2026-11-19", komsu: true,
+    sabah: [...ADA_TURLERI, "zeplin", "dugun", "fok", "hortum", "gemi", "dalga", "kar", "kus", "marti", "film", "balik", "yaris", "balon", "vapur", "ucurtma"],
+    ikinci: [...IKINCI.turler, "zeplin", "dugun", "fok", "hortum", "dalga", "kar", "kus", "elektrik", "marti", "film", "balik", "yaris", "balon", "vapur", "ucurtma"] },
 ];
 // --- ajan E ---
 /** Gün batımı (TR dakikası; sky.js sunTimes ile aynı formül, three'siz: olay-plan.js elektrik kesintisinin penceresini
@@ -84,3 +89,6 @@ export const HORTUM = { uzak: 650, H: 430 };
 Object.assign(PENCERE, { fok: [560, 700], hortum: [570, 720], dalga: [540, 690] });
 Object.assign(IKINCI.pencere, { fok: [840, 960], hortum: [840, 990], dalga: [840, 960] });
 // --- ajan A sonu ---
+/** Kar (olay-kar.js; mevsim 1 Aralık–28 Şubat): sabah 08:00–10:00, öğleden sonra 14:00–15:30 başlar. */
+Object.assign(PENCERE, { kar: [480, 600] });
+Object.assign(IKINCI.pencere, { kar: [840, 930] });

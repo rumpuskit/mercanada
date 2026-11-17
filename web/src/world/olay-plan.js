@@ -169,8 +169,16 @@ function ikinciOlay(day, open, o) {
       const hepsi = liste(d), n = hepsi.length;
       if (!n) return null;
       const sira = (b) => hepsi.map((t) => [kesir("olaySira2", b, t), t]).sort((a, c) => a[0] - c[0]).map((x) => x[1]);
-      const sabah = olayGunu(d, open, { ...o, yuva: 0, zorla: undefined, saat: undefined })?.tur;
+      const sabahOf = (g) => olayGunu(g, open, { ...o, yuva: 0, zorla: undefined, saat: undefined })?.tur;
+      const sabah = sabahOf(d);
       const s = sira(Math.floor(d / n)), aday = [s[((d % n) + n) % n], ...s];
+      // Komşu günlerin sabah olayından da farklı (sürümde komsu: true; 17 Kasım akşamı: bir tür akşam videosunda ve ertesi
+      // sabahın videosunda art arda çıkıyordu). Sabah planı öğleden sonraya bağlı olmadığı için özyineleme yok.
+      if (surum(d)?.komsu) {
+        const dunSabah = sabahOf(d - 1), yarinSabah = sabahOf(d + 1);
+        const t = aday.find((x) => x !== sabah && x !== dun && x !== dunSabah && x !== yarinSabah);
+        if (t) return t;
+      }
       return aday.find((t) => t !== sabah && t !== dun) ?? aday.find((t) => t !== sabah) ?? null;
     };
     let dun = null;
