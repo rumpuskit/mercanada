@@ -21,3 +21,11 @@ export const IKINCI = {
   son: 1130,
   yazSon: 1070,
 };
+/** Olay modüllerinin dili ve adları (olay-zeplin.js). */
+export const DIL = "tr";
+export const ZEPLIN = {
+  kendi: { ad: "Mercan Zeplini", in: "Mercan Zeplini'nin" },
+  ziyaretci: { ad: "bir reklam zeplini", in: "bir reklam zeplininin" },
+  saha: { ad: "Mercanspor Sahası", e: "Mercanspor Sahası'na", ustune: "Mercanspor Sahası'nın üstüne" },
+  yedekSaha: { ad: "çayır", e: "çayıra", ustune: "çayırın üstüne" },
+};
