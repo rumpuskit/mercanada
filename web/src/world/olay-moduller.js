@@ -25,6 +25,11 @@
 //   durum?(o | null, minute) → nesne | null   olaya özgü durum (elektrik: main.js pencere/lamba ışıkları; olay.elektrik).
 //   gunBasi?(day)  her gün başında (olay kurulmadan önce) çağrılır: modülün dünyaya taktığı kancaları sıfırlar (vapur gecikmesi).
 // kur'a gelen yuzey: { terrain, roads, grounds, harbor, beach, fields, city, trees } (main.js; kar düşen yüzeyler).
+//   anlik?(o, minute) → { odak?, yon?, odakY?, gitD?, gitEgim? } | null   hareketli olayın o anki yeri ("Olaya git" ve
+//            video: düğün konvoyu, yarışın önü); api alanlarını o kare için ezer.
+//   (ajan C modülleri sakin olmayan figürleri ekstra ile çizer; yardımcılar: olay-yardim.js.)
+//   seyirciBas?(o) → dakika   seyircilerin gelmeye başladığı an (varsayılan o.bas; düğünde halay).
+//   seyirci.ozel: true → seyirci kalemleri modul alanı taşır, duruşlarını modülün durus'u çizer (alkış, gülme…).
 import { buildZeplinOlay } from "./olay-zeplin.js";
 // --- ajan E ---
 import { buildKarOlay } from "./olay-kar.js";
@@ -39,6 +44,11 @@ import { buildVapurOlay } from "./olay-vapur.js";
 import { buildBalikOlay } from "./olay-balik.js";
 import { buildGemiOlay } from "./olay-gemi.js";
 // --- ajan B sonu ---
+// --- ajan C: kasaba ve insan olayları (düğün, film, yarış, martı) ---
+import { buildDugunOlay } from "./olay-dugun.js";
+import { buildFilmOlay } from "./olay-film.js";
+import { buildYarisOlay } from "./olay-yaris.js";
+import { buildMartiOlay } from "./olay-marti.js";
 
 export const MODULLER = {
   zeplin: buildZeplinOlay,
@@ -54,4 +64,9 @@ export const MODULLER = {
   balik: buildBalikOlay,
   gemi: buildGemiOlay,
   // --- ajan B sonu ---
+  // --- ajan C ---
+  dugun: buildDugunOlay,
+  film: buildFilmOlay,
+  yaris: buildYarisOlay,
+  marti: buildMartiOlay,
 };

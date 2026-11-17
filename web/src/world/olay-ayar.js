@@ -3,7 +3,9 @@
 // (11:30 Berlin = 13:30 TR) başlamadan BİTER; öğle videosu günün olayını anlatır. En geç bitiş ~12:50 TR.
 export const ADA_TURLERI = ["yangin", "firtina", "yunus", "kaza", "sis"];
 /** Başlangıç pencereleri [en erken, en geç] (TR dakikası); verilmeyen tür olay-plan.js varsayılanını kullanır. */
-export const PENCERE = { zeplin: [570, 690], balon: [480, 690], ucurtma: [600, 700], kus: [540, 710] };
+export const PENCERE = { zeplin: [570, 690], balon: [480, 690], ucurtma: [600, 700], kus: [540, 710],
+  // --- ajan C (17 Kasım akşamı): sabah pencereleri, SABAH_SON (12:50) öncesi biter ---
+  dugun: [585, 720], film: [570, 710], yaris: [570, 720], marti: [570, 740] };
 // --- ajan B --- liman/tekne olayları, sabah pencereleri (SABAH_SON 12:50'den önce biter).
 Object.assign(PENCERE, { gemi: [570, 685], vapur: [560, 737], balik: [560, 720] });
 /** Sabah olayının en geç bitişi (TR dk): öğle üretimi 13:30 TR (kış) başlar; 12:50. */
@@ -21,7 +23,9 @@ export function ozelGun(day) {
  *  son: en geç bitiş (18:50 TR, fırtınanın 20 dk gökkuşağı dahil üretimden ≥20 dk önce); yazSon: yaz saatinde 17:50 TR. */
 export const IKINCI = {
   turler: ["yangin", "firtina", "yunus", "kaza"],
-  pencere: { firtina: [840, 930], yangin: [870, 1020], kaza: [870, 1050], yunus: [840, 960], zeplin: [840, 990], balon: [840, 960], ucurtma: [840, 990], kus: [840, 960] },
+  pencere: { firtina: [840, 930], yangin: [870, 1020], kaza: [870, 1050], yunus: [840, 960], zeplin: [840, 990], balon: [840, 960], ucurtma: [840, 990], kus: [840, 960],
+    // --- ajan C: gün ışığında biter (en geç ~17:15 TR) ---
+    dugun: [840, 990], film: [840, 960], yaris: [840, 980], marti: [840, 1010] },
   varsayilan: [840, 960], // penceresi yazılmamış tür (gün ışığında başlar)
   son: 1130,
   yazSon: 1070,
@@ -60,7 +64,9 @@ export function gunBatimi(day) {
 }
 // --- ajan D --- (olay-balon.js, olay-ucurtma.js, olay-kus.js)
 /** Adaya özgü olay adları (olay-plan.js OLAYLAR: [ad, en]). */
-export const ADLAR = { kus: ["Leylek göçü", "Stork migration"] };
+export const ADLAR = { kus: ["Leylek göçü", "Stork migration"],
+  // --- ajan C ---
+  yaris: ["Ada turu bisiklet yarışı", "Island bike race"], marti: ["Martı simit kaptı", "Seagull steals a simit"] };
 /** Kuş olayı (olay-kus.js): Mercanada'da leylek göçü (yüzlerce leylek termikte daire çizip güneye gider). */
 export const KUS = { tur: "leylek" };
 /** Uçurtma şenliği (olay-ucurtma.js): yer (tepe | cimen) ve adı. */
