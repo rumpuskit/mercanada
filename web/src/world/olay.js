@@ -73,8 +73,10 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   const hava = buildHava({ world, scene, sky });
   const deniz = buildDeniz({ world, scene });
   group.add(hava.group, deniz.group);
-  const zorla = params?.get("olay") || null;
-  const zorlaSaat = params?.get("olaysaat")?.match(/^(\d{1,2}):(\d{2})$/);
+  // ?olay / ?olaysaat yalnız geliştirme ve video kaydında (17 Kasım QC: yayındaki sitede herkes sahte olay gösterebiliyordu).
+  const gelistir = import.meta.env?.DEV || ["denetle", "gelistir", "test"].some((k) => params?.has(k));
+  const zorla = (gelistir && params?.get("olay")) || null;
+  const zorlaSaat = gelistir ? params?.get("olaysaat")?.match(/^(\d{1,2}):(\d{2})$/) : null;
   const api = { plan: null, odak: null, odakY: 2, kalabalik: null, bina: null, kiyi: null, yon: 0, araclar: new Map(), hava: hava.durum, yerAdi: null, seyirci: 0 };
   api.evre = (m) => olayEvre(api.plan, m);
   api.arac = (ad) => api.araclar.get(ad) ?? null;
@@ -94,7 +96,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   function gunuKur(day) {
     gun = day;
     api.plan = olayGunu(day, isOpen, { zorla, saat: zorlaSaat ? Number(zorlaSaat[1]) * 60 + Number(zorlaSaat[2]) : undefined });
-    api.odak = api.kalabalik = api.bina = api.kiyi = null; api.zaman = null;
+    api.odak = api.kalabalik = api.bina = api.kiyi = api.yerAdi = null; api.zaman = null; api.seyirci = 0; api.itfaiyeci = 0;
     api.araclar.clear();
     K = null; Y = null;
     kaza.gizle(); yanginG.gizle();
@@ -148,7 +150,8 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
   function planla(people, day) {
     if (day !== gun) gunuKur(day);
     const o = api.plan;
-    if (!o || !api.odak) return null;
+    // Fırtına ve siste seyirci yok (17 Kasım QC: 30 sakin fırtınada meydana yürüyüp "olanları izliyor"du).
+    if (!o || !api.odak || o.tur === "firtina" || o.tur === "sis") return null;
     const plans = people.plans;
     const R = people.residents;
     const yerOf = (seg) => (seg.ne === "meydan" || seg.ne === "hobi" ? world.placeOf?.(seg.ne === "hobi" ? seg.yer.replace("hobi:", "") : "meydan")?.anchors?.[0] : null);
@@ -239,26 +242,33 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
 
   /** Sitede gösterilecek metin (üst panel, gazete): { kisa, uzun } ya da null (olay henüz olmadıysa). */
   const saatYaz = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}.${String(Math.floor(m % 60)).padStart(2, "0")}`;
+  // Bulunma eki saatin okunuşuna göre (17 Kasım QC: hep 'te yazılıyordu: "09.10'te"): dakika 00 ise saat okunur.
+  const SON_RAKAM = ["da", "de", "de", "te", "te", "te", "da", "de", "de", "da"], ONLAR = ["da", "da", "de", "da", "ta", "de"];
+  const saatte = (m) => {
+    const dk = Math.floor(m % 60), n = dk || Math.floor(m / 60) % 24;
+    return `${saatYaz(m)}'${n % 10 ? SON_RAKAM[n % 10] : ONLAR[Math.floor(n / 10)]}`;
+  };
   api.yazi = (minute) => {
     const o = api.plan;
     if (!o || minute < o.bas) return null;
     const bitti = minute >= o.son, yer = api.yerAdi ? `${api.yerAdi} kavşağında` : "bir kavşakta";
+    const yerAd = api.yerAdi ? `${api.yerAdi} kavşağı` : "Kavşak";
     if (o.tur === "kaza" && K) {
       const kapali = Math.round(K.son - 3 - K.bas);
-      if (bitti) return { kisa: `Bugün ${saatYaz(o.bas)}'te ${yer} kaza oldu`, uzun: `Saat ${saatYaz(o.bas)}'te ${yer} iki araç çarpıştı; kimse yaralanmadı. Polis ${Math.round(K.polis.varis - K.bas)} dakikada geldi, kavşak ${kapali} dakika trafiğe kapalı kaldı${api.seyirci ? `, ${api.seyirci} kişi olay yerine toplandı` : ""}. Kazalı araçlardan birini belediye çekicisi götürdü, öbürü kendi gitti. Kazaya karışan iki araç adaya anakaradan gelmişti.` };
-      if (minute < K.polis.varis) return { kisa: `Son dakika: ${yer} kaza`, uzun: `Saat ${saatYaz(o.bas)}'te ${yer} iki araç çarpıştı. Polis yolda.` };
-      if (!K.cekici || minute < K.cekici.varis) return { kisa: `Kaza: ${yer} kapalı · polis olay yerinde`, uzun: `Saat ${saatYaz(o.bas)}'te ${yer} iki araç çarpıştı; kimse yaralanmadı. Polis olay yerinde, kavşak trafiğe kapalı. Çekici bekleniyor.` };
-      return { kisa: `Kaza yerinde çekici çalışıyor`, uzun: `Saat ${saatYaz(o.bas)}'te ${yer} iki araç çarpıştı; kimse yaralanmadı. Belediye çekicisi kazalı aracı kaldırıyor, kavşak birazdan açılacak.` };
+      if (bitti) return { kisa: `Bugün ${saatte(o.bas)} ${yer} kaza oldu`, uzun: `Saat ${saatte(o.bas)} ${yer} iki araç çarpıştı; kimse yaralanmadı. Polis ${Math.round(K.polis.varis - K.bas)} dakikada geldi, kavşak ${kapali} dakika trafiğe kapalı kaldı${api.seyirci ? `, ${api.seyirci} kişi olay yerine toplandı` : ""}. ${K.cekici ? "Kazalı araçlardan birini belediye çekicisi götürdü, öbürü kendi gitti." : "Kazalı araçlar olay yerinden kaldırıldı."} Kazaya karışan iki araç adaya anakaradan gelmişti.` };
+      if (minute < K.polis.varis) return { kisa: `Son dakika: ${yer} kaza`, uzun: `Saat ${saatte(o.bas)} ${yer} iki araç çarpıştı. Polis yolda.` };
+      if (!K.cekici || minute < K.cekici.varis) return { kisa: `Kaza: ${yerAd} kapalı · polis olay yerinde`, uzun: `Saat ${saatte(o.bas)} ${yer} iki araç çarpıştı; kimse yaralanmadı. Polis olay yerinde, kavşak trafiğe kapalı. Çekici bekleniyor.` };
+      return { kisa: `Kaza yerinde çekici çalışıyor`, uzun: `Saat ${saatte(o.bas)} ${yer} iki araç çarpıştı; kimse yaralanmadı. Belediye çekicisi kazalı aracı kaldırıyor, kavşak birazdan açılacak.` };
     }
     if (o.tur === "yangin" && Y) {
       const yerY = api.yerAdi ?? "çarşıdaki bir dükkân", gel = Math.round(Y.itfaiye.varis - Y.bas);
-      if (bitti) return { kisa: `Bugün ${saatYaz(o.bas)}'te ${yerY} yandı`, uzun: `Saat ${saatYaz(o.bas)}'te ${yerY} binasının üst katında yangın çıktı; kimse yaralanmadı. İtfaiye ${gel} dakikada geldi${api.itfaiyeci ? `, ${api.itfaiyeci} itfaiyecimiz hortumla` : ""} yangını söndürdü${api.seyirci ? `; ${api.seyirci} kişi olay yerine toplandı` : ""}. Cephede is izi kaldı.` };
-      if (minute < Y.itfaiye.varis) return { kisa: `Yangın! ${yerY} · itfaiye yolda`, uzun: `Saat ${saatYaz(o.bas)}'te ${yerY} binasından duman yükseliyor. İtfaiye yolda.` };
+      if (bitti) return { kisa: `Bugün ${saatte(o.bas)} ${yerY} yandı`, uzun: `Saat ${saatte(o.bas)} ${yerY} binasının üst katında yangın çıktı; kimse yaralanmadı. İtfaiye ${gel} dakikada geldi ve${api.itfaiyeci ? ` ${api.itfaiyeci} itfaiyecimiz hortumla` : ""} yangını söndürdü${api.seyirci ? `; ${api.seyirci} kişi olay yerine toplandı` : ""}. Cephede is izi kaldı.` };
+      if (minute < Y.itfaiye.varis) return { kisa: `Yangın! ${yerY} · itfaiye yolda`, uzun: `Saat ${saatte(o.bas)} ${yerY} binasından duman yükseliyor. İtfaiye yolda.` };
       if (minute < Y.bas + (Y.son - Y.bas) * 0.6) return { kisa: `Yangın: itfaiye söndürüyor`, uzun: `${yerY} binasındaki yangına itfaiye müdahale ediyor; kimse yaralanmadı.` };
       return { kisa: `Yangın söndürüldü · ${yerY}`, uzun: `${yerY} binasındaki yangın söndürüldü; itfaiye soğutma yapıyor.` };
     }
-    const T = { firtina: ["Fırtına! Sağanak ve şimşek", "Bugün fırtına vardı", "Adayı sağanak ve şimşekli bir fırtına vurdu; sokaklar boşaldı, vapur seferleri bekletildi."],
-      sis: ["Ada sisin içinde", "Bu sabah ada sise gömüldü", "Yoğun sis adayı sardı; vapur düdüğünü çalarak yanaştı, fener gün ortasına dek yandı."],
+    const T = { firtina: ["Fırtına! Sağanak ve şimşek", "Bugün fırtına vardı", "Adayı sağanak ve şimşekli bir fırtına vurdu; gök karardı, sokak lambaları sabah saatinde yandı."],
+      sis: ["Ada sisin içinde", "Bu sabah ada sise gömüldü", "Yoğun sis adayı sardı; sis düdüğü kırk saniyede bir öttü, fener ve sokak lambaları sis dağılana dek yandı."],
       yunus: ["Kıyıda yunuslar!", "Bugün kıyıya yunuslar geldi", `Bir yunus sürüsü kıyının açığında yarım saat zıpladı${api.seyirci ? `; ${api.seyirci} kişi sahile toplanıp izledi` : ""}.`],
       yangin: ["Yangın! İtfaiye yolda", "Bugün yangın çıktı", "Adada yangın çıktı; itfaiye dakikalar içinde geldi ve yangını söndürdü. Kimse yaralanmadı."] }[o.tur];
     if (!T) return null;
@@ -297,11 +307,11 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       deniz.update(o, evre, minute, real, env);
       kaza.update(K, minute, real);
       yanginG.update(minute, real);
-      if (Y) ses.kalabalik = minute > Y.bas + 5 && minute < Y.son ? 0.7 : 0;
       if (traffic && K) traffic.kapali = minute >= K.bas && minute < K.son - 3 ? new Set([K.node]) : new Set();
       // Çarpışma sesi: olay başladığında bir kez (sayaç artar).
       if (K) ses.carpisma = minute >= K.bas ? 1 : 0;
-      ses.kalabalik = K && minute > K.bas + 4 && minute < K.son ? 0.6 : 0;
+      // Kalabalık uğultusu (17 Kasım QC: yangının değeri her karede kazanınkiyle eziliyordu).
+      ses.kalabalik = Y && minute > Y.bas + 5 && minute < Y.son ? 0.7 : K && minute > K.bas + 4 && minute < K.son ? 0.6 : 0;
     },
     /** Ses ortamı (sound.js Ambience.update env.olay). */
     ses() { return { ...hava.durum, ...ses }; },

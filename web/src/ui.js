@@ -154,6 +154,7 @@ export function createUI({ residents, people, world, dollhouse, stories, traffic
       case "olay": {
         const it = seg.olay ?? {};
         if (it.gorevli === "polis") return it.rol === "trafik" ? "Görev başında · kaza yerinde trafiği yönlendiriyor" : "Görev başında · kaza yerinde tutanak tutuyor";
+        if (it.gorevli === "itfaiyeci") return it.rol === "hortum" ? "Görev başında · yangını hortumla söndürüyor" : "Görev başında · yangın yerinde";
         const ad = olay?.plan?.ad?.toLocaleLowerCase("tr") ?? "olay";
         return it.tavir === "cek" ? `Olay yerinde (${ad}), telefonla çekiyor` : `Olay yerinde (${ad}), olanları izliyor`;
       }
