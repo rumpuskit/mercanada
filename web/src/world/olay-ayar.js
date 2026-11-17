@@ -4,6 +4,8 @@
 export const ADA_TURLERI = ["yangin", "firtina", "yunus", "kaza", "sis"];
 /** Başlangıç pencereleri [en erken, en geç] (TR dakikası); verilmeyen tür olay-plan.js varsayılanını kullanır. */
 export const PENCERE = { zeplin: [570, 690], balon: [480, 690], ucurtma: [600, 700], kus: [540, 710] };
+// --- ajan B --- liman/tekne olayları, sabah pencereleri (SABAH_SON 12:50'den önce biter).
+Object.assign(PENCERE, { gemi: [570, 685], vapur: [560, 737], balik: [560, 720] });
 /** Sabah olayının en geç bitişi (TR dk): öğle üretimi 13:30 TR (kış) başlar; 12:50. */
 export const SABAH_SON = 770;
 /** Avrupa yaz saatinde en geç bitiş (TR dakikası): üretim 11:30 CEST = 12:30 TR; fırtınanın 20 dk gökkuşağı dahil 12:25. */
@@ -24,6 +26,8 @@ export const IKINCI = {
   son: 1130,
   yazSon: 1070,
 };
+// --- ajan B --- öğleden sonra pencereleri (gün ışığında biter; gemi yalnız sabah önerilir: ayrılışı olaydan 150 dk sonra).
+Object.assign(IKINCI.pencere, { vapur: [840, 1000], balik: [840, 960] });
 /** Olay modüllerinin dili ve adları (olay-zeplin.js). */
 export const DIL = "tr";
 export const ZEPLIN = {

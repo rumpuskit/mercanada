@@ -59,7 +59,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as sim from "../web/src/sim.js";
 import { VERI_URL, TIKTOK, ZEPLIN_REKLAM } from "../web/src/config.js";
-import { ferryOut, nextArrival } from "../web/src/world/ferry.js";
+import { ferryOut, nextArrival, vapurGecikmesi, vapurOlayGecikme } from "../web/src/world/ferry.js";
 import { seslendir } from "./seslendir.mjs";
 import { efekt, EFEKT_SES, EFEKTLER } from "./efekt.mjs";
 import { olayGunu, olayEvre } from "../web/src/world/olay-plan.js";
@@ -147,6 +147,9 @@ const olayGun = opt("--tarih") ? Date.parse(opt("--tarih") + "T00:00:00Z") / 864
 // Günde iki olay (17 Kasım akşamı): öğle videosu sabahki olayı (yuva 0), akşam videosu öğleden sonrakini (yuva 1) anlatır.
 const olayYuva = yuva === "aksam" ? 1 : 0;
 const olay = olayGunu(olayGun, sim.isOpen, { zorla: olayZorla, saat: olaySaatZorla ? dakika(olaySaatZorla) : undefined, yuva: olayYuva });
+// Vapur arızası (olay "vapur"): o gün iki yuvadan birinde varsa arızalı sefer 20 dk gecikir (ferry.js); iskele çekimleri
+// vapurun gerçekten yanaştığı ana göre (site aynı gecikmeyi kurar).
+vapurGecikmesi(vapurOlayGecikme([olay, olayGunu(olayGun, sim.isOpen, { yuva: 1 - olayYuva })].find((p) => p?.tur === "vapur") ?? null));
 const olayAdres = olayZorla ? `&olay=${olayZorla}${olaySaatZorla ? "&olaysaat=" + olaySaatZorla : ""}${olayYuva ? "&olayyuva=1" : ""}` : "";
 if (olay) console.log(`günün olayı: ${olay.ad} (${olay.tur}) ${saatYaz(olay.bas)}–${saatYaz(olay.son)}${olayZorla ? " [zorlandı]" : ""}`);
 const stages = catalog.gelisim;
@@ -456,6 +459,12 @@ const OLAY_ANI = {
   ucurtma: { olay: "olay:senlik+5", "olay-yakin": "olay:takildi+3", "olay-kalabalik": "olay:senlik+8", "olay-tele": "olay:senlik+2", "olay-hava": "olay:senlik+10" },
   kus: { olay: "olay:termik+6", "olay-yakin": "olay:termik+3", "olay-kalabalik": "olay:termik+4", "olay-tele": "olay:termik+10", "olay-hava": "olay:gidis+1" }, // leylek göçü
   // --- ajan D sonu ---
+  // --- ajan B (liman/tekne olayları) ---
+  vapur: { olay: "olay:romorkor+7", "olay-yakin": "olay:ariza+2.3", "olay-kalabalik": "olay:cekme+3", "olay-tele": "olay:cekme+2", "olay-hava": "olay:ariza+2" },
+  gemi: { olay: "olay:yanasma+10", "olay-yakin": "olay:limanda+6", "olay-kalabalik": "olay:limanda+3", "olay-tele": "olay:gorundu+8", "olay-hava": "olay:yanasma+4" },
+  balik: { olay: "olay:indirme+2", "olay-yakin": "olay:foto+3", "olay-kalabalik": "olay:foto+5", "olay-tele": "olay:donus+7", "olay-hava": "olay:donus+8" },
+  tekne_yarisi: { olay: "olay:yaris+1.5", "olay-yakin": "olay:yaris+3", "olay-kalabalik": "olay:yaris+4.6", "olay-tele": "olay:yaris+2.2", "olay-hava": "olay:toplanma+8" },
+  // --- ajan B sonu ---
 };
 const kullanim = {};
 const efektler = [];

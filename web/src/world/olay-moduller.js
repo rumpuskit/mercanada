@@ -23,6 +23,7 @@
 //            (yuru: yürüme evresi radyan, kenara yürürken; null: alan dışında). Saf işlev; people.js her karede çağırır.
 //   ekstra?(crowd, minute, time)  sakin olmayan figürler (ör. kartopu oynayan çocuklar): crowd.add(-1, poz) (people.js).
 //   durum?(o | null, minute) → nesne | null   olaya özgü durum (elektrik: main.js pencere/lamba ışıkları; olay.elektrik).
+//   gunBasi?(day)  her gün başında (olay kurulmadan önce) çağrılır: modülün dünyaya taktığı kancaları sıfırlar (vapur gecikmesi).
 // kur'a gelen yuzey: { terrain, roads, grounds, harbor, beach, fields, city, trees } (main.js; kar düşen yüzeyler).
 import { buildZeplinOlay } from "./olay-zeplin.js";
 // --- ajan E ---
@@ -33,6 +34,11 @@ import { buildBalonOlay } from "./olay-balon.js";
 import { buildUcurtmaOlay } from "./olay-ucurtma.js";
 import { buildKusOlay } from "./olay-kus.js";
 // --- ajan D sonu ---
+// --- ajan B ---
+import { buildVapurOlay } from "./olay-vapur.js";
+import { buildBalikOlay } from "./olay-balik.js";
+import { buildGemiOlay } from "./olay-gemi.js";
+// --- ajan B sonu ---
 
 export const MODULLER = {
   zeplin: buildZeplinOlay,
@@ -43,4 +49,9 @@ export const MODULLER = {
   ucurtma: buildUcurtmaOlay,
   kus: buildKusOlay,
   // --- ajan D sonu ---
+  // --- ajan B ---
+  vapur: buildVapurOlay,
+  balik: buildBalikOlay,
+  gemi: buildGemiOlay,
+  // --- ajan B sonu ---
 };
