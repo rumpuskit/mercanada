@@ -49,6 +49,11 @@ import { buildDugunOlay } from "./olay-dugun.js";
 import { buildFilmOlay } from "./olay-film.js";
 import { buildYarisOlay } from "./olay-yaris.js";
 import { buildMartiOlay } from "./olay-marti.js";
+// --- ajan A (deniz ve kıyı) ---
+import { buildFokOlay } from "./olay-fok.js";
+import { buildHortumOlay } from "./olay-hortum.js";
+import { buildDalgaOlay } from "./olay-dalga.js";
+// --- ajan A sonu ---
 
 export const MODULLER = {
   zeplin: buildZeplinOlay,
@@ -69,4 +74,9 @@ export const MODULLER = {
   film: buildFilmOlay,
   yaris: buildYarisOlay,
   marti: buildMartiOlay,
+  // --- ajan A ---
+  fok: buildFokOlay,
+  hortum: buildHortumOlay,
+  dalga: buildDalgaOlay,
+  // --- ajan A sonu ---
 };

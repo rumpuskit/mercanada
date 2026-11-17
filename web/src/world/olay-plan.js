@@ -67,6 +67,9 @@ const TURLER = {
   film: { ad: "Film çekimi", en: "Film shoot", pencere: [570, 700], sure: [45, 55], gerek: () => true },
   yaris: { ad: "Bisiklet yarışı", en: "Fun run", pencere: [570, 710], sure: [40, 46], gerek: () => true },
   marti: { ad: "Martı simit kaptı", en: "Seagull steals a hot dog", pencere: [570, 730], sure: [18, 24], gerek: () => true },
+  // --- ajan A (deniz ve kıyı: olay-dalga.js) ---
+  dalga: { ad: "Dev dalgalar", en: "Big waves", pencere: [540, 680], sure: [40, 55], gerek: () => true },
+  // --- ajan A sonu ---
 };
 // Ada adları (olay-ayar.js ADLAR: { tur: [ad, en] }; ör. Mercanada "Akdeniz foku", Driftwood "Seals on the dock").
 /** Kar mevsimi: 1 Aralık–28 Şubat (29 Şubat yok). Gün verilmezse (eski çağrı) false. */
@@ -243,6 +246,9 @@ export function olayEvre(o, minute) {
     film: [[0.15, "kurulum"], [0.85, "cekim"], [1, "toplama"]],
     yaris: [[0.15, "hazirlik"], [0.8, "yaris"], [1, "bitis"]],
     marti: [[0.3, "simit"], [0.36, "kapma"], [0.8, "kovalama"], [1, "dagilma"]],
+    // --- ajan A ---
+    dalga: [[0.15, "yukselme"], [0.85, "dovme"], [1, "durulma"]],
+    // --- ajan A sonu ---
   }[o.tur] ?? [[1, "olay"]];
   const [, ad] = E.find(([s]) => u <= s) ?? E[E.length - 1];
   return { ad, u, t: minute - o.bas };

@@ -72,3 +72,15 @@ export const KUS = { tur: "leylek" };
 /** Uçurtma şenliği (olay-ucurtma.js): yer (tepe | cimen) ve adı. */
 export const UCURTMA = { yer: "tepe", ad: "Tepe", de: "Tepe'de", ye: "Tepe'ye" };
 // --- ajan D sonu ---
+// --- ajan A (deniz ve kıyı olayları: olay-fok.js, olay-hortum.js, olay-dalga.js) ---
+/** Adaya özgü olay adları ({ tur: [ad, en] }; ADLAR yukarıda tanımlı, buraya eklenir). */
+Object.assign(ADLAR, { fok: ["Akdeniz foku", "Mediterranean monk seal"], hortum: ["Su hortumu", "Waterspout"], dalga: ["Lodos dalgaları", "Storm waves"] });
+/** Fok: tek bir Akdeniz foku (keşiş foku). */
+export const FOK = { tur: "kesis", sayi: 1 };
+/** Su hortumu: kıyıdan uzaklık (m) ve bulut tabanı yüksekliği (m). */
+export const HORTUM = { uzak: 650, H: 430 };
+/** Pencereler (TR dk; takvime alınınca geçerli): sabah olayları SABAH_SON'dan (12:50) önce, öğleden sonrakiler gün batımından
+ *  (~17:40) önce biter. fok 40–55 dk, hortum 25–35 dk, dalga 40–55 dk. */
+Object.assign(PENCERE, { fok: [560, 700], hortum: [570, 720], dalga: [540, 690] });
+Object.assign(IKINCI.pencere, { fok: [840, 960], hortum: [840, 990], dalga: [840, 960] });
+// --- ajan A sonu ---
