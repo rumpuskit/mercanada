@@ -3,7 +3,9 @@
 // (11:30 Berlin = 13:30 TR) başlamadan BİTER; öğle videosu günün olayını anlatır. En geç bitiş ~12:50 TR.
 export const ADA_TURLERI = ["yangin", "firtina", "yunus", "kaza", "sis"];
 /** Başlangıç pencereleri [en erken, en geç] (TR dakikası); verilmeyen tür olay-plan.js varsayılanını kullanır. */
-export const PENCERE = {};
+export const PENCERE = { zeplin: [570, 690] };
+/** Sabah olayının en geç bitişi (TR dk): öğle üretimi 13:30 TR (kış) başlar; 12:50. */
+export const SABAH_SON = 770;
 /** Avrupa yaz saatinde en geç bitiş (TR dakikası): üretim 11:30 CEST = 12:30 TR; fırtınanın 20 dk gökkuşağı dahil 12:25. */
 export const YAZ_SON = 725;
 /** Özel günler (olay yok): 29 Ekim (fişek), 10 Kasım (anma). Gün sayısı UTC gün başı (sim.dayOf). */
@@ -17,7 +19,8 @@ export function ozelGun(day) {
  *  son: en geç bitiş (18:50 TR, fırtınanın 20 dk gökkuşağı dahil üretimden ≥20 dk önce); yazSon: yaz saatinde 17:50 TR. */
 export const IKINCI = {
   turler: ["yangin", "firtina", "yunus", "kaza"],
-  pencere: { firtina: [840, 930], yangin: [870, 1020], kaza: [870, 1050], yunus: [840, 960] },
+  pencere: { firtina: [840, 930], yangin: [870, 1020], kaza: [870, 1050], yunus: [840, 960], zeplin: [840, 990] },
+  varsayilan: [840, 960], // penceresi yazılmamış tür (gün ışığında başlar)
   son: 1130,
   yazSon: 1070,
 };
@@ -29,3 +32,8 @@ export const ZEPLIN = {
   saha: { ad: "Mercanspor Sahası", e: "Mercanspor Sahası'na", ustune: "Mercanspor Sahası'nın üstüne" },
   yedekSaha: { ad: "çayır", e: "çayıra", ustune: "çayırın üstüne" },
 };
+/** Tür listesi sürümleri (olay-plan.js): yeni türler yalnız sürümün gününden itibaren takvime girer; önceki günler değişmez. */
+export const TUR_SURUMLERI = [
+  // 19 Kasım: zeplin acil inişi (olay-zeplin.js; 17 Kasım akşamı denendi).
+  { gun: "2026-11-19", sabah: [...ADA_TURLERI, "zeplin"], ikinci: [...IKINCI.turler, "zeplin"] },
+];
