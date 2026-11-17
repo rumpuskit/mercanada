@@ -130,7 +130,8 @@ export function buildYarisOlay({ world, group, traffic }) {
     K.dugum = new Set();
     if (bis && traffic) bariyerKur();
     const tk = K.R.tak, ileri = K.R.giris ? K.R.giris.at(0, {}) : K.R.tur.at(K.R.turBas, {});
-    const kal = [tk[0] + Math.sin(ileri.heading) * 10, tk[1] + Math.cos(ileri.heading) * 10]; // bitiş düzlüğünün iki yanı
+    // Seyircinin ortası: bitiş düzlüğünün kenarı (yolun ortası değil: kalabalık çekimi yarışçıların içinde kalıyordu).
+    const kal = [tk[0] + Math.sin(ileri.heading) * 10 + ileri.nx * (bis ? 6.5 : 5.5), tk[1] + Math.cos(ileri.heading) * 10 + ileri.nz * (bis ? 6.5 : 5.5)];
     // Video (kaydet.mjs aracAni): önde gideni izleyen çekim otomatik saatte yarışın 4. dakikasında.
     const zaman = { lider: { yol: [Ts, Ts + 4.35] } };
     return { odak: tk.slice(), odakY: 1.3, kalabalik: kal, kiyi: null, yon: ileri.heading + 0.6, yerAdi: R0.ad, zaman, gitD: 44, gitEgim: 0.55 };

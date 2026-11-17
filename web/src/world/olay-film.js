@@ -283,7 +283,7 @@ export function buildFilmOlay({ world, group, traffic }) {
       const a = seg.ne === "ev" ? people.homes[i]?.door : yerOf(seg);
       if (!a) return;
       const d = Math.hypot(a[0] - K.Y.A[0], a[1] - K.Y.A[1]);
-      if (d > (seg.ne === "ev" ? 200 : 320)) return;
+      if (d > (seg.ne === "ev" ? 600 : 700)) return; // set haberi yayılır (küçük adada evler uzak)
       adaylar.push({ i, d, r: roll(R[i].seed, "filmFiguran", day) % 1000 });
     });
     adaylar.sort((a, b) => a.r - b.r);
@@ -440,6 +440,6 @@ export function buildFilmOlay({ world, group, traffic }) {
   return {
     kur, update, gorev, durus, tahliye, ekstra, canli, ses, yazi,
     seyirciBas: (o) => (K && K.o === o ? K.Tc0 - 4 : o.bas),
-    seyirci: { r0: 17, r1: 21, isR: 120, uzak: 1, en: 28, ozel: true, yasak, tavirlar: ["cek", "konus", "goster", "cek", "bak", "konus"] },
+    seyirci: { r0: 17, r1: 21, isR: 160, uzak: 2.4, en: 28, ozel: true, yasak, tavirlar: ["cek", "konus", "goster", "cek", "bak", "konus"] },
   };
 }
