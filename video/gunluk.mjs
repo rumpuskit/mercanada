@@ -64,6 +64,7 @@ import { seslendir } from "./seslendir.mjs";
 import { efekt, EFEKT_SES, EFEKTLER } from "./efekt.mjs";
 import { olayGunu, olayEvre } from "../web/src/world/olay-plan.js";
 import { yukle } from "./tiktok.mjs";
+import * as ETIKET from "./etiket.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 process.chdir(HERE);
@@ -150,7 +151,17 @@ const stages = catalog.gelisim;
 // Sıradaki adım sitedeki kartla aynı (layout.js nextStage): ana adımlar + çarşının yeni dükkânları (carsi:n, gelisim_dukkan);
 // 16 Kasım provası: video "Kumsal Kahvecisi için 18 kişi" derken site "Çarşıda yeni dükkân · 8 sakin daha" diyordu.
 const dukkan = catalog.gelisim_dukkan ? Array.from({ length: 400 }, (_, n) => ({ nufus: catalog.gelisim_dukkan.ilk + n * catalog.gelisim_dukkan.aralik, ad: "Çarşıda yeni dükkân" })) : [];
-const next = [...stages, ...dukkan].filter((s) => s.nufus > level).sort((a, b) => a.nufus - b.nufus || (b.acar ? 1 : 0) - (a.acar ? 1 : 0))[0];
+// Yeni mahallelerin yerleri (17 Kasım: kart "Lodos Mahallesi Muhtarlığı · 3 sakin daha" derken video "Kumsal Kahvecisi
+// için 8 kişi" diyordu): layout.js mahalle m ≥ 1 (mahalle sayısı = en büyük slot / mahalle başına konut, yukarı) için
+// _amenityPlan + muhtarlık anahtarları, eşik sim.stageOf, ad stageName ile aynı.
+const mahalleSayisi = Math.max(1, Math.ceil(residents.reduce((m, r) => Math.max(m, r.slot + 1), 0) / (sim.cap("daire_per_bina") * sim.cap("bina_per_sokak") * sim.cap("sokak_per_mahalle"))));
+const mahalleYerleri = Array.from({ length: mahalleSayisi - 1 }, (_, i) => i + 1).flatMap((m) => {
+  const mad = sim.mahalleName(m);
+  const ad = { cami: `${mad.replace(" Mahallesi", "")} Camii`, cay: `${mad} çay bahçesi`, mpark: `${mad} parkları`, oyun: `${mad} çocuk parkları`, basket: `${mad} basketbol sahası` };
+  const turler = ["cami", "cay", "oyun", "mpark", m < catalog.isyerleri.okul.length ? "okul" : "mpark", "basket", "muhtarlik"];
+  return [...new Set(turler)].map((t) => ({ nufus: sim.stageOf(`${t}:${m}`), ad: ad[t] ?? catalog.isyerleri[t]?.[m] ?? `${t}:${m}` }));
+});
+const next = [...stages, ...dukkan, ...mahalleYerleri].filter((s) => s.nufus > level).sort((a, b) => a.nufus - b.nufus || (b.acar ? 1 : 0) - (a.acar ? 1 : 0))[0];
 // Kaç kişi daha: eşik gelişim düzeyine göre (sitedeki kartla aynı, ui.js): ayrılanların sırası yeniden verilmez.
 const need = next ? Math.max(1, next.nufus - level) : 0;
 
@@ -348,14 +359,15 @@ for (const x of cumleler) console.log("   " + x.ses + (x.vurus ? "   [vuruş]" :
 
 // --- açıklama (etkileşim: kanca + soru + istek kalıbı + etiketler) ---
 const kanca = ozelKanca ?? { acilis: `Bugün adada yeni bir yer açıldı 🏗️`, yeniler: `Bugün ${fmt(yeniler.length)} kişi Mercanada'ya taşındı 🧳`, istek: "Yorumlardan gelen istek işlendi ✍️", sakin: "Bir sakinin günü 👀", bos: "Bu adada henüz kimse yaşamıyor 🏝️" }[tur];
-const aciklama = ozelAciklama ?? [
+// Adres yok, 5 hashtag, önceki iki videonunkilerden farklı (etiket.mjs; 17 Kasım, kullanıcı). Hikâyenin kendi
+// açıklaması da aynı kurala uydurulur.
+const aciklama = ozelAciklama ? ETIKET.duzelt(ozelAciklama, tarih, yuva) : [
   kanca,
   `${soru.yazi ?? soru.ses} 👇`,
   `Mesleğini sen seç: yorumuna "meslek: ${ornek}" gibi yaz.`,
   etiketler.length ? etiketler.map((h) => "@" + h).join(" ") : null,
-  "Kendini bul: mercanada.rumpuskit.com",
   "",
-  "#mercanada #keşfet #ada #şehirkurma #simülasyon #oyun #fyp",
+  ETIKET.sec(tarih, yuva).join(" "),
 ].filter((x) => x != null).join("\n");
 writeFileSync(`${out}/ACIKLAMA.txt`, aciklama + "\n");
 writeFileSync(`${out}/malzeme.json`, JSON.stringify({ tarih, yuva, tur, konuId, nufus: N, takipci, level, sıradaki: next?.ad, need, yeniler: yeniler.map((r) => r.handle), etiketler }, null, 2));
@@ -446,7 +458,7 @@ const AILE = (t) => (t === "yanTakip" ? "takip" : t);
 // (16 Kasım deneme videosu). Otomatik seçimde 0.
 const SINIR = { vertigo: 0, drone: 0, tele: 2, whip: 2, vinc: 3, el: 3 };
 const GECIS = { kesme: 0.1, solma: 0.25, kaydir: 0.2, flas: 0.3, yakinlas: 0.22 };
-const hs = { onceki: null, sayac: {}, grup: 0 };
+const hs = { onceki: null, sayac: {}, zorla: {}, grup: 0 };
 const ham = kesitler.map((k, i) => {
   const sure = +(k.t1 - k.t0 + X).toFixed(3); // geçici; geçişler seçilince düzeltilir
   const anahtar = ckAnahtar(k.cekim);
@@ -485,6 +497,8 @@ function yonet(shot, k, v, i) {
   if (shot.sabit) { canlandir(shot, shot.ayarli ? k.parca : v); return bitir(shot.sabit, shot.sabit === "alcak" ? "alcak" : "sabit"); }
   let zorla = k.parca === 0 ? ck?.hareket : null;
   if (zorla && !HAREKETLER.includes(zorla)) { console.log(`UYARI: bilinmeyen hareket "${zorla}" (${HAREKETLER.join(", ")}): yok sayıldı`); zorla = null; }
+  // Aynı hareketi hikâyede çok kez zorlamak videoyu tekdüzeleştirir (17 Kasım: 5 çekime "yorunge" verilmişti).
+  if (zorla && (hs.zorla[zorla] = (hs.zorla[zorla] ?? 0) + 1) === 3) console.log(`UYARI: "hareket": "${zorla}" hikâyede 3. kez verildi: hareketi yalnız kusuru gidermek için ver, gerisini otomatiğe bırak (aynı hareket en çok 2 kez)`);
   const dogal = shot.hareket ? null : shot.kamera ? "itme" : "yorunge";
   // Açılış çekimi (hikâyede ham kamera ile bayrak benzeri): doğal hareketiyle, alçak açı ailesinden sayılır.
   if (k.acilis && !zorla && !shot.hareket) { canlandir(shot, 0); return bitir("alcak", dogal); }
@@ -619,7 +633,9 @@ function canlandir(shot, v) {
     const y = shot.yorunge, yay = Math.max(Math.abs(y.a1 - y.a0), 0.5) * (Math.sign(y.a1 - y.a0) || 1);
     const o = y.r < 50 ? Math.max(0.85, olc) : olc; // yakın yörünge daha da yaklaşmaz (çardağa, direğe, bacaya girdi, 3 Kasım)
     y.a0 += aci; y.a1 = y.a0 + yay; y.r = +(y.r * o).toFixed(2); y.h = +(y.h * o).toFixed(2);
-    if (y.hedef !== "zeplin") y.r1 = +(y.r * m).toFixed(2);
+    // Yörünge hedefe yaklaşmaz (17 Kasım, kullanıcı: Mercanada 18:30'da 5 çekim "eski mantıkla" hedefe yaklaşıyordu;
+    // 16 Kasım isteği "sürekli yaklaşan çekimler yerine karışık"): sabit uzaklıkta döner, tek kullanımda hafif açılır.
+    if (y.hedef !== "zeplin" && m > 1) y.r1 = +(y.r * m).toFixed(2);
   }
   return shot;
 }
