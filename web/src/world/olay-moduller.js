@@ -28,9 +28,19 @@ import { buildZeplinOlay } from "./olay-zeplin.js";
 // --- ajan E ---
 import { buildKarOlay } from "./olay-kar.js";
 import { buildElektrikOlay } from "./olay-elektrik.js";
+// --- ajan D ---
+import { buildBalonOlay } from "./olay-balon.js";
+import { buildUcurtmaOlay } from "./olay-ucurtma.js";
+import { buildKusOlay } from "./olay-kus.js";
+// --- ajan D sonu ---
 
 export const MODULLER = {
   zeplin: buildZeplinOlay,
   kar: buildKarOlay, // ajan E
   elektrik: buildElektrikOlay, // ajan E (yalnız Mercanada)
+  // --- ajan D ---
+  balon: buildBalonOlay,
+  ucurtma: buildUcurtmaOlay,
+  kus: buildKusOlay,
+  // --- ajan D sonu ---
 };

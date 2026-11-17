@@ -3,7 +3,7 @@
 // (11:30 Berlin = 13:30 TR) başlamadan BİTER; öğle videosu günün olayını anlatır. En geç bitiş ~12:50 TR.
 export const ADA_TURLERI = ["yangin", "firtina", "yunus", "kaza", "sis"];
 /** Başlangıç pencereleri [en erken, en geç] (TR dakikası); verilmeyen tür olay-plan.js varsayılanını kullanır. */
-export const PENCERE = { zeplin: [570, 690] };
+export const PENCERE = { zeplin: [570, 690], balon: [480, 690], ucurtma: [600, 700], kus: [540, 710] };
 /** Sabah olayının en geç bitişi (TR dk): öğle üretimi 13:30 TR (kış) başlar; 12:50. */
 export const SABAH_SON = 770;
 /** Avrupa yaz saatinde en geç bitiş (TR dakikası): üretim 11:30 CEST = 12:30 TR; fırtınanın 20 dk gökkuşağı dahil 12:25. */
@@ -19,7 +19,7 @@ export function ozelGun(day) {
  *  son: en geç bitiş (18:50 TR, fırtınanın 20 dk gökkuşağı dahil üretimden ≥20 dk önce); yazSon: yaz saatinde 17:50 TR. */
 export const IKINCI = {
   turler: ["yangin", "firtina", "yunus", "kaza"],
-  pencere: { firtina: [840, 930], yangin: [870, 1020], kaza: [870, 1050], yunus: [840, 960], zeplin: [840, 990] },
+  pencere: { firtina: [840, 930], yangin: [870, 1020], kaza: [870, 1050], yunus: [840, 960], zeplin: [840, 990], balon: [840, 960], ucurtma: [840, 990], kus: [840, 960] },
   varsayilan: [840, 960], // penceresi yazılmamış tür (gün ışığında başlar)
   son: 1130,
   yazSon: 1070,
@@ -54,3 +54,11 @@ export function gunBatimi(day) {
   for (let m = 722; m <= 1440; m += 2) { const e = el(m); if (prev >= h && e < h) return m; prev = e; }
   return 1440;
 }
+// --- ajan D --- (olay-balon.js, olay-ucurtma.js, olay-kus.js)
+/** Adaya özgü olay adları (olay-plan.js OLAYLAR: [ad, en]). */
+export const ADLAR = { kus: ["Leylek göçü", "Stork migration"] };
+/** Kuş olayı (olay-kus.js): Mercanada'da leylek göçü (yüzlerce leylek termikte daire çizip güneye gider). */
+export const KUS = { tur: "leylek" };
+/** Uçurtma şenliği (olay-ucurtma.js): yer (tepe | cimen) ve adı. */
+export const UCURTMA = { yer: "tepe", ad: "Tepe", de: "Tepe'de", ye: "Tepe'ye" };
+// --- ajan D sonu ---
