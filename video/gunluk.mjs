@@ -451,6 +451,11 @@ const OLAY_ANI = {
   kar: { olay: "olay:yogun", "olay-yakin": "olay:seyrelme", "olay-kalabalik": "olay:seyrelme", "olay-tele": "olay:yogun", "olay-hava": "olay:yogun" },
   // Elektrik kesintisi: ada karanlıkta (kapı önlerinde telefon fenerleri, pencerelerde mum); "olay:donus" ışıklar mahalle mahalle gelir.
   elektrik: { olay: "olay:karanlik", "olay-yakin": "olay:karanlik+6", "olay-kalabalik": "olay:karanlik+8", "olay-tele": "olay:kesinti+1", "olay-hava": "olay:donus+1" },
+  // --- ajan D --- balon: kalkış hepsi birden, iniş "olay:inis+4" / söndü "olay:yerde+3"; uçurtma: takılma "olay:takildi+2".
+  balon: { olay: "olay:kalkis+2", "olay-yakin": "olay:sisirme+9", "olay-kalabalik": "olay:sisirme+10", "olay-tele": "olay:suzulme+8", "olay-hava": "olay:suzulme+4" },
+  ucurtma: { olay: "olay:senlik+5", "olay-yakin": "olay:takildi+3", "olay-kalabalik": "olay:senlik+8", "olay-tele": "olay:senlik+2", "olay-hava": "olay:senlik+10" },
+  kus: { olay: "olay:termik+6", "olay-yakin": "olay:termik+3", "olay-kalabalik": "olay:termik+4", "olay-tele": "olay:termik+10", "olay-hava": "olay:gidis+1" }, // leylek göçü
+  // --- ajan D sonu ---
 };
 const kullanim = {};
 const efektler = [];
