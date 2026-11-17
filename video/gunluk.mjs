@@ -61,7 +61,7 @@ import * as sim from "../web/src/sim.js";
 import { VERI_URL, TIKTOK, ZEPLIN_REKLAM } from "../web/src/config.js";
 import { ferryOut, nextArrival } from "../web/src/world/ferry.js";
 import { seslendir } from "./seslendir.mjs";
-import { efekt, EFEKT_SES } from "./efekt.mjs";
+import { efekt, EFEKT_SES, EFEKTLER } from "./efekt.mjs";
 import { olayGunu, olayEvre } from "../web/src/world/olay-plan.js";
 import { yukle } from "./tiktok.mjs";
 
@@ -268,7 +268,11 @@ if (opt("--hikaye")) {
   if (h.muzik !== undefined) muzik = h.muzik;
   ozelAciklama = h.aciklama ?? null; etiketsiz = !!h.etiketsiz; sonBekle = h.sonBekle ?? sonBekle;
   saat = h.saat ?? saat; ozelKanca = h.kanca ?? null;
-  imza2 = h.imza2 ? cc(h.imza2) : null; ilkCekim = h.ilk ?? ilkCekim; ornek = h.ornek ?? ornek; soruCekim = h.soruCekim ?? null;
+  imza2 = h.imza2 ? cc(h.imza2) : null;
+  // Elle yazılan imza2 sitedeki karttan farklı sayı söylemesin (17 Kasım QC: dün gece yazılan "sekiz kişi" sabah kartta "1").
+  if (imza2 && next && !String(imza2.yazi ?? imza2.ses).includes(fmt(need)) && !String(imza2.ses).includes(say(need)))
+    console.log(`UYARI: imza2 elle verilmiş ama sitedeki kart "${next.ad} · ${fmt(need)} sakin daha" diyor: imza2'yi sil (otomatik cümle kartla aynı)`);
+  ilkCekim = h.ilk ?? ilkCekim; ornek = h.ornek ?? ornek; soruCekim = h.soruCekim ?? null;
   tasinCekim = h.tasinCekim ?? tasinCekim;
   onsoz = (h.onsoz ?? []).map(cc); onsozCekim = h.onsozCekim ?? null;
   if (h.acilis !== undefined) acilis = h.acilis;
@@ -386,7 +390,7 @@ gruplar.forEach((g, gi) => {
 /** Yer başına hareket seçenekleri (ilk sıradaki doğal olanı: itme = kütüphane anahtar kareleri, yorunge = dönen kamera).
  *  bayrak (alçaktan yükselen açılış) ve zeplin2 sabit; anma çekimleri yalnız itme. */
 const SECENEK = {
-  ucus: ["itme", "drone", "yanKay", "vertigo"],
+  ucus: ["itme", "drone", "vertigo"], // yanKay yok: meydana kayıp adanın ölçeği kayboluyordu (17 Kasım QC; Driftwood'la aynı)
   iskele: ["itme", "yanKay", "tele", "vinc", "alcak"],
   iskele2: ["itme", "yanKay", "whip", "el"],
   meydan: ["itme", "vinc", "alcak", "whip", "drone", "yanKay", "el"],
@@ -413,6 +417,11 @@ const OLAY_CEKIM = {
   "olay-hava": { D: 120, H: 6, secenek: ["yanKay", "tele"] },
   "olay-arac": { D: 10, H: 3, secenek: ["takip", "yanTakip"] },
 };
+/** Aynı uyarı bölünen çekimin her parçasında tekrarlanmasın. */
+const uyarilan = new Set();
+const birKez = (m) => { if (!uyarilan.has(m)) { uyarilan.add(m); console.log(m); } };
+/** Olay türüne göre sahnedeki araçlar (olay.js: kazada polis/ambulans/çekici, yangında itfaiye). */
+const OLAY_ARACLARI = { kaza: ["polis", "ambulans", "cekici"], yangin: ["itfaiye"] };
 /** Saat verilmeyen olay çekiminin anı (olay türü → çekim → saat; araç: o aracın yolda olduğu evre). */
 const OLAY_ANI = {
   kaza: { olay: "olay:polis", "olay-yakin": "olay+1.5", "olay-kalabalik": "olay:polis", "olay-tele": "olay:polis", "olay-hava": "olay:polis", arac: { polis: "olay+5.2", ambulans: "olay+7.4", itfaiye: "olay+5.2", cekici: "olay:cekici+3" } },
@@ -562,6 +571,8 @@ function ozellik(k, i, shot) {
   for (const e0 of efs) {
     const e = typeof e0 === "string" ? { ad: e0 } : e0;
     if (!e?.ad) continue;
+    // Bilinmeyen efekt üretimi durdurmaz (17 Kasım QC: efekt.mjs hata fırlatıp bütün koşuyu bitiriyordu).
+    if (!EFEKTLER.includes(e.ad)) { birKez(`UYARI: bilinmeyen efekt "${e.ad}" (${EFEKTLER.join(", ")}): atlandı`); continue; }
     efektler.push({ dosya: efekt(e.ad, resolve("cikti/efekt"), e.sure), bas: +(k.t0 + (e.bas ?? 0)).toFixed(3), ses: e.ses ?? EFEKT_SES[e.ad] ?? null, ad: e.ad });
   }
   if (kapali) delete shot.yagmur;
@@ -757,6 +768,11 @@ function olayCekimi(ad0, a, L, arayuz) {
     return shot;
   }
   const arac = tur === "olay-arac" ? ad.slice(10) : null, ani = OLAY_ANI[olay.tur] ?? {};
+  // Olayda olmayan araç (17 Kasım QC: kazada itfaiye, fırtınada polis istenince siren sesi boş çekime ekleniyordu).
+  if (arac && !(OLAY_ARACLARI[olay.tur] ?? []).includes(arac)) {
+    birKez(`UYARI: "${olay.tur}" olayında "${arac}" aracı yok (${(OLAY_ARACLARI[olay.tur] ?? []).join(", ") || "araçsız olay"}): geniş olay çekimi`);
+    return olayCekimi("olay", a, L, arayuz);
+  }
   // Çekici yüklerken park hâlinde: izleme yerine çevresinde yörünge/vinç/alçak açı (yandan izlemede direk önüne giriyordu).
   const cek = arac === "cekici";
   const shot = { adres: a, hareket: { tur: null, hedef: ad, D: cek ? 20 : b.D, H: cek ? 7 : b.H, ...(b.goz ? { goz: b.goz } : {}) }, secenek: cek ? ["yorunge", "vinc", "alcak"] : b.secenek, olayBek: olay.tur,
