@@ -11,3 +11,13 @@ export function ozelGun(day) {
   const d = new Date(day * 86400000), m = d.getUTCMonth() + 1, g = d.getUTCDate();
   return (m === 10 && g === 29) || (m === 11 && g === 10);
 }
+/** Öğleden sonra olayı (17 Kasım akşamı, kullanıcı: "ikinci videolar da olay videosu olacak"): akşam videosu (18:30 Berlin,
+ *  üretim 17:30 = 19:30 TR kışın, 18:30 TR yazın) anlatır. Sis yok (öğleden sonra sis gerçekçi değil); tür sabahkinden
+ *  farklı. Pencereler TR dakikası: deniz olayı gün ışığında (kışın gün batımı ~17:40), kaza/yangın alacakaranlığa kayabilir.
+ *  son: en geç bitiş (18:50 TR, fırtınanın 20 dk gökkuşağı dahil üretimden ≥20 dk önce); yazSon: yaz saatinde 17:50 TR. */
+export const IKINCI = {
+  turler: ["yangin", "firtina", "yunus", "kaza"],
+  pencere: { firtina: [840, 930], yangin: [870, 1020], kaza: [870, 1050], yunus: [840, 960] },
+  son: 1130,
+  yazSon: 1070,
+};

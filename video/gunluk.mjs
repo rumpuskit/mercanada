@@ -144,8 +144,10 @@ sim.setTown(level);
 // zorlar ve çekim adreslerine aynı parametreleri ekler (sayfa da zorlanır).
 const olayZorla = opt("--olay"), olaySaatZorla = opt("--olaysaat");
 const olayGun = opt("--tarih") ? Date.parse(opt("--tarih") + "T00:00:00Z") / 86400000 : today;
-const olay = olayGunu(olayGun, sim.isOpen, { zorla: olayZorla, saat: olaySaatZorla ? dakika(olaySaatZorla) : undefined });
-const olayAdres = olayZorla ? `&olay=${olayZorla}${olaySaatZorla ? "&olaysaat=" + olaySaatZorla : ""}` : "";
+// Günde iki olay (17 Kasım akşamı): öğle videosu sabahki olayı (yuva 0), akşam videosu öğleden sonrakini (yuva 1) anlatır.
+const olayYuva = yuva === "aksam" ? 1 : 0;
+const olay = olayGunu(olayGun, sim.isOpen, { zorla: olayZorla, saat: olaySaatZorla ? dakika(olaySaatZorla) : undefined, yuva: olayYuva });
+const olayAdres = olayZorla ? `&olay=${olayZorla}${olaySaatZorla ? "&olaysaat=" + olaySaatZorla : ""}${olayYuva ? "&olayyuva=1" : ""}` : "";
 if (olay) console.log(`günün olayı: ${olay.ad} (${olay.tur}) ${saatYaz(olay.bas)}–${saatYaz(olay.son)}${olayZorla ? " [zorlandı]" : ""}`);
 const stages = catalog.gelisim;
 // Sıradaki adım sitedeki kartla aynı (layout.js nextStage): ana adımlar + çarşının yeni dükkânları (carsi:n, gelisim_dukkan);
