@@ -134,8 +134,10 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       const ar = (V) => V && { yol: [V.gidis.t0, V.gidis.t1], park: [V.gidis.t1, V.donus?.t0 ?? K.son], donus: V.donus ? [V.donus.t0, V.donus.t1] : null };
       S.zaman = { polis: ar(K.polis), ambulans: ar(K.ambulans), cekici: ar(K.cekici), yukleme: K.cekici?.yukle ?? null, Bgider: [K.Bgider.t0, K.Bgider.t1] };
       // Yer adı: en yakın binanın sokağı ("Kabuk Sokağı No 1, …" → "Kabuk Sokağı").
-      let enY = null, dmin = Infinity;
-      for (const b of world.buildings) { if (!b.address) continue; const d = Math.hypot(b.x - K.P[0], b.z - K.P[1]); if (d < dmin) { dmin = d; enY = b; } }
+      // Önce sokak/cadde adresi olan en yakın bina (17 Kasım akşamı: en yakın bina yeni bir yapı olunca ad "Yakamoz Camii"den
+      // "Çay Bahçesi yanı"na dönüyordu); yoksa en yakın adresli bina.
+      const yakin = (suz) => { let enY = null, dmin = Infinity; for (const b of world.buildings) { if (!b.address || !suz(b.address)) continue; const d = Math.hypot(b.x - K.P[0], b.z - K.P[1]); if (d < dmin) { dmin = d; enY = b; } } return dmin < 80 ? enY : null; };
+      const enY = yakin((a) => /(Sokağı|Caddesi|Bulvarı) No/.test(a)) ?? yakin(() => true);
       S.yerAdi = enY?.address?.split(" No")[0]?.split(",")[0] ?? null;
       kaza.kur(K, world);
     } else if (o.tur === "yangin" && traffic) {
@@ -313,7 +315,7 @@ export function buildOlay({ world, scene, sky, params, traffic }) {
       if (minute < Y.bas + (Y.son - Y.bas) * 0.6) return { kisa: `Yangın: itfaiye söndürüyor`, uzun: `${yerY} binasındaki yangına itfaiye müdahale ediyor; kimse yaralanmadı.` };
       return { kisa: `Yangın söndürüldü · ${yerY}`, uzun: `${yerY} binasındaki yangın söndürüldü; itfaiye soğutma yapıyor.` };
     }
-    const T = { firtina: ["Fırtına! Sağanak ve şimşek", "Bugün fırtına vardı", "Adayı sağanak ve şimşekli bir fırtına vurdu; gök karardı, sokak lambaları sabah saatinde yandı."],
+    const T = { firtina: ["Fırtına! Sağanak ve şimşek", "Bugün fırtına vardı", `Adayı sağanak ve şimşekli bir fırtına vurdu; gök karardı, sokak lambaları ${o.yuva ? "gün ışığında" : "sabah saatinde"} yandı.`],
       sis: ["Ada sisin içinde", "Bu sabah ada sise gömüldü", "Yoğun sis adayı sardı; sis düdüğü kırk saniyede bir öttü, fener ve sokak lambaları sis dağılana dek yandı."],
       yunus: ["Kıyıda yunuslar!", "Bugün kıyıya yunuslar geldi", `Bir yunus sürüsü kıyının açığında yarım saat zıpladı${S.seyirci ? `; ${S.seyirci} kişi sahile toplanıp izledi` : ""}.`],
       yangin: ["Yangın! İtfaiye yolda", "Bugün yangın çıktı", "Adada yangın çıktı; itfaiye dakikalar içinde geldi ve yangını söndürdü. Kimse yaralanmadı."] }[o.tur];
@@ -379,12 +381,15 @@ function kazaKur(world, traffic, o) {
   const adaylar = net.nodes.filter((n) => n.ends.filter(tasit).length >= 3).map((n) => ({ n, d: Math.hypot(n.p[0], n.p[1] + 12), b: binaSay(n.p) }))
     .filter((a) => a.d > 45 && a.d < 360 && a.b >= 6);
   if (!adaylar.length) return null;
-  const puan = (a) => a.d / 6 - a.b * 4 - (a.n.signal ? 12 : 0);
-  adaylar.sort((a, b) => puan(a) - puan(b));
-  const havuz = adaylar.slice(0, 10);
+  // Olay yeri gün boyu sabit (17 Kasım akşamı: ada 2000'i geçip yeni mahalle kurulunca sabahki kaza "Koy Sokağı"ndan
+  // "Kayık Sokağı"na kaydı; öğle videosu ve site metni ayrıştı). Sıralı ilk-10 + tohum kipi her yeni binada kayıyordu.
+  // Artık "rendezvous" seçimi: her uygun kavşağa konumundan ve tohumdan bir puan; en büyük seçilir. Ada büyüdükçe yeni
+  // aday eklenirse seçim yalnız yeni aday kazanırsa değişir (≈1/aday sayısı). Uygunluk yukarıda (45–360 m, ≥6 bina).
+  const yerPuani = (a) => kesir("kazaYer", o.tohum, Math.round(a.n.p[0]), Math.round(a.n.p[1]));
+  const havuz = [...adaylar].sort((a, b) => yerPuani(b) - yerPuani(a));
   const neden = [];
   for (let deneme = 0; deneme < havuz.length; deneme++) {
-    const { n } = havuz[(o.tohum + deneme) % havuz.length];
+    const { n } = havuz[deneme];
     const gelen = traffic.lanes.filter((l) => l.to?.id === n.id && l.len > 14);
     // Dik açıyla kesişen iki gelen şerit.
     let cift = null;
@@ -686,10 +691,12 @@ function buildKazaGorsel(group) {
 function yanginKur(world, traffic, o) {
   const fs = world.fireStation;
   if (!fs?.bay) return null;
+  // Yangın binası gün boyu sabit (kazadaki gibi rendezvous seçimi: çarşıya yeni dükkân eklenince sıralı listede kayıyordu).
   const bs = world.buildings.filter((b) => b.kind === "carsi" && b.w > 5)
-    .map((b) => ({ b, d: Math.hypot(b.x, b.z + 12) })).filter((a) => a.d > 30 && a.d < 380).sort((a, b) => a.d - b.d).slice(0, 12);
+    .map((b) => ({ b, d: Math.hypot(b.x, b.z + 12), k: kesir("yanginYer", o.tohum, Math.round(b.x), Math.round(b.z)) }))
+    .filter((a) => a.d > 30 && a.d < 380).sort((a, b) => b.k - a.k);
   for (let deneme = 0; deneme < bs.length; deneme++) {
-    const { b } = bs[(o.tohum + deneme * 7) % bs.length];
+    const { b } = bs[deneme];
     const s = Math.sin(b.rot ?? 0), c = Math.cos(b.rot ?? 0);
     const on = [s, c], yan = [c, -s]; // binanın önü (+z yerel) ve yanı (+x yerel)
     const H = b.floors * 3.2;
