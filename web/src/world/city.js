@@ -514,7 +514,7 @@ export function buildCity(world) {
   return {
     group,
     tick: (t) => features.userData.tick(t),
-    setFlood: (s, f) => features.userData.setFlood(s, f),
+    setFlood: (s, f, t) => features.userData.setFlood(s, f, t),
     windows: K.glass.mesh,
     windowOwners: K.windowOwners,
     windowInfo: K.windowInfo,
@@ -1313,12 +1313,13 @@ function buildFeatures(world) {
       group.add(mesh);
     }
   }
-  /** stadium: saha projektörleri (akşam saatlerinde), fener: gece boyunca. */
-  group.userData.setFlood = (stadium, fener = stadium) => {
+  /** stadium: saha projektörleri (akşam saatlerinde), fener: gece boyunca; tabela: ışıklı tabelalar (elektrik kesintisinde
+   *  söner, pilli fener yanar; verilmezse fener ile aynı). */
+  group.userData.setFlood = (stadium, fener = stadium, tabela = fener) => {
     floodLens.emissiveIntensity = 3.2 * stadium;
     floodGlareMat.opacity = 0.75 * stadium;
     for (const f of fenerLamps) { f.lensMat.emissiveIntensity = 0.15 + 3.5 * fener; f.beamMat.uniforms.uOpacity.value = 0.35 * fener; f.beam.visible = fener > 0; }
-    for (const m of glowSigns) m.emissiveIntensity = 0.9 * fener;
+    for (const m of glowSigns) m.emissiveIntensity = 0.9 * tabela;
   };
   group.userData.extras = extras;
   group.userData.tick = (t) => {

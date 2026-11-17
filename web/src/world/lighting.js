@@ -52,6 +52,11 @@ export function createLampLight(world, spots, materials, { wallMaterials = [] } 
     return t;
   };
   const tex = toTex(canvas), ftex = toTex(fcanvas);
+  // Elektrik kesintisi (olay-elektrik.js): kaba bir güç haritası (8 m/texel; 1 açık, 0 kesik) lamba ve saha ışığını çarpar.
+  // Kesinti yokken 1×1 beyaz doku (her gün aynı gölgelendirici: kesinti günü yeniden derleme yok).
+  const beyaz = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  beyaz.needsUpdate = true;
+  let mask = null, maskSurum = null;
 
   const uniforms = {
     lampMap: { value: tex },
@@ -60,6 +65,7 @@ export function createLampLight(world, spots, materials, { wallMaterials = [] } 
     floodMap: { value: ftex },
     floodOn: { value: 0 },
     lampFloor: { value: world.flatY },
+    lampMask: { value: beyaz },
   };
   const patch = (material, wall) => {
     material.onBeforeCompile = (shader) => {
@@ -80,10 +86,11 @@ export function createLampLight(world, spots, materials, { wallMaterials = [] } 
         uniform float lampNight;
         uniform sampler2D floodMap;
         uniform float floodOn;
-        uniform float lampFloor;`)
+        uniform float lampFloor;
+        uniform sampler2D lampMask;`)
         .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
         vec2 lampUv = (vLampWorld.xz - lampRect.xy) / lampRect.zw;
-        vec3 lampLight = texture2D(lampMap, lampUv).rgb + texture2D(floodMap, lampUv).rgb * floodOn;
+        vec3 lampLight = (texture2D(lampMap, lampUv).rgb + texture2D(floodMap, lampUv).rgb * floodOn) * texture2D(lampMask, lampUv).r;
         float lampFall = ${wall ? "clamp(1.0 - (vLampWorld.y - lampFloor) / 7.0, 0.0, 1.0)" : "1.0"};
         totalEmissiveRadiance += lampLight * lampNight * lampFall * diffuseColor.rgb * ${wall ? "0.9" : "1.5"};`);
     };
@@ -97,6 +104,18 @@ export function createLampLight(world, spots, materials, { wallMaterials = [] } 
     },
     setStadium(n) {
       uniforms.floodOn.value = n;
+    },
+    /** Güç haritası: kesik(x, z) → true olan yerde lamba ışığı yok; null: her yer açık. surum değişmedikçe yeniden kurulmaz. */
+    setMask(kesik, surum) {
+      if (!kesik) { if (maskSurum !== null) { uniforms.lampMask.value = beyaz; maskSurum = null; } return; }
+      if (surum === maskSurum) return;
+      maskSurum = surum;
+      const W = Math.ceil(w / 8), H = Math.ceil(d / 8);
+      if (!mask) { mask = new THREE.DataTexture(new Uint8Array(W * H * 4), W, H); mask.magFilter = mask.minFilter = THREE.LinearFilter; }
+      const a = mask.image.data;
+      for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const k = (j * W + i) * 4, v = kesik(x0 + (i + 0.5) * 8, z0 + (j + 0.5) * 8) ? 0 : 255; a[k] = a[k + 1] = a[k + 2] = v; a[k + 3] = 255; }
+      mask.needsUpdate = true;
+      uniforms.lampMask.value = mask;
     },
   };
 }

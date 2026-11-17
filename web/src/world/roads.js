@@ -436,6 +436,7 @@ export function buildRoads(world) {
   const lamps = buildLamps(lampSpots);
   group.add(lamps);
   group.userData.lampHeads = lamps.userData.heads;
+  group.userData.lampHeadMeshes = lamps.userData.headMeshes;
   return group;
 }
 
@@ -467,6 +468,8 @@ function buildLamps(spots) {
     for (const mesh of s.deco ? [decoPole, decoBase, decoHead, decoCap] : [pole, arm, head]) mesh.setMatrixAt(mesh.count++, m);
   }
   group.userData.heads = [headMat];
+  // Elektrik kesintisi (main.js updateWindows): lamba başlarını tek tek söndürmek için örnek sırasıyla konumlar.
+  group.userData.headMeshes = [head, decoHead].map((mesh) => ({ mesh, xz: spots.filter((s) => !s.hidden && !!s.deco === (mesh === decoHead)).map((s) => [s.x, s.z]) }));
   return group;
 }
 

@@ -645,17 +645,30 @@ function rayClear(o, dir, max) {
 // --- pencereler ve lambalar ---
 const tmpColor = new THREE.Color();
 const LAMP_OFF = new THREE.Color("#cfd6de");
+// Elektrik kesintisi (olay-elektrik.js, olay.elektrik): kesik mahallede pencere, lamba, saha ve tabela ışıkları söner, kimi
+// pencerede mum yanar; fener (pilli) yanar. Pencere ve lamba başlarının mahallesi ilk kesintide bir kez sayılır.
+const MUM = new THREE.Color("#ffad55");
+const elHucre = { pencere: null, lamba: null, kesikti: false };
 function updateWindows(minute, light, sunDeg) {
   const night = 1 - light;
   const { windows, windowOwners } = city;
+  const el = olay.elektrik(minute);
+  if (el && !elHucre.pencere) {
+    const m4 = new THREE.Matrix4(), v = new THREE.Vector3();
+    elHucre.pencere = Int16Array.from(windowOwners, (o, i) => { windows.getMatrixAt(i, m4); v.setFromMatrixPosition(m4); return el.hucre(v.x, v.z); });
+    elHucre.lamba = roads.userData.lampHeadMeshes.map(({ xz }) => Int16Array.from(xz, ([x, z]) => el.hucre(x, z)));
+  }
   for (let i = 0; i < windowOwners.length; i++) {
     const o = windowOwners[i];
     let lit;
     if (o.slot != null) lit = o.slot < population && people.athome[o.slot] === 1;
     else if (o.workplace === "otel" || o.workplace === "saglik" || o.workplace === "karakol") lit = (o.seed * 7) % 5 < 3;
     else lit = minute > 470 && minute < 1380 && (o.seed * 5) % 7 < 5;
-    tmpColor.copy(P.WINDOW_DAY).lerp(lit ? P.WINDOW_NIGHT : P.WINDOW_DARK, night);
+    const kesik = el && !el.acik(elHucre.pencere[i]);
+    if (kesik) lit = false;
+    tmpColor.copy(P.WINDOW_DAY).lerp(lit ? P.WINDOW_NIGHT : P.WINDOW_DARK, kesik ? Math.min(1, night * 3) : night); // kesintide alacakaranlıkta da koyu
     if (o.slot != null) curtain(o.slot, tmpColor, night, lit); // seçtiği perde rengi
+    if (kesik) { const mum = el.mum(i, o.slot != null && o.slot < population && people.athome[o.slot] === 1); if (mum) tmpColor.lerp(MUM, mum * Math.min(1, night * 2)); }
     windows.setColorAt(i, tmpColor);
   }
   windows.instanceColor.needsUpdate = true;
@@ -663,13 +676,24 @@ function updateWindows(minute, light, sunDeg) {
   // (17 Kasım QC: olay metni lambaların yandığını söylüyor). Fenerin sis/fırtına ışığını hava.js ekler (setFlood sarmalı).
   const hv = olay.api.hava, gece = sunDeg < -1.5;
   const on = gece || Math.max(hv?.karanlik ?? 0, (hv?.sis ?? 0) * 0.9) > 0.45;
-  for (const m of roads.userData.lampHeads) m.color.copy(LAMP_OFF).lerp(P.WINDOW_NIGHT, on ? 1 : 0);
+  if (el || elHucre.kesikti) {
+    // Kesintide lamba başları tek tek (örnek rengi), bitince örnek renkleri beyaza döner ve eski yol sürer.
+    roads.userData.lampHeadMeshes.forEach(({ mesh }, k) => {
+      // Sönük lamba başı gece koyu gri (gündüz rengi LAMP_OFF karanlıkta parlak görünüyordu).
+      const sonuk = tmpColor.copy(LAMP_OFF).multiplyScalar(1 - 0.72 * night);
+      for (let j = 0; j < mesh.count; j++) mesh.setColorAt(j, !el ? tmpColor.setRGB(1, 1, 1) : on && el.acik(elHucre.lamba[k][j]) ? P.WINDOW_NIGHT : sonuk);
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    });
+    elHucre.kesikti = !!el;
+  }
+  for (const m of roads.userData.lampHeads) el ? m.color.setRGB(1, 1, 1) : m.color.copy(LAMP_OFF).lerp(P.WINDOW_NIGHT, on ? 1 : 0);
+  lampLight.setMask(el?.kesik ?? null, el?.surum);
   lampLight.setNight(gece ? Math.min(1, (-1.5 - sunDeg) / 6 + 0.35) : on ? 0.35 : 0);
   // Saha ışıkları yalnızca akşam (17:30-23:00), fener bütün gece.
-  const stadium = on && minute >= 1050 && minute < 1380 ? 1 : 0;
-  city.setFlood(stadium, gece ? 1 : 0);
+  const stadium = on && minute >= 1050 && minute < 1380 && !el?.sahaKesik ? 1 : 0;
+  city.setFlood(stadium, gece ? 1 : 0, gece && !el?.carsiKesik ? 1 : 0);
   lampLight.setStadium(stadium);
-  harbor.userData.setNight(on ? 1 : 0);
+  harbor.userData.setNight(on && !el?.limanKesik ? 1 : 0);
 }
 
 // --- giriş: yükleme bitince "Adaya gir"; dokununca ses açılır ve kamera yüksekten adaya süzülür ---
@@ -751,7 +775,7 @@ function tick() {
   const anmaEvre = anmaPhase(day, minute);
   traffic.step(anmaEvre === "sukut" ? 0 : simDtSec, minute, day);
   if (anmaOf(day) !== anmaGunu) { anmaGunu = anmaOf(day); zeplin?.setAnma?.(anmaGunu); }
-  signals.userData.update(minute * 60);
+  signals.userData.update(minute * 60, olay.elektrik(minute)?.kesik); // elektrik kesintisinde trafik ışıkları söner
   // Araçlar: yoldakiler, park halindekiler (farlar sönük) ve bekleyen taksiler.
   vehicles.begin();
   const vp = {};
@@ -771,7 +795,7 @@ function tick() {
   for (const c of people.staticCars) vehicles.addCar(c.x, world.surfaceY(c.x, c.z) + 0.06, c.z, c.heading, 0, { taxi: c.taxi, record: { kind: "taxi" } });
   olay.vehicles(vehicles, real, minute);
 
-  zeplin?.update(unix, real, zeplinNight); // takipten önce: kamera zeplinin bu karedeki yerini izler
+  zeplin?.update(unix, real, olay.elektrik(minute)?.zeplinKesik ? 0 : zeplinNight); // takipten önce: kamera zeplinin bu karedeki yerini izler
   if (flight) {
     flight.t = Math.min(1, flight.t + dt / flight.sure);
     const k = 1 - (1 - flight.t) ** 3;

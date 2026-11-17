@@ -1106,16 +1106,17 @@ export function buildSignals(traffic, world) {
   group.add(pole, head, visor, lamps, pedPole, pedHead, pedLamps, pedWalk);
   const RED = new THREE.Color(2.2, 0.15, 0.1), YEL = new THREE.Color(2.2, 1.4, 0.1), GRN = new THREE.Color(0.2, 2.0, 0.6), DARK = new THREE.Color(0.08, 0.08, 0.08);
   const PRED = new THREE.Color(2.4, 0.25, 0.15), PGRN = new THREE.Color(0.3, 2.2, 1.0), PDARK = new THREE.Color(0.1, 0.1, 0.1);
-  group.userData.update = (tSec) => {
+  // kesik(x, z): elektrik kesintisi (olay-elektrik.js) o yerde sürüyorsa ışıklar söner (araçlar yine sırayla geçer).
+  group.userData.update = (tSec, kesik = null) => {
     items.forEach((it, i) => {
-      const st = signalState(it.node, it.group, tSec);
+      const st = kesik?.(it.x, it.z) ? "-" : signalState(it.node, it.group, tSec);
       lamps.setColorAt(i * 3, st === "r" ? RED : DARK);
       lamps.setColorAt(i * 3 + 1, st === "y" ? YEL : DARK);
       lamps.setColorAt(i * 3 + 2, st === "g" ? GRN : DARK);
     });
     const blink = Math.floor(tSec * 2) % 2 === 0;
     peds.forEach((it, i) => {
-      const st = pedState(it.node, it.group, tSec);
+      const st = kesik?.(it.x, it.z) ? "-" : pedState(it.node, it.group, tSec);
       pedLamps.setColorAt(i, st === "r" ? PRED : PDARK);
       pedWalk.setColorAt(i, st === "g" || (st === "f" && blink) ? PGRN : PDARK);
     });
