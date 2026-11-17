@@ -4,6 +4,8 @@
 export const ADA_TURLERI = ["yangin", "firtina", "yunus", "kaza", "sis"];
 /** Başlangıç pencereleri [en erken, en geç] (TR dakikası); verilmeyen tür olay-plan.js varsayılanını kullanır. */
 export const PENCERE = {};
+/** Avrupa yaz saatinde en geç bitiş (TR dakikası): üretim 11:30 CEST = 12:30 TR; fırtınanın 20 dk gökkuşağı dahil 12:25. */
+export const YAZ_SON = 725;
 /** Özel günler (olay yok): 29 Ekim (fişek), 10 Kasım (anma). Gün sayısı UTC gün başı (sim.dayOf). */
 export function ozelGun(day) {
   const d = new Date(day * 86400000), m = d.getUTCMonth() + 1, g = d.getUTCDate();
