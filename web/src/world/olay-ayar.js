@@ -37,3 +37,20 @@ export const TUR_SURUMLERI = [
   // 19 Kasım: zeplin acil inişi (olay-zeplin.js; 17 Kasım akşamı denendi).
   { gun: "2026-11-19", sabah: [...ADA_TURLERI, "zeplin"], ikinci: [...IKINCI.turler, "zeplin"] },
 ];
+// --- ajan E ---
+/** Gün batımı (TR dakikası; sky.js sunTimes ile aynı formül, three'siz: olay-plan.js elektrik kesintisinin penceresini
+ *  bununla kurar, video betiği de aynı planı hesaplar). Enlem 40,87° K, boylam 29,1° D, UTC+3. */
+export function gunBatimi(day) {
+  const rad = Math.PI / 180, LAT = 40.87 * rad, LON = 29.1, TZ = 3, h = -0.833 * rad;
+  const el = (m) => {
+    const n = day + 2440587.5 + (m / 60 - TZ) / 24 - 2451545.0;
+    const L = (280.46 + 0.9856474 * n) % 360, g = (357.528 + 0.9856003 * n) * rad;
+    const lam = (L + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * rad, eps = (23.439 - 0.0000004 * n) * rad;
+    const ra = Math.atan2(Math.cos(eps) * Math.sin(lam), Math.cos(lam)), dec = Math.asin(Math.sin(eps) * Math.sin(lam));
+    const ha = ((18.697374558 + 24.06570982441908 * n) % 24) * 15 * rad + LON * rad - ra;
+    return Math.asin(Math.sin(LAT) * Math.sin(dec) + Math.cos(LAT) * Math.cos(dec) * Math.cos(ha));
+  };
+  let prev = el(720);
+  for (let m = 722; m <= 1440; m += 2) { const e = el(m); if (prev >= h && e < h) return m; prev = e; }
+  return 1440;
+}

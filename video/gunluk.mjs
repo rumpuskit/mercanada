@@ -447,6 +447,10 @@ const OLAY_ANI = {
   balina: { olay: "olay:oyun" },
   // Olay modülleri (17 Kasım akşamı; web/src/world/olay-moduller.js): hareketli hedefi olanlarda kamera onu izler.
   zeplin: { olay: "olay:yerde", "olay-yakin": "olay:inis", "olay-kalabalik": "olay:yerde+4", "olay-tele": "olay:alcalma+3", "olay-hava": "olay:alcalma+2" },
+  // --- ajan E --- Kar: yoğun yağışın ortası (çocuklar kartopunda), seyrelirken kardan adam bitmiş; "olay:sonra" beyaz ada güneşte.
+  kar: { olay: "olay:yogun", "olay-yakin": "olay:seyrelme", "olay-kalabalik": "olay:seyrelme", "olay-tele": "olay:yogun", "olay-hava": "olay:yogun" },
+  // Elektrik kesintisi: ada karanlıkta (kapı önlerinde telefon fenerleri, pencerelerde mum); "olay:donus" ışıklar mahalle mahalle gelir.
+  elektrik: { olay: "olay:karanlik", "olay-yakin": "olay:karanlik+6", "olay-kalabalik": "olay:karanlik+8", "olay-tele": "olay:kesinti+1", "olay-hava": "olay:donus+1" },
 };
 const kullanim = {};
 const efektler = [];
