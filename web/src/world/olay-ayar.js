@@ -1,6 +1,8 @@
 // Mercanada'nın olay ayarları (olay-plan.js okur; Driftwood'da kendi dosyası).
 // Saatler (16 Kasım, kullanıcı: "yarınki üretimle … 12:30 videosu bunlarla çıkmalı"): olay öğle videosunun üretimi
 // (11:30 Berlin = 13:30 TR) başlamadan BİTER; öğle videosu günün olayını anlatır. En geç bitiş ~12:50 TR.
+/** Adanın adı (olay-plan.js tema düzeni: iki ada birlikte planlanır, TEMA_SIRA). */
+export const ADA = "mercanada";
 export const ADA_TURLERI = ["yangin", "firtina", "yunus", "kaza", "sis"];
 /** Başlangıç pencereleri [en erken, en geç] (TR dakikası); verilmeyen tür olay-plan.js varsayılanını kullanır. */
 export const PENCERE = { zeplin: [570, 690], balon: [480, 690], ucurtma: [600, 700], kus: [540, 710],
@@ -41,6 +43,8 @@ export const ZEPLIN = {
   yedekSaha: { ad: "çayır", e: "çayıra", ustune: "çayırın üstüne" },
 };
 /** Tür listesi sürümleri (olay-plan.js): yeni türler yalnız sürümün gününden itibaren takvime girer; önceki günler değişmez. */
+// 19 Kasım'dan itibaren HANGİ gün hangi türün çıkacağını olay-plan.js tema düzeni seçer (iki ada birlikte; 18 Kasım,
+// "aynı temada videolar peşpeşe"); buradaki listeler adanın o gün izinli türleridir.
 export const TUR_SURUMLERI = [
   // 19 Kasım: zeplin acil inişi (olay-zeplin.js; 17 Kasım akşamı denendi).
   // 19 Kasım: olay modülleri (17 Kasım akşamı, kullanıcı: "olay çeşitliliği ve dikkat çekicilik çok önemli"; 20 yeni tür).
