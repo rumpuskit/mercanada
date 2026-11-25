@@ -117,6 +117,8 @@ def secenekler() -> dict[str, list[tuple[str, str]]]:
     meslek = [(katla(j["id"].replace("_", " ")), j["id"]) for j in meslekler]
     meslek += [(katla(k), j["id"]) for j in meslekler for k in j["kademeler"] if katla(k) not in GENEL]
     meslek += list(EK_MESLEK.items())
+    # Katalogdaki takma adlar (25 Kasım: haftalık meslek oylamasıyla eklenen meslekler kod değişmeden tanınsın).
+    meslek += [(katla(t), j["id"]) for j in meslekler for t in j.get("takma", [])]
     hobi = [(katla(h["id"]), h["id"]) for h in c["hobiler"]] + [(katla(h["ad"]), h["id"]) for h in c["hobiler"]]
     hobi += list(EK_HOBI.items())
     # Özel yoldaşlar (Robot) rastgele dağıtılmaz, yalnız istenir (sim.pet override'ı döndürür).
